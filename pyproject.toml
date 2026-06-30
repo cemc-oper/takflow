@@ -19,7 +19,6 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "jinja2",
-    "light-ecflow>=0.1.0",
 ]
 
 [project.optional-dependencies]

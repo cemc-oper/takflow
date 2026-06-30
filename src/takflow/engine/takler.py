@@ -108,6 +108,17 @@ class TaklerBackend(WorkflowBackend):
     def add_inlimit(self, node: Node, limit_name: str, tokens: int = 1) -> None:
         node.raw.add_in_limit(limit_name, tokens=tokens)
 
+    def add_late(
+        self,
+        node: Node,
+        submitted: tuple[int, int] | None = None,
+        active: tuple[int, int] | None = None,
+        complete: tuple[int, int] | None = None,
+        complete_relative: bool = False,
+    ) -> None:
+        # takler 未实现 Late；现阶段直接忽略。
+        return
+
     def add_repeat_date(
         self,
         node: Node,

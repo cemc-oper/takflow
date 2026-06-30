@@ -114,6 +114,18 @@ class WorkflowBackend(ABC):
         ...
 
     @abstractmethod
+    def add_late(
+        self,
+        node: "Node",
+        submitted: tuple[int, int] | None = None,
+        active: tuple[int, int] | None = None,
+        complete: tuple[int, int] | None = None,
+        complete_relative: bool = False,
+    ) -> None:
+        """添加 late 监控属性（ecflow 后端实现；takler 后端可 no-op）。"""
+        ...
+
+    @abstractmethod
     def add_repeat_date(
         self,
         node: "Node",

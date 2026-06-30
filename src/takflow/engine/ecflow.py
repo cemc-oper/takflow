@@ -1,12 +1,22 @@
 """
 ecflow 后端实现。
 
-将统一后端接口映射到 light_ecflow API（一个纯 Python 的 ecflow .def 生成库）。
+将统一后端接口映射到 ``takflow.serialize.ecflow`` API（一个纯 Python 的
+ecflow ``.def`` 生成库，由 ``light_ecflow`` 折叠而来）。
 """
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
-from light_ecflow import Defs, Suite, Family, Task, RepeatDate, RepeatDay, Clock, DState
+from takflow.serialize.ecflow import (
+    Clock,
+    DState,
+    Defs,
+    Family,
+    RepeatDate,
+    RepeatDay,
+    Suite,
+    Task,
+)
 
 from takflow.engine.backend import WorkflowBackend
 from takflow.engine import Node, NodeType
@@ -73,7 +83,26 @@ class EcflowBackend(WorkflowBackend):
         node.raw.add_limit(name, limit)
 
     def add_inlimit(self, node: Node, limit_name: str, tokens: int = 1) -> None:
-        node.raw.add_inlimit(limit_name)
+        node.raw.add_inlimit(limit_name, tokens)
+
+    def add_late(
+        self,
+        node: Node,
+        submitted: tuple[int, int] | None = None,
+        active: tuple[int, int] | None = None,
+        complete: tuple[int, int] | None = None,
+        complete_relative: bool = False,
+    ) -> None:
+        from takflow.serialize.ecflow import Late
+
+        late = Late()
+        if submitted is not None:
+            late.submitted(*submitted)
+        if active is not None:
+            late.active(*active)
+        if complete is not None:
+            late.complete(*complete, relative=complete_relative)
+        node.raw.add_late(late)
 
     def add_repeat_date(
         self,
@@ -84,8 +113,8 @@ class EcflowBackend(WorkflowBackend):
     ) -> None:
         node.raw.add_repeat(RepeatDate(name, start_date, end_date))
 
-    def add_repeat_day(self, node: Node, step: int = 1) -> None:
-        node.raw.add_clock(Clock(True))
+    def add_repeat_day(self, node: Node, step: int = 1, *, clock_kind: str = "hybrid") -> None:
+        node.raw.add_clock(Clock(clock_kind))
         node.raw.add_repeat(RepeatDay(step))
 
     def add_time(self, node: Node, time_str: str) -> None:

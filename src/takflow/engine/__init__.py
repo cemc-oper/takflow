@@ -195,6 +195,23 @@ class Node:
         self._engine.backend.add_inlimit(self, limit_name, tokens)
         return self
 
+    def add_late(
+        self,
+        submitted: tuple[int, int] | None = None,
+        active: tuple[int, int] | None = None,
+        complete: tuple[int, int] | None = None,
+        complete_relative: bool = False,
+    ) -> "Node":
+        """添加 late 监控属性。"""
+        self._engine.backend.add_late(
+            self,
+            submitted=submitted,
+            active=active,
+            complete=complete,
+            complete_relative=complete_relative,
+        )
+        return self
+
     def add_repeat_date(
         self,
         name: str,
