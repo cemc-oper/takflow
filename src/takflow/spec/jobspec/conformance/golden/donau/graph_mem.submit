@@ -1,0 +1,8 @@
+#!/bin/bash
+#DSUB -n meso_graph
+#DSUB -q normal
+#DSUB -T 5400
+#DSUB -R "mem=70G"
+#DSUB -d "op_meso:op_grapes_meso_3km"
+
+echo "running ${0##*/}"

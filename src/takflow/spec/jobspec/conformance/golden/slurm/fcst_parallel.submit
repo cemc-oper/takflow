@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH --job-name=mcv_fcst
+#SBATCH --nodes=24
+#SBATCH --ntasks-per-node=64
+#SBATCH --time=00:30:00
+#SBATCH --partition=normal
+#SBATCH --wckey=op_mcv
+#SBATCH --comment=mcv
+#SBATCH --mem=25G
+#SBATCH --no-requeue
+
+echo "running ${0##*/}"

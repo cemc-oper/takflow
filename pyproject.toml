@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "takflow"
+authors = [
+    { name="Wang Dapeng", email="perillaroc@gmail.com" },
+]
+description = "Unified workflow-generation framework (engine, hooks, config, jobspec contract) for MCV / CMA post-processing workflows."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache-2.0",
+]
+dynamic = ["version"]
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "jinja2",
+    "light-ecflow>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "jsonschema>=4.0",
+]
+
+[tool.setuptools_scm]
+fallback_version = "0.1.0"
+write_to = "src/takflow/_version.py"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+takflow = [
+    "spec/**/*.json",
+    "spec/**/VERSION",
+    "spec/**/*.sh",
+    "spec/**/*.submit",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra -q"

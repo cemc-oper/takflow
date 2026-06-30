@@ -1,0 +1,10 @@
+#!/bin/bash
+#SBATCH --job-name=meso_graph
+#SBATCH --time=01:30:00
+#SBATCH --partition=normal
+#SBATCH --wckey=op_meso
+#SBATCH --comment=op_grapes_meso_3km
+#SBATCH --mem=70G
+#SBATCH --no-requeue
+
+echo "running ${0##*/}"

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cemc/takflow/jobspec/v1",
+  "title": "takflow jobspec — job-run resource description contract",
+  "description": "Canonical, language-neutral description of a job's HPC run resources. takflow renders it into #ORVIX directives; orvix translates those to slurm/donau/local. Keys are snake_case here and hyphenated as #ORVIX directives (e.g. job_name -> #ORVIX job-name). This file is the single source of truth and is vendored by orvix.",
+  "type": "object",
+  "properties": {
+    "scheduler":       {"type": "string", "enum": ["slurm", "donau", "local"], "default": "local", "description": "Target scheduler backend."},
+    "job_name":        {"type": "string", "description": "Job name. slurm --job-name / donau -n."},
+    "output":          {"type": "string", "description": "Stdout path. slurm --output / donau -oo."},
+    "error":           {"type": "string", "description": "Stderr path. slurm --error / donau -eo."},
+    "nodes":           {"type": "string", "description": "Number of nodes. slurm --nodes / donau -nn."},
+    "ntasks":          {"type": "string", "description": "Total task count. slurm --ntasks (no donau equivalent)."},
+    "ntasks_per_node": {"type": "string", "description": "Tasks per node. slurm --ntasks-per-node / donau -tpn."},
+    "cpus_per_task":   {"type": "string", "description": "CPUs per task. slurm --cpus-per-task / donau merges into -R."},
+    "time":            {"type": "string", "description": "Wall-clock limit. slurm --time / donau -T (seconds)."},
+    "queue":           {"type": "string", "description": "Queue/partition. slurm --partition / donau -q. (Canonical name is 'queue', not 'partition'.)"},
+    "account":         {"type": "string", "description": "Billing account. slurm --account / donau -A."},
+    "project":         {"type": "string", "description": "Project code. slurm --wckey / donau merges into -d."},
+    "application":     {"type": "string", "description": "Application name. slurm --comment / donau merges into -d."},
+    "exclusive":       {"type": ["string", "boolean"], "description": "Exclusive node access. Bare flag (true) or a value."},
+    "nodelist":        {"type": "string", "description": "Specific node list. slurm --nodelist / donau -pn."},
+    "job_type":        {"type": "string", "description": "Scheduler job type (e.g. donau 'cosched'). NOTE: distinct from takflow's high-level serial/parallel TaskResource.job_type, which is never emitted as this directive."},
+    "memory":          {"type": "string", "description": "Memory requirement. slurm --mem / donau merges into -R."},
+    "dependency":      {"type": "string", "description": "Job dependency expression. slurm --dependency (no donau equivalent)."},
+    "requeue":         {"type": "boolean", "default": true, "description": "Whether the scheduler may auto-requeue the job. When false, slurm emits --no-requeue; donau/local ignore. Added in v1 relative to the original orvix vocabulary."}
+  },
+  "additionalProperties": false
+}

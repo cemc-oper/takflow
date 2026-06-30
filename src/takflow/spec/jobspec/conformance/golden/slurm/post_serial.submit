@@ -1,0 +1,8 @@
+#!/bin/bash
+#SBATCH --job-name=mcv_post
+#SBATCH --time=00:15:00
+#SBATCH --partition=serial
+#SBATCH --wckey=op_mcv
+#SBATCH --comment=mcv
+
+echo "running ${0##*/}"

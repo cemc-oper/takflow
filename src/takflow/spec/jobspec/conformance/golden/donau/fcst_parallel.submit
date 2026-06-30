@@ -1,0 +1,10 @@
+#!/bin/bash
+#DSUB -n mcv_fcst
+#DSUB -nn 24
+#DSUB -tpn 64
+#DSUB -q normal
+#DSUB -T 1800
+#DSUB -R "mem=25G"
+#DSUB -d "op_mcv:mcv"
+
+echo "running ${0##*/}"
