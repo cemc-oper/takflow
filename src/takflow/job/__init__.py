@@ -15,6 +15,8 @@ from jinja2 import Environment, FileSystemLoader
 
 from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
+from takflow.config import SlurmWorkload
+from takflow.jobspec import TaskResource, to_orvix_directives
 
 if TYPE_CHECKING:
     from takflow.config import BaseWorkflowConfig
@@ -39,6 +41,55 @@ def _current_build_info_lines() -> Dict[str, str]:
     if _build_info_provider is not None:
         return _build_info_provider()
     return _generic_build_info_lines(_generic_build_info("unknown"), "takflow")
+
+
+def render_orvix_resource_block(
+    job_type: str = "serial",
+    queue: Optional[str] = None,
+    partition: Optional[str] = None,
+    nodes: Optional[Union[int, str]] = None,
+    ntasks_per_node: Optional[Union[int, str]] = None,
+    time: Optional[str] = None,
+    walltime: Optional[str] = None,
+    memory: Optional[str] = None,
+    output: Optional[str] = None,
+    error: Optional[str] = None,
+    project: Optional[str] = None,
+    wckey: Optional[str] = None,
+    application: Optional[str] = None,
+    scheduler: str = "slurm",
+    requeue: Optional[bool] = None,
+) -> str:
+    """Render a ``#ORVIX`` directive block from template-friendly kwargs.
+
+    ``partition`` is accepted as a legacy alias for ``queue``; ``walltime`` is a
+    legacy alias for ``time``. ``project`` and ``wckey`` are synonyms (``wckey``
+    wins if both given).
+    """
+    resolved_queue = queue or partition
+    resolved_time = time or walltime
+    resolved_project = wckey or project
+
+    task = TaskResource(
+        job_type=job_type,  # type: ignore[arg-type]
+        queue=resolved_queue,
+        nodes=int(nodes) if nodes is not None else None,
+        ntasks_per_node=int(ntasks_per_node) if ntasks_per_node is not None else None,
+        time=resolved_time,
+        memory=memory,
+        requeue=requeue,
+    )
+    workload = SlurmWorkload(
+        wckey=resolved_project or "",
+        application=application,
+    )
+    spec = task.compile(workload)
+    spec.scheduler = scheduler
+    if output is not None:
+        spec.output = output
+    if error is not None:
+        spec.error = error
+    return "\n".join(to_orvix_directives(spec))
 
 
 # --- rendering ---------------------------------------------------------------
@@ -109,6 +160,7 @@ def render_jobs_from_directory(
     )
     env.globals["include_raw"] = include_raw
     env.globals["invoke_script"] = invoke_script
+    env.globals["render_orvix_resource_block"] = render_orvix_resource_block
 
     if config.workflow_mode == "shell":
         output_file_suffix = "sh"

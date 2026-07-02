@@ -29,10 +29,19 @@ class SlurmWorkload(BaseWorkload):
     """Slurm (or orvix-translated) workload with global defaults.
 
     Note the canonical key is ``queue`` (orvix vocabulary), not ``partition``.
+
+    ``submit_carrier`` selects how job resources reach the scheduler:
+    ``"orvix"`` writes ``#ORVIX`` directives + ``orvix submit`` job command,
+    ``"slsubmit6"`` keeps the legacy ``%CLASS%``/``%NODES%`` ecFlow variables +
+    ``slsubmit6``. ``scheduler`` is the orvix target family. Apps subclass this
+    and override the defaults (mcv defaults to ``orvix``; gfs/meso will default
+    to ``slsubmit6``).
     """
 
     workload_type: Literal["slurm"] = "slurm"
     wckey: str
+    scheduler: Literal["slurm", "donau"] = "slurm"
+    submit_carrier: Literal["orvix", "slsubmit6"] = "orvix"
     default_serial_queue: str = "serial"
     default_parallel_queue: str = "normal"
     #: Optional application label (-> slurm --comment), e.g. "op_grapes_gfs".
