@@ -155,7 +155,7 @@ def slsubmit6_serial_job(
             "TAKLER_SHELL_KILL_CMD": "scancel {{ TAKLER_RID }}",
         }
     if class_name is not None:
-        params["PARTITION"] = class_name
+        params["QUEUE"] = class_name
     if wckey is not None:
         params["WCKEY"] = wckey
     return params
@@ -187,7 +187,7 @@ def slsubmit6_parallel_job(
     params["NODES"] = str(nodes)
     params["TASKS_PER_NODE"] = str(tasks_per_node)
     if class_name is not None:
-        params["PARTITION"] = class_name
+        params["QUEUE"] = class_name
     if wckey is not None:
         params["WCKEY"] = wckey
     return params
@@ -238,7 +238,7 @@ def set_runtime(
     if carrier != "slsubmit6":
         raise ValueError(f"submit carrier is not supported: {carrier}")
 
-    # slsubmit6 carrier: flatten TaskResource to legacy %CLASS%/%NODES% vars.
+    # slsubmit6 carrier: flatten TaskResource to legacy %QUEUE%/%NODES% vars.
     wckey = workload_config.wckey
     if task_resource is None:
         node.add_variables(
