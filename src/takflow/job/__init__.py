@@ -96,40 +96,46 @@ def render_orvix_resource_block(
 
 def render_jobs_from_directory(
     config: "BaseWorkflowConfig",
-    repo_base: str,
+    repo_base: Union[str, Path, List[Union[str, Path]]],
     output_repo_base: str,
-    additional_repo_base: Optional[Union[str, List[str]]] = None,
-):
-    """Render every ``jobs/**/*.j2`` template under ``repo_base`` into the output.
+) -> None:
+    """Render every ``jobs/**/*.j2`` template under one or more repo roots.
 
     Parameters
     ----------
     config : BaseWorkflowConfig
         Workflow config used as template data.
-    repo_base : str
-        Repo root containing the ``jobs`` template directory.
+    repo_base : str, Path, or list
+        One or more repo roots containing ``jobs`` template directories.
+        When a list is given, directories are processed in order and later
+        directories overwrite earlier ones for identical relative paths.
     output_repo_base : str
         Output repo root.
-    additional_repo_base : str or list[str], optional
-        Extra Jinja2 template search paths (used by oper extensions to override
-        base templates).
     """
-    jobs_dir = Path(repo_base, "jobs")
-    if not jobs_dir.exists():
-        raise FileNotFoundError(f"Jobs directory not found: {jobs_dir}")
+    if isinstance(repo_base, (str, Path)):
+        repo_bases = [str(repo_base)]
+    elif isinstance(repo_base, (list, tuple)):
+        repo_bases = [str(rb) for rb in repo_base]
+    else:
+        raise TypeError(
+            f"repo_base must be str, Path, or list, got {type(repo_base)}"
+        )
 
-    template_search_paths = [repo_base]
-    if additional_repo_base is not None:
-        if isinstance(additional_repo_base, str):
-            template_search_paths.append(additional_repo_base)
-        elif isinstance(additional_repo_base, list):
-            template_search_paths.extend(additional_repo_base)
-        elif isinstance(additional_repo_base, Path):
-            template_search_paths.append(str(additional_repo_base))
-        else:
-            raise TypeError(
-                f"error type of additional_repo_base, current is {type(additional_repo_base)}"
-            )
+    # Collect existing (repo_base, jobs_dir) pairs.  For a single repo_base we
+    # preserve the original error-on-missing behaviour; for a list we tolerate
+    # sparse layers but fail if nothing is found.
+    repo_jobs_pairs = []
+    for rb in repo_bases:
+        jobs_dir = Path(rb, "jobs")
+        if jobs_dir.exists():
+            repo_jobs_pairs.append((rb, jobs_dir))
+        elif len(repo_bases) == 1:
+            raise FileNotFoundError(f"Jobs directory not found: {jobs_dir}")
+
+    if not repo_jobs_pairs:
+        raise FileNotFoundError(
+            f"No jobs directories found in any repo base: {repo_bases}"
+        )
 
     def include_raw(script_path: str) -> str:
         script_file = Path(output_repo_base, script_path)
@@ -154,13 +160,25 @@ def render_jobs_from_directory(
             return include_raw(script_path)
         return f"${{OUTPUT_REPO_BASE}}/{script_path}"
 
-    env = Environment(
-        loader=FileSystemLoader(template_search_paths),
-        lstrip_blocks=True,
-    )
-    env.globals["include_raw"] = include_raw
-    env.globals["invoke_script"] = invoke_script
-    env.globals["render_orvix_resource_block"] = render_orvix_resource_block
+    def build_environment(source_idx: int) -> Environment:
+        """Build a Jinja2 env where the current source repo has highest priority.
+
+        Search order: current source, then earlier layers in reverse rendering
+        order (more specialised layers first).
+        """
+        source_repo_base = repo_bases[source_idx]
+        search_paths = [source_repo_base]
+        if source_idx > 0:
+            search_paths.extend(repo_bases[source_idx - 1::-1])
+
+        env = Environment(
+            loader=FileSystemLoader(search_paths),
+            lstrip_blocks=True,
+        )
+        env.globals["include_raw"] = include_raw
+        env.globals["invoke_script"] = invoke_script
+        env.globals["render_orvix_resource_block"] = render_orvix_resource_block
+        return env
 
     if config.workflow_mode == "shell":
         output_file_suffix = "sh"
@@ -171,28 +189,30 @@ def render_jobs_from_directory(
     else:
         output_file_suffix = "sh"
 
-    j2_files = jobs_dir.rglob("*.j2")
-    for j2_file in j2_files:
-        relative_path = j2_file.relative_to(repo_base)
+    for source_idx, (repo_base_str, jobs_dir) in enumerate(repo_jobs_pairs):
+        env = build_environment(source_idx)
+        j2_files = jobs_dir.rglob("*.j2")
+        for j2_file in j2_files:
+            relative_path = j2_file.relative_to(repo_base_str)
 
-        if relative_path.stem.endswith(".sh"):
-            base_name = relative_path.stem[:-3]
-        else:
-            base_name = relative_path.stem
+            if relative_path.stem.endswith(".sh"):
+                base_name = relative_path.stem[:-3]
+            else:
+                base_name = relative_path.stem
 
-        output_file_relative_path = Path(
-            relative_path.parent, f"{base_name}.{output_file_suffix}"
-        )
+            output_file_relative_path = Path(
+                relative_path.parent, f"{base_name}.{output_file_suffix}"
+            )
 
-        render_single_job_file(
-            relative_path=relative_path,
-            output_repo_base=output_repo_base,
-            output_relative_path=output_file_relative_path,
-            config=config,
-            env=env,
-        )
+            render_single_job_file(
+                relative_path=relative_path,
+                output_repo_base=output_repo_base,
+                output_relative_path=output_file_relative_path,
+                config=config,
+                env=env,
+            )
 
-        print(f"Generated: {output_file_relative_path}")
+            print(f"Generated: {output_file_relative_path}")
 
 
 def render_single_job_file(
