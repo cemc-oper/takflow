@@ -1,6 +1,6 @@
 # takflow
 
-![Maturity-Sandbox|112](https://img.shields.io/badge/Maturity-Sandbox-F9D71C)
+![Maturity-Sandbox](https://img.shields.io/badge/Maturity-Sandbox-F9D71C)
 
 
 `takflow`（`tak` 取自 task/takler + `flow`）是面向 CEMC 数值天气预报模式系统的统一工作流生成框架。
