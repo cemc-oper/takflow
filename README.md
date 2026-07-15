@@ -78,8 +78,8 @@ print("\n".join(to_orvix_directives(spec)))
 ### 3. 构建工作流
 
 ```python
-from takflow.engine import WorkflowEngine
-from takflow.engine.ecflow import EcflowBackend
+from takflow.flow import WorkflowEngine
+from takflow.backends.ecflow import EcflowBackend
 
 engine = WorkflowEngine(EcflowBackend())
 suite = engine.Suite("mcv_gfs")
@@ -95,7 +95,7 @@ engine.save_suite(suite, "mcv_gfs.def")
 切换到 takler 后端只需更换 backend：
 
 ```python
-from takflow.engine.takler import TaklerBackend
+from takflow.backends.takler import TaklerBackend
 
 engine = WorkflowEngine(TaklerBackend())
 ```
@@ -103,7 +103,7 @@ engine = WorkflowEngine(TaklerBackend())
 ### 4. 渲染作业脚本
 
 ```python
-from takflow.job import render_jobs_from_directory
+from takflow.toolkit import render_jobs_from_directory
 
 render_jobs_from_directory(
     config=config,
@@ -128,7 +128,7 @@ render_jobs_from_directory(
 ### 5. 复制静态资源
 
 ```python
-from takflow.resource import copy_resources_to_output
+from takflow.toolkit import copy_resources_to_output
 
 copy_resources_to_output(
     output_repo_base="/path/to/output",
@@ -150,7 +150,7 @@ copy_resources_to_output(
 ## 扩展：钩子
 
 ```python
-from takflow.hooks.base import BaseHookRegistry, create_hook_decorator
+from takflow.flow.hook import BaseHookRegistry, create_hook_decorator
 
 registry = BaseHookRegistry()
 register = create_hook_decorator(lambda: registry)
@@ -161,7 +161,7 @@ def my_hook(ctx):
     ctx.node.add_family("extra")
 ```
 
-`takflow.credential.hooks` 也提供了共享的凭据渲染钩子注册表。
+`takflow.toolkit.credential` 也提供了共享的凭据渲染钩子注册表。
 
 ## 测试
 

@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from takflow.engine.backend import WorkflowBackend
+from takflow.flow.backend import WorkflowBackend
 
 
 class NodeType(str, Enum):

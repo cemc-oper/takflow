@@ -1,9 +1,9 @@
-"""Tests for takflow.serialize.ecflow (folded light-ecflow + new features)."""
+"""Tests for takflow.backends.ecflow.serializer (folded light-ecflow + new features)."""
 from __future__ import annotations
 
 import pytest
 
-from takflow.serialize.ecflow import (
+from takflow.backends.ecflow.serializer import (
     Clock,
     Defs,
     DState,

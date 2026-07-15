@@ -10,8 +10,7 @@ from typing import Any, Dict, List, Union
 from takler.core import Bunch, Flow, NodeContainer, RepeatDate, NodeStatus
 from takler.tasks.shell import ShellScriptTask
 
-from takflow.engine.backend import WorkflowBackend
-from takflow.engine import Node, NodeType
+from takflow.flow import Node, NodeType, WorkflowBackend
 
 
 class TaklerBackend(WorkflowBackend):
