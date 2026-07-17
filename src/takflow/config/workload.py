@@ -20,9 +20,26 @@ class BaseWorkload(BaseModel):
 
 
 class ShellWorkload(BaseWorkload):
-    """Plain-shell workload: tasks run directly, no batch scheduler."""
+    """Plain-shell workload: tasks run directly, no batch scheduler.
+
+    ``submit_carrier`` selects how host-local tasks reach execution:
+    ``"direct"`` (default) runs the script straight from the engine,
+    ``"orvix"`` submits through the orvix ``local`` backend so submission,
+    kill and status go through the same path as scheduled jobs.
+    """
 
     workload_type: Literal["shell"] = "shell"
+    submit_carrier: Literal["orvix", "direct"] = "direct"
+
+    @classmethod
+    def for_suite(cls, suite_workload: "WorkloadType") -> "ShellWorkload":
+        """Derive the local-task workload from the suite workload.
+
+        A suite submitted via the ``orvix`` carrier gets orvix-carried local
+        tasks; every other suite keeps direct local execution.
+        """
+        carrier = getattr(suite_workload, "submit_carrier", None)
+        return cls(submit_carrier="orvix" if carrier == "orvix" else "direct")
 
 
 class SlurmWorkload(BaseWorkload):

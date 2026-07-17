@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict
 
+from takflow.backends.runtime.orvix import orvix_job
 from takflow.backends.runtime.orvix import set_runtime as set_orvix_runtime
 from takflow.backends.runtime.slsubmit import set_runtime as set_slsubmit_runtime
 
@@ -125,7 +126,13 @@ def set_runtime(
     ``workload_config.submit_carrier``.
     """
     if workload_config.workload_type == "shell":
-        node.add_variables(shell_job(engine))
+        # Host-local task. Under the orvix carrier submit it through the
+        # orvix local backend (orvix_job pins ORVIX_SCHEDULER=local on the
+        # node); otherwise run it directly.
+        if getattr(workload_config, "submit_carrier", "direct") == "orvix":
+            node.add_variables(orvix_job(engine, "local"))
+        else:
+            node.add_variables(shell_job(engine))
         return
 
     if workload_config.workload_type != "slurm":
