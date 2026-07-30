@@ -24,7 +24,7 @@
 
 ## 安装
 
-要求 Python >= 3.9。在依赖它的业务包之前先安装 `takflow`：
+要求 Python >= 3.10。在依赖它的业务包之前先安装 `takflow`：
 
 ```bash
 git clone https://github.com/cemc-oper/takflow.git

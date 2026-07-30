@@ -9,7 +9,7 @@ authors = [
 ]
 description = "Unified workflow-generation framework for CEMC numerical weather prediction operational systems."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache-2.0",
