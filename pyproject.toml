@@ -7,7 +7,7 @@ name = "takflow"
 authors = [
     { name="Wang Dapeng", email="perillaroc@gmail.com" },
 ]
-description = "Unified workflow-generation framework (engine, hooks, config, jobspec contract) for MCV / CMA post-processing workflows."
+description = "Unified workflow-generation framework for CEMC numerical weather prediction operational systems."
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [

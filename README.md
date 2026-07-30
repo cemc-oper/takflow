@@ -1,6 +1,10 @@
 # takflow
 
 ![Maturity-Sandbox](https://img.shields.io/badge/Maturity-Sandbox-F9D71C)
+![GitHub Release](https://img.shields.io/github/v/release/cemc-oper/takflow)
+![PyPI - Version](https://img.shields.io/pypi/v/takflow)
+![GitHub License](https://img.shields.io/github/license/cemc-oper/takflow)
+![GitHub Action Workflow Status](https://github.com/cemc-oper/takflow/actions/workflows/ci.yml/badge.svg)
 
 `takflow`（`tak` 取自 task/takler + `flow`）是面向 CEMC 数值天气预报模式系统的统一工作流生成框架。
 
