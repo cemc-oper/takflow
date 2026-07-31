@@ -6,7 +6,7 @@
 ![GitHub License](https://img.shields.io/github/license/cemc-oper/takflow)
 ![GitHub Action Workflow Status](https://github.com/cemc-oper/takflow/actions/workflows/ci.yml/badge.svg)
 
-`takflow`（`tak` 取自 task/takler + `flow`）是面向 CEMC 数值天气预报模式系统的统一工作流生成框架。
+`takflow`（`tak` 取自 takler + `flow`）是面向 CEMC 数值天气预报模式系统的统一工作流生成框架。
 
 它提供了一套通用的配置模型、作业资源描述契约、工作流引擎抽象和渲染工具，让业务工作流生成器（如 `mcv-workflow`、`mcv-oper-workflow`、`cma-gfs-post-workflow`）专注于领域逻辑，而无需重复实现 ecFlow 定义生成、作业脚本渲染、资源载体切换等通用能力。
 
@@ -40,23 +40,25 @@ pip install -e ".[dev]"
 
 ### 通用 YAML 结构
 
+下面以 toyflow 的配置为例（完整文件见 [`examples/toyflow/config/toyflow.yaml`](examples/toyflow/config/toyflow.yaml)）。
+通用字段由 `BaseWorkflowConfig` 定义，分隔线以下是由应用子类添加的领域字段：
+
 ```yaml
-project_base_dir: /path/to/project
-run_base_dir: /path/to/run
+project_base_dir: /path/to/toyflow/project
+run_base_dir: /path/to/toyflow/run
 workflow_repo_base_dir: /path/to/resources   # 可选,默认使用应用包内 resources/
-output_repo_base_dir: /path/to/output        # 可选
-workflow_name: mcv_gfs
+output_repo_base_dir: /path/to/toyflow/output # 可选
+workflow_name: toyflow
 workflow_mode: ecflow                        # shell / ecflow / takler
 script_invoke_mode: external                 # external / inline
 
 workload:
   workload_type: slurm
-  wckey: myproject
+  wckey: toyflow
   scheduler: slurm                           # slurm / donau
   submit_carrier: orvix                      # orvix / slsubmit6
   default_serial_queue: serial
   default_parallel_queue: normal
-  application: op_grapes_gfs                 # 可选
 
 scheduling:                                  # ecflow 模式有效
   scheduling_type: RepeatDate
@@ -64,13 +66,27 @@ scheduling:                                  # ecflow 模式有效
   end_date: 20250720
 
 cycles:                                      # ecflow 模式有效
-  "12":
-    cycle_label: "12"
-    time: "12:00"
+  "00":
+    cycle_label: "00"
+    time: "00:00"
 
-housekeep:                                   # ecflow 模式有效
-  clear_day: 3
-  time: "23:30"
+# ---- 以下为应用领域字段(以 toyflow 为例) ----
+
+enable_obs: true
+enable_main: true
+enable_post: true
+
+forecast:
+  forecast_length: 24
+  resource:
+    job_type: parallel
+    nodes: 2
+    ntasks_per_node: 16
+    time: "01:00:00"
+
+post_resource:
+  job_type: serial
+  time: "00:30:00"
 ```
 
 ### 关键字段说明
@@ -130,19 +146,35 @@ workload:
 
 ### 1. 定义配置
 
-应用子类化 `BaseWorkflowConfig`，添加领域字段，然后使用 `load_config_from_file` 加载 YAML：
+应用子类化 `BaseWorkflowConfig`，添加领域字段，然后使用 `load_config_from_file` 加载 YAML（对应 toyflow 的 `src/toyflow/config.py`）：
 
 ```python
-from takflow.config import BaseWorkflowConfig, load_config_from_file
-from pydantic import Field
-from typing import Literal
+from pydantic import BaseModel
 
-class MyWorkflowConfig(BaseWorkflowConfig):
+from takflow.config import BaseWorkflowConfig, load_config_from_file
+from takflow.jobspec import TaskResource
+
+
+class ForecastConfig(BaseModel):
+    """预报步骤的领域配置。"""
+
+    forecast_length: int = 24
+    # 预报任务的资源需求(serial/parallel 高层模型,生成时编译为 #ORVIX 指令)
+    resource: TaskResource = TaskResource(job_type="parallel", nodes=2, ntasks_per_node=16)
+
+
+class ToyflowConfig(BaseWorkflowConfig):
+    """通用字段(目录、模式、workload、调度)全部继承,这里只声明领域字段。"""
+
     enable_obs: bool = True
     enable_main: bool = True
     enable_post: bool = True
 
-config = load_config_from_file("my_config.yaml", config_class=MyWorkflowConfig)
+    forecast: ForecastConfig = ForecastConfig()
+    post_resource: TaskResource = TaskResource(job_type="serial")
+
+
+config = load_config_from_file("config/toyflow.yaml", config_class=ToyflowConfig)
 print(config.workflow_mode)
 print(config.workload.submit_carrier)
 ```
@@ -155,20 +187,13 @@ print(config.workload.submit_carrier)
 from takflow.config import SlurmWorkload
 from takflow.jobspec import TaskResource, to_orvix_directives
 
-workload = SlurmWorkload(
-    wckey="myproject",
-    scheduler="slurm",
-    submit_carrier="orvix",
-    default_serial_queue="serial",
-    default_parallel_queue="normal",
-)
+workload = SlurmWorkload(wckey="toyflow")  # 其余字段取默认值
 
 tr = TaskResource(
     job_type="parallel",
-    nodes=4,
+    nodes=2,
     ntasks_per_node=16,
-    time="01:30:00",
-    queue="normal",
+    time="01:00:00",
 )
 
 spec = tr.compile(workload)
@@ -179,93 +204,152 @@ print("\n".join(to_orvix_directives(spec)))
 
 ```text
 #ORVIX scheduler=slurm
-#ORVIX nodes=4
+#ORVIX nodes=2
 #ORVIX ntasks-per-node=16
-#ORVIX time=01:30:00
+#ORVIX time=01:00:00
 #ORVIX queue=normal
-#ORVIX project=myproject
+#ORVIX project=toyflow
 ```
 
 ### 2. 定义运行流程
 
-运行流程通过 `takflow.flow` 中的抽象 API 定义，与后端无关：
+运行流程通过 `takflow.flow` 中的抽象 API 定义，与后端无关（对应 toyflow 的 `src/toyflow/flow.py`）：
 
 ```python
 from takflow.flow import WorkflowEngine
 from takflow.backends.ecflow import EcflowBackend
+from takflow.backends.runtime import common_setting, set_runtime, set_scheduling
 
 engine = WorkflowEngine(EcflowBackend())
 
-suite = engine.Suite("mcv_gfs")
-suite.add_variable("FOO", "bar")
+suite = engine.Suite(config.workflow_name)
 
-main = suite.add_family("main")
-fcst = main.add_task("forecast")
-fcst.add_trigger("/mcv_gfs/obs == complete")
+# 资源载体(提交命令)+ 引擎公共设置
+set_runtime(suite, config.workload, engine=engine)
+suite.add_variables(common_setting(engine=engine))
 
-fcst.add_event("ready")
-fcst.add_meter("progress", 0, 100)
+# admin/ 运维开关
+fm_admin = suite.add_family("admin")
+fm_admin.set_defstatus_complete()
+fm_admin.add_task("toggles")
+
+# time_triggers/ 时间调度
+fm_time = suite.add_family("time_triggers")
+set_scheduling(fm_time, config.scheduling, engine=engine)
+fm_time.add_task("00").add_time("00:00")
+
+# obs -> main -> post 依赖链
+fm_obs = suite.add_family("obs")
+fm_obs.add_task("prepare")
+
+fm_main = suite.add_family("main")
+fcst = fm_main.add_task("forecast")
+fcst.add_trigger(f"/{config.workflow_name}/obs/prepare == complete")
+
+fm_post = suite.add_family("post")
+plot = fm_post.add_task("plot")
+plot.add_trigger(f"/{config.workflow_name}/main/forecast == complete")
 ```
 
 同一套节点树可以通过不同的后端输出为 ecFlow `.def` 或 takler JSON。
 
 #### 2.1 扩展流程：钩子
 
-通过 `takflow.flow.hook` 的优先级排序注册表注入业务逻辑：
+takflow 只提供通用基类（`BaseHookRegistry` + `create_hook_decorator`），hook 点的词汇表由应用自己定义（对应 toyflow 的 `src/toyflow/hooks.py`）：
 
 ```python
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, Optional
+
+from takflow.flow import Node, WorkflowEngine
 from takflow.flow.hook import BaseHookRegistry, create_hook_decorator
 
-registry = BaseHookRegistry()
-register = create_hook_decorator(lambda: registry)
 
-@register("my.hook.point", priority=10)
-def my_hook(ctx):
-    # ctx 包含当前 node、component 等上下文
-    ctx.node.add_family("extra")
+class EngineHookPoint(str, Enum):
+    """应用自己的 hook 点(takflow 不预定义)。"""
+
+    AFTER_FORECAST = "main.after_forecast"
+
+
+@dataclass
+class EngineHookContext:
+    """engine hook 的上下文:当前 node、engine 及附加参数。"""
+
+    node: Node
+    engine: WorkflowEngine
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+
+
+class EngineHookRegistry(BaseHookRegistry[EngineHookContext, None]):
+    """应用自有的 engine hook 注册表(单例)。"""
+
+    _instance: Optional["EngineHookRegistry"] = None
+
+    @classmethod
+    def get_instance(cls) -> "EngineHookRegistry":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+
+register_engine_hook = create_hook_decorator(EngineHookRegistry.get_instance)
+
+
+@register_engine_hook(EngineHookPoint.AFTER_FORECAST, priority=10)
+def add_verify_task(context: EngineHookContext) -> None:
+    """在预报任务之后注入一个检验任务。"""
+    verify = context.node.add_task("verify")
+    verify.add_trigger("forecast == complete")
+```
+
+hook 在 **import 时** 通过装饰器注册；流程构建代码在相应位置执行：
+
+```python
+context = EngineHookContext(node=fm_main, engine=engine, kwargs={})
+EngineHookRegistry.get_instance().execute(EngineHookPoint.AFTER_FORECAST, context)
 ```
 
 ### 3. 选择后端
 
-`takflow` 通过 `backends/` 提供具体后端实现。切换后端只需更换 `WorkflowEngine` 构造参数。
-
-#### 3.1 ecFlow 后端
+`takflow` 通过 `backends/` 提供具体后端实现。应用通常按 `workflow_mode` 从映射表中取后端类，切换后端只需更换 `WorkflowEngine` 构造参数（对应 toyflow 的 `src/toyflow/generate.py`）：
 
 ```python
+from pathlib import Path
+
 from takflow.flow import WorkflowEngine
 from takflow.backends.ecflow import EcflowBackend
-
-engine = WorkflowEngine(EcflowBackend())
-suite = engine.Suite("mcv_gfs")
-# ... 构建节点树 ...
-engine.save_suite(suite, "mcv_gfs.def")
-```
-
-#### 3.2 takler 后端
-
-```python
-from takflow.flow import WorkflowEngine
 from takflow.backends.takler import TaklerBackend
 
-engine = WorkflowEngine(TaklerBackend())
-suite = engine.Suite("mcv_gfs")
-# ... 构建节点树 ...
-engine.save_suite(suite, "mcv_gfs.json")
+_BACKEND_MAP = {
+    "ecflow": EcflowBackend,
+    "takler": TaklerBackend,
+}
+_DEFAULT_SUFFIX = {
+    "ecflow": ".def",
+    "takler": ".json",
+}
+
+mode = config.workflow_mode
+engine = WorkflowEngine(_BACKEND_MAP[mode]())
+suite = create_suite(config, engine=engine)  # 见第 2 节的节点树构建
+
+output_path = Path(
+    config.output_repo_base_dir,
+    f"{config.workflow_name}{_DEFAULT_SUFFIX[mode]}",
+)
+engine.save_suite(suite, output_path)
 ```
 
-#### 3.3 资源载体
+#### 3.1 资源载体
 
-在 slurm workload 下，任务资源通过 `submit_carrier` 决定如何抵达调度器：
+在 slurm workload 下，任务资源通过 `submit_carrier` 决定如何抵达调度器。suite 构建时调用一次 `set_runtime` 即可（对应 toyflow `flow.py` 的 `setup()`）：
 
 ```python
 from takflow.backends.runtime import set_runtime
 
-set_runtime(
-    node=suite,
-    workload_config=config.workload,
-    engine=engine,
-    task_resource=tr,  # slsubmit6 需要;orvix 忽略
-)
+set_runtime(suite, config.workload, engine=engine)
+# slsubmit6 carrier 还需要任务级资源:set_runtime(node, workload, engine=engine, task_resource=tr)
 ```
 
 | Carrier | 生成内容 | 适用场景 |
@@ -277,67 +361,121 @@ set_runtime(
 
 ### 4. 构建命令行接口
 
-`takflow.toolkit` 提供构建 CLI 的原子能力。典型业务应用 CLI 如下：
+`takflow.toolkit` 提供构建 CLI 的原子能力。典型业务应用 CLI 如下（对应 toyflow 的 `src/toyflow/cli.py`，省略了 click 选项声明）：
 
 ```python
+from pathlib import Path
+
 import click
-from takflow.config import load_config_from_file
+
 from takflow.toolkit import (
     copy_resources_to_output,
     render_credential,
     render_jobs_from_directory,
+    set_build_info_provider,
 )
 
+from toyflow.config import ToyflowConfig, load_config_from_file
+from toyflow.generate import toyflow_build_info_lines
+
+# 让 toolkit 渲染的文件头带上应用品牌(否则是通用 takflow 头)
+set_build_info_provider(toyflow_build_info_lines)
+
+
+def _load_config(config_file: str) -> ToyflowConfig:
+    # 先 import hooks,触发 @register_engine_hook / @register_credential_hook
+    # 的 import 时注册(与 mcv-oper-workflow 的扩展模式一致)
+    import toyflow.hooks  # noqa: F401
+
+    return load_config_from_file(config_file, config_class=ToyflowConfig)
+
+
 @click.group()
-def cli():
+def main():
     pass
 
-@cli.command()
-@click.option("--config-file", required=True)
-def resource_copy(config_file):
-    config = load_config_from_file(config_file, config_class=MyWorkflowConfig)
+
+@main.group()
+def resource():
+    pass
+
+
+@resource.command("copy")
+@click.option("--config-file", required=True, type=click.Path(exists=True, dir_okay=False))
+def resource_copy(config_file: str):
+    """Copy static resources (scripts/, ecflow/include/) to OUTPUT_REPO_BASE."""
+    config = _load_config(config_file)
     copy_resources_to_output(
-        output_repo_base=config.output_repo_base_dir,
-        src_base=config.workflow_repo_base_dir,
+        output_repo_base=Path(config.output_repo_base_dir),
+        src_base=Path(config.workflow_repo_base_dir),
     )
 
-@cli.command()
-@click.option("--config-file", required=True)
-def job_generate(config_file):
-    config = load_config_from_file(config_file, config_class=MyWorkflowConfig)
+
+@main.group()
+def job():
+    pass
+
+
+@job.command("generate")
+@click.option("--config-file", required=True, type=click.Path(exists=True, dir_okay=False))
+def job_generate(config_file: str):
+    """Generate job scripts from Jinja2 templates (jobs/**/*.j2)."""
+    config = _load_config(config_file)
     render_jobs_from_directory(
         config=config,
         repo_base=config.workflow_repo_base_dir,
         output_repo_base=config.output_repo_base_dir,
     )
 
-@cli.command()
-@click.option("--config-file", required=True)
-@click.option("--credential-file", required=True)
-def credential_generate(config_file, credential_file):
-    config = load_config_from_file(config_file, config_class=MyWorkflowConfig)
+
+@main.group()
+def credential():
+    pass
+
+
+@credential.command("generate")
+@click.option("--credential-file", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--config-file", required=True, type=click.Path(exists=True, dir_okay=False))
+def credential_generate(credential_file: str, config_file: str):
+    """Render config/credential.sh from credential.yaml via credential hooks."""
+    config = _load_config(config_file)
     render_credential(
         credential_file=credential_file,
         config=config,
         output_repo_base=config.output_repo_base_dir,
-        build_info_lines={"warning": "...", "info": "..."},
+        build_info_lines=toyflow_build_info_lines(),
     )
 
+
 if __name__ == "__main__":
-    cli()
+    main()
 ```
+
+资源/输出目录的解析优先级（CLI 参数 > 配置字段 > 包内 `resources/` 或报错）由应用侧的小工具函数实现，见 toyflow 的 `src/toyflow/util.py`。`config generate` 与 `workflow generate` 两步由应用自己实现（takflow 刻意留给应用），见 toyflow 的 `src/toyflow/generate.py`。
 
 #### 4.1 凭证渲染 Hook
 
-`takflow.toolkit.credential` 提供共享的凭证渲染钩子注册表：
+`takflow.toolkit.credential` 提供共享的凭证渲染钩子注册表（对应 toyflow `hooks.py` 的 credential 部分）：
 
 ```python
-from takflow.toolkit.credential import register_credential_hook, CredentialContext
+from takflow.toolkit.credential import (
+    CredentialContext,
+    CredentialHookPoint,
+    register_credential_hook,
+)
 
-@register_credential_hook("credential.render", priority=10)
-def render_db_credential(ctx: CredentialContext) -> str:
-    credential = ctx.credential
-    return f'export DB_HOST={credential["db"]["host"]}'
+
+@register_credential_hook(CredentialHookPoint.RENDER, priority=10)
+def render_toyflow_credential(context: CredentialContext) -> str:
+    """把 credential.yaml 中的应用段渲染为 credential.sh 片段。"""
+    toyflow = context.credential.get("toyflow", {})
+    return "\n".join(
+        [
+            "# toyflow API 凭证",
+            f'export TOYFLOW_API_HOST="{toyflow.get("api_host", "")}"',
+            f'export TOYFLOW_API_KEY="{toyflow.get("api_key", "")}"',
+        ]
+    )
 ```
 
 ## 包结构速查
