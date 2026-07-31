@@ -1,0 +1,53 @@
+# toyflow 示例配置 —— 一个完整的 takflow 工作流 YAML。
+#
+# 通用字段由 takflow.config.BaseWorkflowConfig 定义，
+# 领域字段（enable_*/forecast/post_resource）由 toyflow.config.ToyflowConfig 定义。
+
+project_base_dir: /path/to/toyflow/project
+run_base_dir: /path/to/toyflow/run
+
+# 资源模板目录；注释掉则使用 toyflow 包内 resources/
+# workflow_repo_base_dir: /path/to/resources
+
+# 生成产物输出目录（也可用 CLI --output-repo-base 覆盖）
+output_repo_base_dir: /path/to/toyflow/output
+
+workflow_name: toyflow
+workflow_mode: ecflow            # shell / ecflow / takler
+script_invoke_mode: external     # external / inline
+
+workload:
+  workload_type: slurm
+  wckey: toyflow
+  scheduler: slurm               # orvix 目标调度器: slurm / donau
+  submit_carrier: orvix          # 资源载体: orvix / slsubmit6
+  default_serial_queue: serial
+  default_parallel_queue: normal
+
+scheduling:                      # ecflow 模式有效
+  scheduling_type: RepeatDate
+  start_date: 20250716
+  end_date: 20250720
+
+cycles:                          # ecflow 模式有效
+  "00":
+    cycle_label: "00"
+    time: "00:00"
+
+# ---- 以下为 toyflow 领域字段 ----
+
+enable_obs: true
+enable_main: true
+enable_post: true
+
+forecast:
+  forecast_length: 24
+  resource:
+    job_type: parallel
+    nodes: 2
+    ntasks_per_node: 16
+    time: "01:00:00"
+
+post_resource:
+  job_type: serial
+  time: "00:30:00"

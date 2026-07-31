@@ -224,3 +224,5 @@ __marimo__/
 **/credential.yaml
 !**/credential.sh.template
 !**/credential.yaml.template
+# toyflow 示例用的是演示占位凭证（非敏感），README 和 tests/test_examples.py 依赖它，必须入库
+!examples/toyflow/config/credential.yaml

@@ -1,0 +1,35 @@
+#! /usr/bin/env bash
+#
+# {{ build_info_warning }}
+# {{ build_info_detail }}
+#
+# 后处理绘图作业（serial）。
+
+{% if config.workload.workload_type == "slurm" and config.workload.submit_carrier == "orvix" %}
+{{ render_orvix_resource_block(job_type="serial", walltime=(config.post_resource.time | default("00:30:00")), output=output_std_log_path, error=output_stderr_log_path, wckey=config.workload.wckey, application=(config.workload.application | default("TOYFLOW")), scheduler=(config.workload.scheduler | default("slurm"))) }}
+{% endif %}
+
+set -a
+
+#-----------------------------------------------
+# load configure
+{% if config.workflow_mode == 'ecflow' %}
+{% raw %}
+%include <common/head.h>
+%include <common/configure.h>
+{% endraw %}
+{% else %}
+source ${OUTPUT_REPO_BASE}/config/config.sh
+{% endif %}
+
+#-----------------------------------------------
+# run script
+
+{{ invoke_script('scripts/post/run_plot.sh') }}
+
+#-----------------------------------------------
+{% if config.workflow_mode == 'ecflow' %}
+{% raw %}
+%include <common/tail.h>
+{% endraw %}
+{% endif %}

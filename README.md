@@ -124,6 +124,10 @@ workload:
 
 ## 使用方法
 
+> **完整示例**：想看一个端到端可运行的最小应用（config 子类化 → 节点树 → hook →
+> 4 步 CLI → 生成 `.def`），见 [`examples/toyflow/`](examples/toyflow/README.md)。
+> 下面的章节按层讲解各个概念。
+
 ### 1. 定义配置
 
 应用子类化 `BaseWorkflowConfig`，添加领域字段，然后使用 `load_config_from_file` 加载 YAML：

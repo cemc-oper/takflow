@@ -1,0 +1,35 @@
+#! /usr/bin/env bash
+#
+# {{ build_info_warning }}
+# {{ build_info_detail }}
+#
+# 预报作业（parallel）—— 资源需求来自配置的 forecast.resource（TaskResource）。
+
+{% if config.workload.workload_type == "slurm" and config.workload.submit_carrier == "orvix" %}
+{{ render_orvix_resource_block(job_type="parallel", nodes=config.forecast.resource.nodes, ntasks_per_node=config.forecast.resource.ntasks_per_node, walltime=(config.forecast.resource.time | default("01:00:00")), output=output_std_log_path, error=output_stderr_log_path, wckey=config.workload.wckey, application=(config.workload.application | default("TOYFLOW")), scheduler=(config.workload.scheduler | default("slurm"))) }}
+{% endif %}
+
+set -a
+
+#-----------------------------------------------
+# load configure
+{% if config.workflow_mode == 'ecflow' %}
+{% raw %}
+%include <common/head.h>
+%include <common/configure.h>
+{% endraw %}
+{% else %}
+source ${OUTPUT_REPO_BASE}/config/config.sh
+{% endif %}
+
+#-----------------------------------------------
+# run script
+
+{{ invoke_script('scripts/main/run_forecast.sh') }}
+
+#-----------------------------------------------
+{% if config.workflow_mode == 'ecflow' %}
+{% raw %}
+%include <common/tail.h>
+{% endraw %}
+{% endif %}

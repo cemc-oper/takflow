@@ -1,0 +1,36 @@
+#! /usr/bin/env bash
+#
+# {{ build_info_warning }}
+# {{ build_info_detail }}
+#
+# 检验作业（serial）—— 由 engine hook（hooks.py 的 add_verify_task）注入的任务，
+# 扩展包注入任务时同时提供作业模板，与 mcv-oper-workflow 的模式一致。
+
+{% if config.workload.workload_type == "slurm" and config.workload.submit_carrier == "orvix" %}
+{{ render_orvix_resource_block(job_type="serial", walltime="00:30:00", output=output_std_log_path, error=output_stderr_log_path, wckey=config.workload.wckey, application=(config.workload.application | default("TOYFLOW")), scheduler=(config.workload.scheduler | default("slurm"))) }}
+{% endif %}
+
+set -a
+
+#-----------------------------------------------
+# load configure
+{% if config.workflow_mode == 'ecflow' %}
+{% raw %}
+%include <common/head.h>
+%include <common/configure.h>
+{% endraw %}
+{% else %}
+source ${OUTPUT_REPO_BASE}/config/config.sh
+{% endif %}
+
+#-----------------------------------------------
+# run script
+
+{{ invoke_script('scripts/main/run_verify.sh') }}
+
+#-----------------------------------------------
+{% if config.workflow_mode == 'ecflow' %}
+{% raw %}
+%include <common/tail.h>
+{% endraw %}
+{% endif %}

@@ -1,0 +1,17 @@
+#! /usr/bin/env bash
+#
+# {{ build_info_warning }}
+# {{ build_info_detail }}
+#
+# toyflow 生成的配置文件（shell 模式为 config.sh，ecflow 模式为 config.h）。
+
+echo "BEGIN: config.sh"
+
+export WORKFLOW_MODE={{ config.workflow_mode }}
+
+export PROJECT_BASE_DIR={{ config.project_base_dir }}
+export RUN_BASE_DIR={{ config.run_base_dir }}
+
+export FORECAST_LENGTH={{ config.forecast.forecast_length }}
+
+echo "END: config.sh"
