@@ -13,6 +13,7 @@ from .attributes import (
     Edit,
     Event,
     InLimit,
+    Label,
     Late,
     Limit,
     Meter,
@@ -49,6 +50,7 @@ class Node:
         self._trigger: Optional[str] = None
         self._completes: List[Complete] = []
         self._events: List[Event] = []
+        self._labels: List[Label] = []
         self._meters: List[Meter] = []
         self._limits: List[Limit] = []
         self._inlimits: List[InLimit] = []
@@ -117,6 +119,8 @@ class Node:
             self.add_defstatus(child.state)
         elif isinstance(child, Event):
             self.add_event(child.name)
+        elif isinstance(child, Label):
+            self.add_label(child.name, child.value)
         elif isinstance(child, Meter):
             self.add_meter(child.name, child.min_value, child.max_value)
         elif isinstance(child, Limit):
@@ -216,6 +220,11 @@ class Node:
         self._events.append(Event(name))
         return self
 
+    def add_label(self, name: str, value: str) -> Node:
+        """Add a label (mirrors native ecflow ``add_label(name, value)``)."""
+        self._labels.append(Label(name, value))
+        return self
+
     def add_meter(
         self,
         name: str,
@@ -295,6 +304,10 @@ class Node:
         # Variables.
         for key, value in self._variables.items():
             yield f"{pad}{self.INDENT}edit {key} {_quote(value)}"
+
+        # Labels (native ecflow prints them after edits, before events).
+        for label in self._labels:
+            yield f"{pad}{self.INDENT}{label.to_def()}"
 
         # Attribute objects (limits, inlimits, events, meters, times, lates, completes).
         for limit in self._limits:

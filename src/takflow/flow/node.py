@@ -175,6 +175,11 @@ class Node:
         self._engine.backend.add_event(self, name)
         return self
 
+    def add_label(self, name: str, value: str) -> "Node":
+        """添加标签。"""
+        self._engine.backend.add_label(self, name, value)
+        return self
+
     def add_meter(
         self,
         name: str,

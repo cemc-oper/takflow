@@ -92,6 +92,11 @@ class TaklerBackend(WorkflowBackend):
     def add_event(self, node: Node, name: str) -> None:
         node.raw.add_event(name)
 
+    def add_label(self, node: Node, name: str, value: str) -> None:
+        raise NotImplementedError(
+            "takler backend does not support labels (ecflow-only attribute)"
+        )
+
     def add_meter(
         self,
         node: Node,

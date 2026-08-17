@@ -97,6 +97,25 @@ class Event:
         return f"Event({self.name!r})"
 
 
+class Label:
+    """Represents a label attached to a node.
+
+    Mirrors the native ecFlow ``add_label(name, value)``; serialized as
+    ``label <name> "<value>"`` (value always double-quoted, even when empty).
+    """
+
+    def __init__(self, name: str, value: str):
+        self.name = str(name)
+        self.value = str(value)
+
+    def to_def(self) -> str:
+        escaped = self.value.replace('"', '\\"')
+        return f'label {self.name} "{escaped}"'
+
+    def __repr__(self) -> str:
+        return f"Label({self.name!r}, {self.value!r})"
+
+
 class Meter:
     """Represents a meter attached to a node."""
 

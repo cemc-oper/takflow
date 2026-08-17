@@ -93,6 +93,11 @@ class WorkflowBackend(ABC):
         ...
 
     @abstractmethod
+    def add_label(self, node: "Node", name: str, value: str) -> None:
+        """添加标签(ecflow 后端实现;takler 后端可抛 NotImplementedError)。"""
+        ...
+
+    @abstractmethod
     def add_meter(
         self,
         node: "Node",

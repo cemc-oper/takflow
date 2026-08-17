@@ -68,6 +68,9 @@ class EcflowBackend(WorkflowBackend):
     def add_event(self, node: Node, name: str) -> None:
         node.raw.add_event(name)
 
+    def add_label(self, node: Node, name: str, value: str) -> None:
+        node.raw.add_label(name, value)
+
     def add_meter(
         self,
         node: Node,
