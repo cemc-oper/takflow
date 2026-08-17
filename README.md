@@ -8,7 +8,11 @@
 
 `takflow`（`tak` 取自 takler + `flow`）是面向 CEMC 数值天气预报模式系统的统一工作流生成框架。
 
-它提供了一套通用的配置模型、作业资源描述契约、工作流引擎抽象和渲染工具，让业务工作流生成器（如 `mcv-workflow`、`mcv-oper-workflow`、`cma-gfs-post-workflow`）专注于领域逻辑，而无需重复实现 ecFlow 定义生成、作业脚本渲染、资源载体切换等通用能力。
+它提供了一套通用的配置模型、作业资源描述契约、工作流引擎抽象和渲染工具，让业务工作流生成器专注于领域逻辑，而无需重复实现 ecFlow 定义生成、作业脚本渲染、资源载体切换等通用能力。
+目前已应用如下系统流程中（内部访问）：
+
+- mcv-workflow
+- cma-gfs-post-workflow
 
 ## 设计原则
 
@@ -24,14 +28,22 @@
 
 ## 安装
 
-要求 Python >= 3.10。在依赖它的业务包之前先安装 `takflow`：
+要求 Python >= 3.10。
+
+使用 pip 安装最新发布版本：
+
+```bash
+pip install takflow
+```
+
+或者通过源代码安装最新开发版本：
 
 ```bash
 git clone https://github.com/cemc-oper/takflow.git
 # or in CMA, use metcode
 # git clone http://e.mc.met.cma/codingcorp/cemc-takler/takflow.git
 cd takflow
-pip install -e ".[dev]"
+pip install .
 ```
 
 ## 工作流规范(YAML)
