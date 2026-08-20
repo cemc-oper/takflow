@@ -15,7 +15,6 @@ from jinja2 import Environment, FileSystemLoader
 from takflow.build_info import get_build_info, get_build_info_lines
 from takflow.flow import WorkflowEngine
 from takflow.backends.ecflow import EcflowBackend
-from takflow.backends.takler import TaklerBackend
 
 import toyflow
 from toyflow.config import ToyflowConfig
@@ -57,10 +56,19 @@ def render_config(
     return output_file_path
 
 
-_BACKEND_MAP = {
-    "ecflow": EcflowBackend,
-    "takler": TaklerBackend,
-}
+def _get_backend_class(mode: str):
+    """按 ``workflow_mode`` 返回后端类。
+
+    takler 后端懒加载：``takflow.backends.takler`` 依赖独立的 takler 包，
+    未安装时只有 takler 模式会报错，shell/ecflow 模式不受影响。
+    """
+    if mode == "ecflow":
+        return EcflowBackend
+    if mode == "takler":
+        from takflow.backends.takler import TaklerBackend
+        return TaklerBackend
+    raise ValueError(f"Unsupported workflow_mode: {mode}")
+
 
 _DEFAULT_SUFFIX = {
     "ecflow": ".def",
@@ -80,9 +88,7 @@ def generate_workflow(
     config.output_repo_base_dir = str(resolved_output_repo_base)
 
     mode = config.workflow_mode
-    backend_cls = _BACKEND_MAP.get(mode)
-    if backend_cls is None:
-        raise ValueError(f"Unsupported workflow_mode: {mode}")
+    backend_cls = _get_backend_class(mode)
 
     engine = WorkflowEngine(backend_cls())
     suite = create_suite(config, engine=engine)
