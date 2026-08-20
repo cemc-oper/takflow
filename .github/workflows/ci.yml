@@ -34,6 +34,41 @@ jobs:
       - name: Run tests
         run: pytest -v
 
+  conformance:
+    name: jobspec conformance (orvix)
+    runs-on: ubuntu-latest
+    env:
+      # 固定 orvix 版本：golden 文件与该版本行为一一对应。
+      # 升级前必须先在本地用新版 orvix 重新生成 golden 文件并确认差异。
+      ORVIX_VERSION: 0.1.0
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install orvix (pinned release)
+        run: |
+          base=https://github.com/cemc-oper/orvix/releases/download/v${ORVIX_VERSION}
+          curl -sSLO ${base}/orvix_${ORVIX_VERSION}_linux_amd64.tar.gz
+          curl -sSLO ${base}/checksums.txt
+          grep linux_amd64 checksums.txt | sha256sum -c -
+          tar -xzf orvix_${ORVIX_VERSION}_linux_amd64.tar.gz
+          sudo install -m 755 orvix /usr/local/bin/orvix
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install takflow with dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run conformance tests
+        run: pytest tests/test_conformance.py -v
+
   build:
     name: build check
     runs-on: ubuntu-latest
