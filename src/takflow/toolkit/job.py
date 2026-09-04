@@ -98,6 +98,7 @@ def render_jobs_from_directory(
     config: "BaseWorkflowConfig",
     repo_base: Union[str, Path, List[Union[str, Path]]],
     output_repo_base: str,
+    job_output_dir: str = "jobs",
 ) -> None:
     """Render every ``jobs/**/*.j2`` template under one or more repo roots.
 
@@ -111,6 +112,12 @@ def render_jobs_from_directory(
         directories overwrite earlier ones for identical relative paths.
     output_repo_base : str
         Output repo root.
+    job_output_dir : str
+        Output subdirectory for rendered job files, relative to
+        ``output_repo_base``. The default ``"jobs"`` reproduces the source
+        layout (``jobs/<rel>.j2`` -> ``jobs/<rel>.<suffix>``); apps whose
+        runtime layout differs (e.g. TYM's ``ecffiles/``) pass their own
+        directory name.
     """
     if isinstance(repo_base, (str, Path)):
         repo_bases = [str(repo_base)]
@@ -194,14 +201,17 @@ def render_jobs_from_directory(
         j2_files = jobs_dir.rglob("*.j2")
         for j2_file in j2_files:
             relative_path = j2_file.relative_to(repo_base_str)
+            jobs_relative_path = j2_file.relative_to(jobs_dir)
 
-            if relative_path.stem.endswith(".sh"):
-                base_name = relative_path.stem[:-3]
+            if jobs_relative_path.stem.endswith(".sh"):
+                base_name = jobs_relative_path.stem[:-3]
             else:
-                base_name = relative_path.stem
+                base_name = jobs_relative_path.stem
 
             output_file_relative_path = Path(
-                relative_path.parent, f"{base_name}.{output_file_suffix}"
+                job_output_dir,
+                jobs_relative_path.parent,
+                f"{base_name}.{output_file_suffix}",
             )
 
             render_single_job_file(
