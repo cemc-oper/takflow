@@ -99,6 +99,7 @@ def render_jobs_from_directory(
     repo_base: Union[str, Path, List[Union[str, Path]]],
     output_repo_base: str,
     job_output_dir: str = "jobs",
+    template_filter: Optional[Callable[[Path], bool]] = None,
 ) -> None:
     """Render every ``jobs/**/*.j2`` template under one or more repo roots.
 
@@ -118,6 +119,14 @@ def render_jobs_from_directory(
         layout (``jobs/<rel>.j2`` -> ``jobs/<rel>.<suffix>``); apps whose
         runtime layout differs (e.g. TYM's ``ecffiles/``) pass their own
         directory name.
+    template_filter : callable, optional
+        Predicate receiving the template's path relative to its ``jobs/``
+        directory (e.g. ``Path("data/initial.sh.j2")``); returning ``False``
+        skips the template entirely (no rendering, no output file). Intended
+        for feature-toggle-aware generation: apps pass a predicate derived
+        from their ``enable_*`` switches so templates of disabled components
+        never enter rendering. ``None`` (default) renders everything —
+        identical to the previous behaviour.
     """
     if isinstance(repo_base, (str, Path)):
         repo_bases = [str(repo_base)]
@@ -202,6 +211,10 @@ def render_jobs_from_directory(
         for j2_file in j2_files:
             relative_path = j2_file.relative_to(repo_base_str)
             jobs_relative_path = j2_file.relative_to(jobs_dir)
+
+            if template_filter is not None and not template_filter(jobs_relative_path):
+                print(f"Skipped (disabled): {jobs_relative_path}")
+                continue
 
             if jobs_relative_path.stem.endswith(".sh"):
                 base_name = jobs_relative_path.stem[:-3]
