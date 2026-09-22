@@ -7,8 +7,16 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
-from takler.core import Bunch, Flow, NodeContainer, RepeatDate, NodeStatus
-from takler.tasks.shell import ShellScriptTask
+try:
+    from takler.core import Bunch, Flow, NodeContainer, RepeatDate, NodeStatus
+    from takler.tasks.shell import ShellScriptTask
+
+    _TAKLER_AVAILABLE = True
+except ImportError:
+    # takler 是可选运行时依赖（未发布到 PyPI），仅在使用 takler 后端时需要；
+    # 仅生成 ecFlow/shell 套件的环境不应因缺少 takler 而无法导入本模块。
+    Bunch = Flow = NodeContainer = RepeatDate = NodeStatus = ShellScriptTask = None
+    _TAKLER_AVAILABLE = False
 
 from takflow.flow import Node, NodeType, WorkflowBackend
 
@@ -19,6 +27,11 @@ class TaklerBackend(WorkflowBackend):
     """
 
     def __init__(self, host: str = None, port: Union[int, str] = None):
+        if not _TAKLER_AVAILABLE:
+            raise ImportError(
+                "TaklerBackend requires the 'takler' package, which is not installed. "
+                "Install it from runtime/takler-devel/repo/takler to use the takler backend."
+            )
         self.host = host
         self.port = port
         self._bunch = Bunch(name="mcv", host=host, port=port)
