@@ -20,7 +20,12 @@ from pathlib import Path
 
 import pytest
 
-from takflow.spec.jobspec.conformance import CASES, SCHEDULERS, build_script
+from takflow.spec.jobspec.conformance import (
+    CASES,
+    LEADING_BLANK_CASES,
+    SCHEDULERS,
+    build_script,
+)
 
 HERE = Path(__file__).resolve()
 CONF_DIR = (
@@ -47,7 +52,7 @@ CASE_NAMES = sorted(CASES)
 def test_rendered_script_matches_committed_vector(name):
     """The committed vector must equal what build_script() produces now."""
     committed = (VECTORS_DIR / f"{name}.sh").read_text(encoding="utf-8")
-    assert build_script(CASES[name]) == committed
+    assert build_script(CASES[name], leading_blank=name in LEADING_BLANK_CASES) == committed
 
 
 @orvix_required

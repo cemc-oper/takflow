@@ -1,0 +1,6 @@
+#!/bin/bash
+#DSUB -q serial
+#DSUB -T 300
+#DSUB -d "op_mcv:mcv"
+
+echo "running ${0##*/}"

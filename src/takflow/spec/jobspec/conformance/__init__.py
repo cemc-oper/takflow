@@ -56,13 +56,31 @@ CASES: Dict[str, ResourceSpec] = {
         memory="70G",
         requeue=False,
     ),
+    # Regression (mcv 2.5 HPC run): ecFlow-created job files may start with
+    # blank line(s) before the shebang — orvix must still hoist the shebang
+    # ahead of the scheduler preamble. Serial task, mcv-style short walltime.
+    "serial_leading_blank": ResourceSpec(
+        time="5:00",
+        queue="serial",
+        project="op_mcv",
+        application="mcv",
+    ),
 }
 
+#: Cases whose vector starts with blank line(s) before the shebang.
+LEADING_BLANK_CASES = frozenset({"serial_leading_blank"})
 
-def build_script(spec: ResourceSpec) -> str:
-    """Render a full vector script (shebang + #ORVIX block + body) for ``spec``."""
+
+def build_script(spec: ResourceSpec, leading_blank: bool = False) -> str:
+    """Render a full vector script (shebang + #ORVIX block + body) for ``spec``.
+
+    ``leading_blank=True`` prepends a blank line before the shebang, mimicking
+    ecFlow-created job files.
+    """
     lines = [SHEBANG, *to_orvix_directives(spec), "", BODY.rstrip("\n"), ""]
+    if leading_blank:
+        lines.insert(0, "")
     return "\n".join(lines)
 
 
-__all__ = ["SCHEDULERS", "CASES", "build_script", "SHEBANG", "BODY"]
+__all__ = ["SCHEDULERS", "CASES", "build_script", "SHEBANG", "BODY", "LEADING_BLANK_CASES"]

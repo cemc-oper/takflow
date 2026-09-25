@@ -19,7 +19,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from takflow.spec.jobspec.conformance import CASES, SCHEDULERS, build_script
+from takflow.spec.jobspec.conformance import CASES, LEADING_BLANK_CASES, SCHEDULERS, build_script
 
 HERE = Path(__file__).resolve().parent
 VECTORS_DIR = HERE / "vectors"
@@ -35,7 +35,10 @@ def write_vectors() -> dict[str, Path]:
     paths: dict[str, Path] = {}
     for name, spec in CASES.items():
         path = VECTORS_DIR / f"{name}.sh"
-        path.write_text(build_script(spec), encoding="utf-8")
+        path.write_text(
+            build_script(spec, leading_blank=name in LEADING_BLANK_CASES),
+            encoding="utf-8",
+        )
         paths[name] = path
     return paths
 
