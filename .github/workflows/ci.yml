@@ -40,7 +40,7 @@ jobs:
     env:
       # 固定 orvix 版本：golden 文件与该版本行为一一对应。
       # 升级前必须先在本地用新版 orvix 重新生成 golden 文件并确认差异。
-      ORVIX_VERSION: 0.1.0
+      ORVIX_VERSION: 0.2.0
 
     steps:
       - uses: actions/checkout@v4
