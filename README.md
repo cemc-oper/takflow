@@ -5,6 +5,7 @@
 ![PyPI - Version](https://img.shields.io/pypi/v/takflow)
 ![GitHub License](https://img.shields.io/github/license/cemc-oper/takflow)
 ![GitHub Action Workflow Status](https://github.com/cemc-oper/takflow/actions/workflows/ci.yml/badge.svg)
+[![Documentation Status](https://readthedocs.org/projects/takflow/badge/?version=latest)](https://takflow.readthedocs.io/)
 
 `takflow`（`tak` 取自 takler + `flow`）是面向 CEMC 数值天气预报模式系统的统一工作流生成框架。
 
@@ -56,6 +57,10 @@ suite.add_family("main").add_task("forecast")
 完整的端到端最小应用见 [`examples/toyflow/`](examples/toyflow/README.md)。
 
 ## 文档
+
+在线文档：<https://takflow.readthedocs.io/>
+
+本地构建：
 
 ```bash
 pip install -e ".[docs]"
