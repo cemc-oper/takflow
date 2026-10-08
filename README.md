@@ -71,7 +71,7 @@ cd docs && make html
 - 使用指南：[配置](docs/source/guide/config.md) · [jobspec](docs/source/guide/jobspec.md) ·
   [流程与钩子](docs/source/guide/flow-and-hooks.md) ·
   [后端与资源载体](docs/source/guide/backends.md) · [构建 CLI](docs/source/guide/cli.md)
-- [架构设计](docs/source/design/architecture.md) · [jobspec 契约](docs/source/reference/jobspec-schema.md)
+- [架构设计](docs/source/develop/architecture.md) · [jobspec 契约](docs/source/reference/jobspec-schema.md)
 
 ## 许可
 

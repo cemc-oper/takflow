@@ -14,4 +14,3 @@ takflow 文档
    guide/index
    reference/index
    develop/index
-   design/index
