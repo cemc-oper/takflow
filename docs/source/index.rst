@@ -8,40 +8,10 @@ takflow 文档
 
 .. toctree::
    :maxdepth: 2
-   :caption: 快速上手
+   :hidden:
 
    quickstart
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 使用指南
-
-   guide/config
-   guide/jobspec
-   guide/flow-and-hooks
-   guide/backends
-   guide/cli
-
-.. toctree::
-   :maxdepth: 2
-   :caption: API 参考
-
-   reference/config
-   reference/jobspec
-   reference/flow
-   reference/backends
-   reference/toolkit
-   reference/jobspec-schema
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 开发
-
-   develop/testing
-   develop/versioning
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 设计
-
-   design/architecture
+   guide/index
+   reference/index
+   develop/index
+   design/index
