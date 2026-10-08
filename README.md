@@ -60,19 +60,6 @@ suite.add_family("main").add_task("forecast")
 
 在线文档：<https://takflow.readthedocs.io/>
 
-本地构建：
-
-```bash
-uv sync --group docs
-cd docs && make html
-```
-
-- [快速上手](docs/source/quickstart.md)
-- 使用指南：[配置](docs/source/guide/config.md) · [jobspec](docs/source/guide/jobspec.md) ·
-  [流程与钩子](docs/source/guide/flow-and-hooks.md) ·
-  [后端与资源载体](docs/source/guide/backends.md) · [构建 CLI](docs/source/guide/cli.md)
-- [架构设计](docs/source/develop/architecture.md) · [jobspec 契约](docs/source/reference/jobspec-schema.md)
-
 ## 许可
 
 `takflow` 采用 Apache-2.0 许可证。

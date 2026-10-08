@@ -25,6 +25,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=7.0",
+    { include-group = "docs" },
 ]
 docs = [
     "sphinx>=7.0",
