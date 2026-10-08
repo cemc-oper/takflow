@@ -22,11 +22,9 @@ dependencies = [
     "jinja2",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "jsonschema>=4.0",
 ]
 docs = [
     "sphinx>=7.0",

@@ -26,10 +26,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install package with dev dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: uv pip install --system -e . --group dev
 
       - name: Run tests
         run: pytest -v
@@ -61,10 +62,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install takflow with dev dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: uv pip install --system -e . --group dev
 
       - name: Run conformance tests
         run: pytest tests/test_conformance.py -v

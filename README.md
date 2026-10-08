@@ -63,7 +63,7 @@ suite.add_family("main").add_task("forecast")
 本地构建：
 
 ```bash
-pip install -e ".[docs]"
+uv sync --group docs
 cd docs && make html
 ```
 
