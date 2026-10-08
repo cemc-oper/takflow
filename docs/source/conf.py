@@ -69,3 +69,41 @@ html_theme_options = {
     "navigation_with_keys": False,
 }
 html_title = "takflow"
+
+# -- Resolve napoleon/autodoc duplicate attribute entries --------------------
+# 类 docstring 的 numpy 风格 "Attributes" 段由 napoleon 渲染成带描述的属性条目；
+# autodoc 又会把带注解的类字段/property 自动文档化成第二条（无描述）重复条目。
+# 这里跳过 autodoc 生成的那份：凡属性名出现在所属类 "Attributes" 段中的，
+# 跳过 autodoc 的 attribute/property 成员条目，保留 napoleon 版本。
+import importlib
+import re
+from functools import lru_cache
+from inspect import cleandoc
+
+
+@lru_cache(maxsize=None)
+def _attributes_section_names(class_name: str):
+    """Return attribute names listed in the class docstring's Attributes section."""
+    module_name, _, attr_path = class_name.rpartition(".")
+    try:
+        cls = getattr(importlib.import_module(module_name), attr_path)
+    except (ImportError, AttributeError):
+        return frozenset()
+    doc = cleandoc(cls.__doc__ or "")
+    m = re.search(r"(?ms)^Attributes\s*\n-+\s*\n(.*?)(?=^\S|\Z)", doc)
+    if not m:
+        return frozenset()
+    return frozenset(re.findall(r"(?m)^(\w+)\s*:", m.group(1)))
+
+
+def _skip_napoleon_attribute_duplicates(app, what, name, obj, skip, options):
+    if skip or what not in ("attribute", "property"):
+        return skip
+    class_name = app.env.ref_context.get("py:class")
+    if class_name and name in _attributes_section_names(class_name):
+        return True
+    return skip
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", _skip_napoleon_attribute_duplicates)
