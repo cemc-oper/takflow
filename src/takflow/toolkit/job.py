@@ -190,6 +190,7 @@ def render_jobs_from_directory(
         env = Environment(
             loader=FileSystemLoader(search_paths),
             lstrip_blocks=True,
+            trim_blocks=True,
         )
         env.globals["include_raw"] = include_raw
         env.globals["invoke_script"] = invoke_script

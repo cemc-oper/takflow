@@ -31,7 +31,11 @@ def render_credential_template(
     template_name: str = "credential_workflow.sh.j2",
 ) -> str:
     """Render a credential fragment from ``{repo_base}/config/{template_name}``."""
-    env = Environment(loader=FileSystemLoader(f"{repo_base}/config"))
+    env = Environment(
+        loader=FileSystemLoader(f"{repo_base}/config"),
+        lstrip_blocks=True,
+        trim_blocks=True,
+    )
     template = env.get_template(template_name)
     return template.render(credential=credential, config=config)
 
