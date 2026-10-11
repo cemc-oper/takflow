@@ -3,19 +3,20 @@ takler 后端实现。
 
 将统一后端接口映射到 takler Python API。
 """
-import json
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
 try:
     from takler.core import Bunch, Flow, NodeContainer, RepeatDate, NodeStatus
     from takler.tasks.shell import ShellScriptTask
+    from takler.serialization.definition import export_definition
 
     _TAKLER_AVAILABLE = True
 except ImportError:
     # takler 是可选运行时依赖（未发布到 PyPI），仅在使用 takler 后端时需要；
     # 仅生成 ecFlow/shell 套件的环境不应因缺少 takler 而无法导入本模块。
     Bunch = Flow = NodeContainer = RepeatDate = NodeStatus = ShellScriptTask = None
+    export_definition = None
     _TAKLER_AVAILABLE = False
 
 from takflow.flow import Node, NodeType, WorkflowBackend
@@ -133,8 +134,7 @@ class TaklerBackend(WorkflowBackend):
         complete: tuple[int, int] | None = None,
         complete_relative: bool = False,
     ) -> None:
-        # takler 未实现 Late；现阶段直接忽略。
-        return
+        raise NotImplementedError("takler backend does not support late")
 
     def add_repeat_date(
         self,
@@ -147,8 +147,7 @@ class TaklerBackend(WorkflowBackend):
         node.raw.add_repeat(repeat)
 
     def add_repeat_day(self, node: Node, step: int = 1) -> None:
-        # takler 没有直接的 RepeatDay，先以变量形式保留配置
-        node.raw.add_parameter("REPEAT_DAY_STEP", step)
+        raise NotImplementedError("takler backend does not support repeat_day")
 
     def add_time(self, node: Node, time_str: str) -> None:
         node.raw.add_time(time_str)
@@ -160,11 +159,10 @@ class TaklerBackend(WorkflowBackend):
         node.raw.set_default_node_status(NodeStatus.queued)
 
     def save_suite(self, suite: Node, output_path: Path) -> None:
-        self._bunch.add_flow(suite.raw)
+        # Load expects one Flow definition, not the legacy mixed Bunch tree.
+        document = export_definition(suite.raw)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        data = self._bunch.to_dict()
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        output_path.write_text(document.model_dump_json(indent=2), encoding="utf-8")
 
     def node_path(self, node: Node) -> str:
         return node.raw.node_path

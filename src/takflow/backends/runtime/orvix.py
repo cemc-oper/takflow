@@ -34,8 +34,8 @@ def orvix_job(engine: "WorkflowEngine", scheduler: str) -> Dict[str, str]:
         }
     # takler
     return {
-        "TAKLER_SHELL_JOB_CMD": f"orvix submit --scheduler {scheduler} {{ TAKLER_JOB }}",
-        "TAKLER_SHELL_KILL_CMD": "orvix kill {{ TAKLER_JOB }}.info.yaml",
+        "TAKLER_SHELL_JOB_CMD": f"orvix submit --scheduler {scheduler} {{{{ TAKLER_JOB | shquote }}}}",
+        "TAKLER_SHELL_KILL_CMD": 'orvix kill {{ (TAKLER_JOB ~ ".info.yaml") | shquote }}',
         "ORVIX_SCHEDULER": scheduler,
     }
 
