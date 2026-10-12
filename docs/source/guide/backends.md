@@ -50,3 +50,12 @@ set_runtime(suite, config.workload, engine=engine)
 | `slsubmit6` | `%QUEUE%` / `%NODES%` / `%WCKEY%` 变量 + `slsubmit6` | `gfs-post` / `meso-post` 默认 |
 
 两种 carrier 使用相同的 `TaskResource` 输入，切换只需改 YAML 中的 `workload.submit_carrier`。
+
+`set_runtime` 按 carrier 注入的提交/终止命令：
+
+- **`orvix` 载体**：ecFlow 下设 `ECF_JOB_CMD=orvix submit --scheduler %ORVIX_SCHEDULER% %ECF_JOB%`、
+  `ECF_KILL_CMD=orvix kill %ECF_JOB%.info.yaml`（takler 下对应 `TAKLER_SHELL_JOB_CMD`/
+  `TAKLER_SHELL_KILL_CMD`）；`ORVIX_SCHEDULER` 由 workload 的 `scheduler` 字段推导为 suite 变量。
+- **`slsubmit6` 载体**：任务级 `set_runtime` 把 `TaskResource` 展开为 ecFlow 变量
+  `%QUEUE%`/`%NODES%`/`%TASKS_PER_NODE%`/`%WCKEY%`，并设 `ECF_JOB_CMD=slsubmit6 ...`、
+  `ECF_KILL_CMD=slcancel4 ...`；`#SBATCH` 的最终转译由作业 include 的 `workload.h` 完成。

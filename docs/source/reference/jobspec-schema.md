@@ -24,6 +24,10 @@ nodelist, job_type, memory, dependency, requeue
 在 orvix 侧对应 `#ORVIX key=value` 指令解析器的词汇表（下划线在指令中写成连字符，
 如 `ntasks_per_node` → `ntasks-per-node`）。
 
+除 `requeue`（布尔，默认 `true`）与 `exclusive` 外，所有键的值均为字符串：指令层不做
+数值转换，避免 Go 侧与 Python 侧各自解析产生漂移；带类型的易用性由上层
+`TaskResource`（见 [作业资源描述](../guide/jobspec.md)）提供。
+
 ## 所有权规则
 
 - **takflow 是契约的唯一 owner**：schema、VERSION、对拍向量都在本仓库维护。

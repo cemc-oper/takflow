@@ -33,6 +33,29 @@ print("\n".join(to_orvix_directives(spec)))
 #ORVIX project=toyflow
 ```
 
+## 编译规则与字段语义
+
+`TaskResource.compile(workload)` 的取值规则：
+
+- `queue` 缺省时按 `job_type` 取 `workload.default_serial_queue`（serial）或
+  `default_parallel_queue`（parallel）；
+- `project` 取自 `workload.wckey`（→ slurm `--wckey`），`application` 取自
+  `workload.application`（→ slurm `--comment`）；
+- `requeue=false` 时 slurm 后端发 `--no-requeue`（donau/local 各自映射或忽略）；
+- `nodes`/`ntasks_per_node` 等整数字段编译时转成字符串——指令层不做数值转换，与 orvix
+  解析器保持一致。
+
+`to_orvix_directives(spec, conditional_for="slurm")` 可生成条件指令
+`#ORVIX [scheduler=slurm] key=value`，只在指定调度器下生效。
+
+> **命名冲突（务必注意）：** `TaskResource.job_type`（serial/parallel）是 takflow 的
+> **高层选择器**，只用来决定取哪个默认 queue；它**不**对应 orvix 的 `job-type` 指令
+> （后者是 donau `cosched` 一类调度属性）。`compile()` 绝不会把高层 `job_type` 当作
+> `#ORVIX job-type` 发出。orvix 的 `job-type`/`exclusive`/`dependency`/`nodelist`
+> 目前各应用均未使用，作为 `ResourceSpec` 的可选透传字段保留。
+>
+> 同理，规范名是 **`queue`**；旧名 `partition` 不是契约键，orvix 解析器会**静默丢弃**它。
+
 ## 在作业模板中使用
 
 Jinja2 作业模板中通过 `render_resource_block` 把资源块嵌入脚本头部，
