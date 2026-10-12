@@ -1,8 +1,9 @@
 """takflow — unified workflow-generation framework.
 
-Phase 0 exposes the ``jobspec`` contract layer. Later phases add the engine
-abstraction, hooks, config base, job/resource/credential/util, and the CLI
-skeleton (see ``../TAKFLOW_DESIGN.md``).
+Provides the generic layer shared by the domain applications: the ``jobspec``
+contract, flow/backend abstraction, hooks, config base, and the
+job/resource/credential/util toolkit (see
+``framework/doc/TAKFLOW_DESIGN.md`` in the workspace).
 """
 
 try:
