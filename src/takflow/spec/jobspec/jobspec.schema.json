@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cemc/takflow/jobspec/v1",
-  "title": "takflow jobspec — job-run resource description contract",
-  "description": "Canonical, language-neutral description of a job's HPC run resources. takflow renders it into #ORVIX directives; orvix translates those to slurm/donau/local. Keys are snake_case here and hyphenated as #ORVIX directives (e.g. job_name -> #ORVIX job-name). This file is the single source of truth and is vendored by orvix.",
+  "title": "jobspec — job-run resource description contract",
+  "description": "Canonical, language-neutral description of a job's HPC run resources. Workflow generators (takflow and its applications) render it into #ORVIX directives; orvix translates those to slurm/donau/local. Keys are snake_case here and hyphenated as #ORVIX directives (e.g. job_name -> #ORVIX job-name). This file is the single source of truth, owned by the orvix repo; takflow vendors a pinned read-only copy.",
   "type": "object",
   "properties": {
     "scheduler":       {"type": "string", "enum": ["slurm", "donau", "local"], "default": "local", "description": "Target scheduler backend."},
