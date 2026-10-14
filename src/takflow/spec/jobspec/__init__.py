@@ -1,8 +1,11 @@
-"""Accessors for the canonical jobspec contract artifacts.
+"""Accessors for the vendored jobspec contract artifacts.
 
-The schema (``jobspec.schema.json``) is the single source of truth for the
-job-run resource description. ``orvix`` vendors a copy of it; both sides are
-kept honest by the conformance harness under ``conformance/``.
+The schema (``jobspec.schema.json``), ``VERSION`` and ``conformance/`` are a
+**read-only vendored copy** of the jobspec contract owned by the ``orvix``
+repo (``spec/jobspec/`` there), pinned to the orvix ref recorded in
+``ORVIX_VERSION``. Do not edit them here — change the contract in orvix, then
+re-vendor with ``scripts/sync_jobspec.py``. Both sides are kept honest by the
+conformance harness under ``conformance/`` and the CI vendored-vs-pin check.
 """
 from __future__ import annotations
 

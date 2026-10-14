@@ -14,14 +14,15 @@ takflow 按职责分为六层，上层应用（如 `mcv-workflow`）只与其中
   - `backends/runtime/` → `#ORVIX` / `slsubmit6` 运行时提交描述
 - **工具层 `toolkit/`**：为上层应用构建 CLI 提供可复用能力（渲染作业模板、复制静态资源、
   渲染凭证文件）。
-- **契约层 `spec/jobspec/`**：语言无关的作业运行资源契约，`takflow` 为唯一 owner，
-  `orvix` 只读/对拍校验。详见 [jobspec 契约](../reference/jobspec-schema.md)。
+- **契约层 `spec/jobspec/`**：语言无关的作业运行资源契约的 vendor 只读副本
+  （唯一 owner 是 `orvix`，本仓库 pin + 消费侧对拍校验），外加 Python 渲染器
+  harness。详见 [jobspec 契约](../reference/jobspec-schema.md)。
 
 ## 包结构速查
 
 ```text
 src/takflow/
-├── spec/jobspec/           # 语言无关契约（被 orvix 使用）
+├── spec/jobspec/           # 语言无关契约的 vendor 副本（owner 是 orvix）+ 渲染器 harness
 ├── config/                 # 配置层
 ├── jobspec/                # 任务资源 Python 模型
 ├── flow/                   # 抽象层（WorkflowEngine / Node / Hook）

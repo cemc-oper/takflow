@@ -44,6 +44,7 @@ where = ["src"]
 takflow = [
     "spec/**/*.json",
     "spec/**/VERSION",
+    "spec/**/ORVIX_VERSION",
     "spec/**/*.sh",
     "spec/**/*.submit",
 ]

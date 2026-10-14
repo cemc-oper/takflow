@@ -1,11 +1,19 @@
-"""Conformance cases shared between vector generation and tests.
+"""Conformance cases shared between vector reproduction and tests.
 
 Each case is a :class:`~takflow.jobspec.model.ResourceSpec` describing generic,
 scheduler-neutral resources (``scheduler`` is left at the default so it is not
 pinned in the vector — the backend is chosen by ``orvix generate --scheduler``).
 
-The harness:  render a case to a ``#ORVIX`` script  ->  ``orvix generate
---scheduler X``  ->  diff against ``golden/X/<name>.submit``.
+The contract artifacts (``vectors/`` and ``golden/``) are **vendored read-only
+from the orvix repo** (``spec/jobspec/conformance/`` there), pinned via the
+``../ORVIX_VERSION`` file; do not edit them here — sync with
+``scripts/sync_jobspec.py``. This module is the Python renderer harness:
+
+- the render-stability test proves ``build_script(CASES[name])`` still
+  reproduces the vendored vector byte for byte (i.e. takflow's renderer keeps
+  honoring the contract's canonical vectors);
+- the conformance test pipes the vendored vector through the pinned
+  ``orvix generate --scheduler X`` and diffs against the vendored golden.
 """
 from __future__ import annotations
 

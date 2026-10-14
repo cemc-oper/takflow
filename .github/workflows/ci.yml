@@ -38,24 +38,35 @@ jobs:
   conformance:
     name: jobspec conformance (orvix)
     runs-on: ubuntu-latest
-    env:
-      # 固定 orvix 版本：golden 文件与该版本行为一一对应。
-      # 升级前必须先在本地用新版 orvix 重新生成 golden 文件并确认差异。
-      ORVIX_VERSION: 0.2.0
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install orvix (pinned release)
+      - name: Read pinned orvix ref
+        run: echo "ORVIX_REF=$(cat src/takflow/spec/jobspec/ORVIX_VERSION)" >> "$GITHUB_ENV"
+
+      - name: Clone orvix at the pinned ref
+        # The pin may be a tag or a SHA; fetch by ref works for both on GitHub.
         run: |
-          base=https://github.com/cemc-oper/orvix/releases/download/v${ORVIX_VERSION}
-          curl -sSLO ${base}/orvix_${ORVIX_VERSION}_linux_amd64.tar.gz
-          curl -sSLO ${base}/checksums.txt
-          grep linux_amd64 checksums.txt | sha256sum -c -
-          tar -xzf orvix_${ORVIX_VERSION}_linux_amd64.tar.gz
-          sudo install -m 755 orvix /usr/local/bin/orvix
+          git init /tmp/orvix
+          git -C /tmp/orvix remote add origin https://github.com/cemc-oper/orvix.git
+          git -C /tmp/orvix fetch --depth 1 origin "$ORVIX_REF"
+          git -C /tmp/orvix checkout FETCH_HEAD
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: /tmp/orvix/go.mod
+
+      - name: Build orvix from the pinned source
+        run: |
+          go build -o orvix-bin .
+          sudo install -m 755 orvix-bin /usr/local/bin/orvix
+        working-directory: /tmp/orvix
+
+      - name: Check vendored contract matches the pin
+        run: python scripts/sync_jobspec.py --check --orvix-repo /tmp/orvix
 
       - name: Set up Python
         uses: actions/setup-python@v5

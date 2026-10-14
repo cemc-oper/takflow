@@ -65,6 +65,8 @@ Jinja2 作业模板中通过 `render_resource_block` 把资源块嵌入脚本头
 
 `#ORVIX` 指令词汇表是 takflow 与 `orvix`（Go 作业提交层）之间的语言无关契约：
 
-- 权威 schema：`takflow.spec.jobspec` 中的 `jobspec.schema.json`（19 个键）。
-- takflow 是契约的唯一 owner；orvix 只 vendor 只读副本并做一致性校验。
+- 权威 schema 在 orvix 仓库的 `spec/jobspec/jobspec.schema.json`（19 个键）；
+  `takflow.spec.jobspec` 中是 vendor 只读副本（pin 见 `ORVIX_VERSION`）。
+- orvix 是契约的唯一 owner；takflow vendor 副本并做消费侧一致性校验（渲染稳定性
+  + pin 版本对拍）。
 - 契约详情见 [jobspec 契约](../reference/jobspec-schema.md)。

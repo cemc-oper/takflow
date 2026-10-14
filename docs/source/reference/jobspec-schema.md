@@ -5,10 +5,13 @@ Python 侧的应用（takflow 及其上层应用）和 Go 侧的 `orvix` 通过�
 
 ## 组成
 
+下表为本仓库的 vendor 只读副本（同步自 orvix，见文末所有权规则）：
+
 | 文件 | 作用 |
 |---|---|
-| `spec/jobspec/jobspec.schema.json` | 权威 schema，扁平 19 键，与 orvix `#ORVIX` 指令词汇表一一对应 |
-| `spec/jobspec/VERSION` | 契约版本号（语义化版本），takflow 唯一维护 |
+| `spec/jobspec/jobspec.schema.json` | 契约 schema，扁平 19 键，与 orvix `#ORVIX` 指令词汇表一一对应 |
+| `spec/jobspec/VERSION` | 契约版本号（语义化版本），orvix 唯一维护 |
+| `spec/jobspec/ORVIX_VERSION` | vendor 来源 pin：本副本同步自的 orvix git ref |
 | `spec/jobspec/conformance/vectors/*.sh` | 对拍输入：携带 `#ORVIX` 指令的作业脚本 |
 | `spec/jobspec/conformance/golden/<scheduler>/*.submit` | 对拍基线：`orvix generate` 的期望输出 |
 
@@ -30,8 +33,10 @@ nodelist, job_type, memory, dependency, requeue
 
 ## 所有权规则
 
-- **takflow 是契约的唯一 owner**：schema、VERSION、对拍向量都在本仓库维护。
-- **orvix 只 vendor 只读副本**：orvix 仓库中的 schema 拷贝只用于校验，不得修改；
-  修改契约必须从 takflow 发起，并同步 bump VERSION。
-- 契约变更后须重新生成 golden 输出并跑通对拍，见 [测试](../develop/testing.md) 与
-  [版本管理](../develop/versioning.md)。
+- **orvix 是契约的唯一 owner**：schema、VERSION、对拍向量的权威版本在 orvix
+  仓库的 `spec/jobspec/`（`github.com/cemc-oper/orvix`）。
+- **takflow 只 vendor 只读副本**：本目录内容同步自 orvix @ `ORVIX_VERSION` 记录的
+  pin，不得原地修改；修改契约必须从 orvix 发起，由其 bump VERSION。
+- 同步用 `python scripts/sync_jobspec.py --orvix-ref <ref>` 执行，CI 检查
+  vendor 副本与 pin 一致；契约变更后 orvix 侧重新生成 golden 输出并跑通对拍，
+  见 [测试](../develop/testing.md) 与 [版本管理](../develop/versioning.md)。

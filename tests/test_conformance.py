@@ -1,14 +1,20 @@
 """Conformance tests: takflow-rendered #ORVIX scripts vs orvix output.
 
-For each case x scheduler:
-  1. rebuild the vector script from the shared cases (proving render stability
-     against the committed ``vectors/<name>.sh``);
-  2. run ``orvix generate --scheduler X`` on the committed vector;
-  3. diff the result against the committed ``golden/X/<name>.submit``.
+The contract artifacts (``vectors/`` and ``golden/``) are vendored read-only
+from the orvix repo, pinned via ``src/takflow/spec/jobspec/ORVIX_VERSION``
+(CI verifies the vendored copy matches orvix @ that pin). The two test layers
+are the consumer-side acceptance gate:
 
-Requires an ``orvix`` binary (``ORVIX_BIN`` env var or on ``PATH``). If none is
-found, the orvix-dependent tests are skipped (not failed) so the suite still
-runs in environments without orvix.
+  1. render stability — ``build_script(CASES[name])`` must reproduce the
+     vendored ``vectors/<name>.sh`` byte for byte (takflow's renderer still
+     honors the contract's canonical vectors);
+  2. translation conformance — the pinned ``orvix generate --scheduler X``
+     on the vendored vector must equal the vendored
+     ``golden/X/<name>.submit``.
+
+Requires an ``orvix`` binary (``ORVIX_BIN`` env var or on ``PATH``) for layer 2;
+CI builds it from the pinned ref. If none is found, the orvix-dependent tests
+are skipped (not failed) so the suite still runs in environments without orvix.
 """
 from __future__ import annotations
 
