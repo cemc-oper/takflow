@@ -92,6 +92,8 @@ python -m toyflow.cli credential generate --config-file config/toyflow.yaml \
 
 需要静态定义清单时，安装 `takflow[observability]`，在配置中设置 `observability.enabled: true`、发布的 Sledra `spec_dir`、`application_revision` 和 `config_revision`。`workflow generate` 随后生成 `definition_manifest.json`；默认关闭时不生成此文件。详见 [可选 Sledra 定义导出](../../docs/source/guide/observability.md)。
 
+本地真实进程验收示例位于工作区的 `observability/sledra-devel/repo/sledra/examples/generated/`。它复用上述清单导出接口，生成 prepare→forecast→verify 定义与作业，再由独立 launcher 登记 Run、Attempt。`toyflow` 本身只演示静态生成，不充当运行入口。
+
 ## 把它改成你自己的应用
 
 1. 复制本目录，把包名 `toyflow` 改成你的应用名。
