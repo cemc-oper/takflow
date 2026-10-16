@@ -15,6 +15,13 @@ from takflow.toolkit.job import (
     set_build_info_provider,
 )
 from takflow.toolkit.resource import copy_resources_to_output, make_scripts_executable
+from takflow.toolkit.observability import (
+    ObservabilityConfigError,
+    TaskMapping,
+    expand_task_parameters,
+    export_definition_manifest,
+    write_definition_manifest,
+)
 from takflow.toolkit.util import (
     common_setting,
     script_cmd_var_name,
@@ -42,4 +49,9 @@ __all__ = [
     "script_cmd_value",
     "set_scheduling",
     "shell_job",
+    "ObservabilityConfigError",
+    "TaskMapping",
+    "expand_task_parameters",
+    "export_definition_manifest",
+    "write_definition_manifest",
 ]

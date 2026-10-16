@@ -17,7 +17,7 @@ from takflow.config.scheduling import (
     HousekeepConfig,
     SchedulingConfig,
 )
-from takflow.config.workflow import BaseWorkflowConfig, load_config_from_file
+from takflow.config.workflow import BaseWorkflowConfig, ObservabilityConfig, load_config_from_file
 
 __all__ = [
     "BaseWorkload",
@@ -28,6 +28,7 @@ __all__ = [
     "CycleConfig",
     "HousekeepConfig",
     "BaseWorkflowConfig",
+    "ObservabilityConfig",
     "load_config_from_file",
     "FortranBool",
     "fortran_variables",

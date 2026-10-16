@@ -15,6 +15,15 @@ from takflow.config.scheduling import CycleConfig, HousekeepConfig, SchedulingCo
 from takflow.config.workload import WorkloadType
 
 
+class ObservabilityConfig(BaseModel):
+    """Optional, generation-time Sledra integration."""
+
+    enabled: bool = False
+    spec_dir: Optional[str] = None
+    application_revision: Optional[str] = None
+    config_revision: Optional[str] = None
+
+
 class BaseWorkflowConfig(BaseModel):
     """App-agnostic workflow configuration base.
 
@@ -54,6 +63,7 @@ class BaseWorkflowConfig(BaseModel):
     workflow_name: str = "workflow"
     workflow_mode: Literal["shell", "ecflow", "takler"] = "shell"
     script_invoke_mode: Literal["external", "inline"] = "external"
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
     workload: WorkloadType
 
@@ -72,4 +82,4 @@ def load_config_from_file(
     return config_class(**yaml_data)
 
 
-__all__ = ["BaseWorkflowConfig", "load_config_from_file"]
+__all__ = ["BaseWorkflowConfig", "ObservabilityConfig", "load_config_from_file"]

@@ -28,6 +28,7 @@ toyflow/
 | 资源载体 | `flow.py` 的 `setup()` + 作业模板 | `set_runtime()` + 模板里 `render_orvix_resource_block` |
 | 工具层 `takflow.toolkit` | `src/toyflow/cli.py` | 拼出 4 步生成管线 + credential 生成 |
 | hook 系统 | `src/toyflow/hooks.py` | 应用自有 engine hook 注册表 + takflow 共享 credential hook |
+| 可选观测 | `src/toyflow/generate.py` | 启用时声明稳定任务键并导出 Sledra DefinitionManifest |
 
 ## 运行
 
@@ -88,6 +89,8 @@ python -m toyflow.cli credential generate --config-file config/toyflow.yaml \
 
 可以打开 `toyflow.def` 和 `jobs/main/forecast.ecf` 对照源码看每一行
 是从哪一层来的。
+
+需要静态定义清单时，安装 `takflow[observability]`，在配置中设置 `observability.enabled: true`、发布的 Sledra `spec_dir`、`application_revision` 和 `config_revision`。`workflow generate` 随后生成 `definition_manifest.json`；默认关闭时不生成此文件。详见 [可选 Sledra 定义导出](../../docs/source/guide/observability.md)。
 
 ## 把它改成你自己的应用
 

@@ -9,5 +9,6 @@ config
 jobspec
 flow-and-hooks
 backends
+observability
 cli
 ```

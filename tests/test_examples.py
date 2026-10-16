@@ -9,6 +9,8 @@ job generate → workflow generate → credential generate），断言生成物�
 from __future__ import annotations
 
 import sys
+import json
+import os
 from pathlib import Path
 
 import pytest
@@ -102,3 +104,67 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
     )
     credential_text = (output_repo_base / "config" / "credential.sh").read_text()
     assert "TOYFLOW_API_KEY" in credential_text
+
+
+def test_toyflow_explicitly_disabled_needs_no_sledra(toyflow):
+    from takflow.config import ObservabilityConfig
+    from toyflow.generate import generate_workflow
+
+    config, output_repo_base = toyflow
+    baseline = generate_workflow(config).read_bytes()
+    config.observability = ObservabilityConfig(enabled=False, spec_dir="/missing-sledra")
+    assert generate_workflow(config).read_bytes() == baseline
+    assert not (output_repo_base / "definition_manifest.json").exists()
+
+
+@pytest.mark.parametrize("invoke_mode", ["external", "inline"])
+def test_toyflow_optional_definition_manifest(toyflow, invoke_mode, tmp_path):
+    from takflow.config import ObservabilityConfig
+    from takflow.toolkit import copy_resources_to_output, render_jobs_from_directory
+    from takflow.toolkit.observability import ObservabilityConfigError
+    from toyflow.generate import generate_workflow
+    from toyflow.util import get_resources_path
+
+    config, output_repo_base = toyflow
+    config.script_invoke_mode = invoke_mode
+    resources = get_resources_path()
+    copy_resources_to_output(output_repo_base, resources)
+    render_jobs_from_directory(config, str(resources), str(output_repo_base))
+    baseline = generate_workflow(config).read_bytes()
+    generated = {
+        str(path.relative_to(output_repo_base)): path.read_bytes()
+        for directory in ("jobs", "scripts", "ecflow")
+        for path in (output_repo_base / directory).rglob("*") if path.is_file()
+    }
+    spec_dir = os.environ.get("SLEDRA_SPEC_DIR")
+    if not spec_dir:
+        pytest.skip("set SLEDRA_SPEC_DIR to a published Sledra 1.0.0 spec directory")
+    pytest.importorskip("jsonschema")
+
+    config.observability = ObservabilityConfig(
+        enabled=True, spec_dir=str(tmp_path / "missing"),
+        application_revision="toyflow-source-1", config_revision="toyflow-config-1",
+    )
+    with pytest.raises(ObservabilityConfigError, match="unavailable"):
+        generate_workflow(config)
+    assert not (output_repo_base / "definition_manifest.json").exists()
+    assert (output_repo_base / "toyflow.def").read_bytes() == baseline
+
+    config.observability.spec_dir = spec_dir
+    copy_resources_to_output(output_repo_base, resources)
+    render_jobs_from_directory(config, str(resources), str(output_repo_base))
+    assert generate_workflow(config).read_bytes() == baseline
+    assert {str(path.relative_to(output_repo_base)): path.read_bytes()
+            for directory in ("jobs", "scripts", "ecflow")
+            for path in (output_repo_base / directory).rglob("*") if path.is_file()} == generated
+    manifest_path = output_repo_base / "definition_manifest.json"
+    first = manifest_path.read_bytes()
+    manifest = json.loads(first)
+    assert manifest["definition_id"].startswith("def_")
+    assert "main.forecast" in {task["task_key"] for task in manifest["tasks"]}
+    generate_workflow(config)
+    assert manifest_path.read_bytes() == first
+
+    config.observability.enabled = False
+    generate_workflow(config)
+    assert (output_repo_base / "toyflow.def").read_bytes() == baseline
