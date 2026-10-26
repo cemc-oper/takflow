@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Union
 
 try:
-    from takler.core import Bunch, Flow, NodeContainer, RepeatDate, NodeStatus
+    from takler.core import Flow, NodeContainer, RepeatDate, NodeStatus
     from takler.tasks.shell import ShellScriptTask
     from takler.serialization.definition import export_definition
 
@@ -15,7 +15,7 @@ try:
 except ImportError:
     # takler 是可选运行时依赖（未发布到 PyPI），仅在使用 takler 后端时需要；
     # 仅生成 ecFlow/shell 套件的环境不应因缺少 takler 而无法导入本模块。
-    Bunch = Flow = NodeContainer = RepeatDate = NodeStatus = ShellScriptTask = None
+    Flow = NodeContainer = RepeatDate = NodeStatus = ShellScriptTask = None
     export_definition = None
     _TAKLER_AVAILABLE = False
 
@@ -35,7 +35,6 @@ class TaklerBackend(WorkflowBackend):
             )
         self.host = host
         self.port = port
-        self._bunch = Bunch(name="mcv", host=host, port=port)
 
     @property
     def backend_type(self) -> str:

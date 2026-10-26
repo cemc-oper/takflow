@@ -60,6 +60,27 @@ def _load_flow(output: Path):
     return bunch.find_node("/suite")
 
 
+def test_backend_does_not_create_legacy_application_bunch(monkeypatch):
+    def fail_if_created(*args, **kwargs):
+        raise AssertionError("TaklerBackend must not create a legacy application Bunch")
+
+    monkeypatch.setattr(
+        "takflow.backends.takler.backend.Bunch", fail_if_created, raising=False
+    )
+    TaklerBackend(host="localhost", port="33083")
+
+
+def test_suite_name_is_caller_supplied(tmp_path):
+    engine = WorkflowEngine(TaklerBackend())
+    suite = engine.Suite("research_flow")
+    output = tmp_path / "research_flow.json"
+    engine.save_suite(suite, output)
+
+    assert "mcv" not in output.read_text(encoding="utf-8")
+    document = parse_definition(output.read_bytes())
+    assert build_definition(document).name == "research_flow"
+
+
 def test_saved_suite_builds_and_loads_current_definition(tmp_path):
     output, source = _golden(tmp_path)
     document = parse_definition(output.read_bytes())
