@@ -73,7 +73,8 @@ fm_obs.add_task("prepare")
 
 ### 3. 选择后端并输出
 
-按 `workflow_mode` 从映射表取后端类，同一套节点树可输出 ecFlow `.def` 或 takler JSON：
+按 `workflow_mode` 从映射表取后端类，同一套节点树可在公共支持子集上输出 ecFlow `.def` 或
+takler JSON（能力差异见[后端能力矩阵](guide/backends.md)）：
 
 ```python
 from takflow.backends.ecflow import EcflowBackend

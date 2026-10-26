@@ -40,7 +40,9 @@ plot = fm_post.add_task("plot")
 plot.add_trigger(f"/{config.workflow_name}/main/forecast == complete")
 ```
 
-同一套节点树可以通过不同的后端输出为 ecFlow `.def` 或 takler JSON。
+同一套节点树可以在两个后端共同支持的子集上输出 ecFlow `.def` 或 takler JSON。
+label、late、repeat-day 等操作并非完全可移植，具体支持状态和语义差异见
+[后端能力矩阵](backends.md)。
 
 ## 扩展流程：钩子
 

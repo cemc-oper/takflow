@@ -162,10 +162,20 @@ def test_real_orvix_generate_accepts_rendered_job_without_submit(tmp_path):
     assert not Path(task.orvix_info_path).exists()
 
 
-def test_unsupported_late_and_repeat_day_fail_explicitly():
+def test_unsupported_attributes_fail_with_stable_errors():
     engine = WorkflowEngine(TaklerBackend())
     task = engine.Suite("suite").add_task("task")
-    with pytest.raises(NotImplementedError, match="late"):
+
+    with pytest.raises(NotImplementedError) as label_error:
+        task.add_label("owner", "research")
+    assert str(label_error.value) == (
+        "takler backend does not support labels (ecflow-only attribute)"
+    )
+
+    with pytest.raises(NotImplementedError) as late_error:
         task.add_late(submitted=(0, 10))
-    with pytest.raises(NotImplementedError, match="repeat_day"):
+    assert str(late_error.value) == "takler backend does not support late"
+
+    with pytest.raises(NotImplementedError) as repeat_day_error:
         task.add_repeat_day(1)
+    assert str(repeat_day_error.value) == "takler backend does not support repeat_day"

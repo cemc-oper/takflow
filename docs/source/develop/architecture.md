@@ -7,7 +7,8 @@ takflow 按职责分为六层，上层应用（如 `mcv-workflow`）只与其中
 - **资源模型层 `jobspec/`**：面向应用的 `TaskResource`（serial/parallel）向下编译成与
   `orvix` 对齐的扁平 `ResourceSpec`。
 - **抽象层 `flow/`**：与后端无关的流程定义 API（`WorkflowEngine`、`Node`、
-  `WorkflowBackend`、Hook 注册表），同一套节点树可同时生成 ecFlow `.def` 或 takler JSON。
+  `WorkflowBackend`、Hook 注册表），同一套节点树可在公共支持子集上生成 ecFlow `.def` 或
+  takler JSON；后端差异见[能力矩阵](../guide/backends.md)。
 - **转换层 `backends/`**：把抽象定义转换为具体运行形式：
   - `backends/ecflow/` → ecFlow `.def`
   - `backends/takler/` → takler flow
