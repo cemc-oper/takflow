@@ -3,6 +3,17 @@
 `takflow.spec.jobspec` 是语言无关的作业运行资源契约，是 takflow 存在的核心理由：
 Python 侧的应用（takflow 及其上层应用）和 Go 侧的 `orvix` 通过它保持作业资源描述一致。
 
+## 当前 vendor 快照
+
+| 项目 | 当前值 | 权威文件 |
+|---|---|---|
+| jobspec 契约版本 | `1.0.1` | `src/takflow/spec/jobspec/VERSION` |
+| orvix 来源 pin | `ab4916131c78c2d2e491d30de61968078c0353d4` | `src/takflow/spec/jobspec/ORVIX_VERSION` |
+
+本表是当前只读副本的可读展示，权威值始终以包内文件为准；执行 vendor 同步时必须同步核对本表。
+takflow 包版本不随这里的契约版本或 pin 机械变化，详见
+[公共 API 与兼容策略](../guide/public-api.md)。
+
 ## 组成
 
 下表为本仓库的 vendor 只读副本（同步自 orvix，见文末所有权规则）：
