@@ -24,11 +24,15 @@ toyflow/
 | 配置层 `takflow.config` | `src/toyflow/config.py` | 子类化 `BaseWorkflowConfig`，只加领域字段 |
 | 资源模型 `takflow.jobspec` | `config/toyflow.yaml` | YAML 里写 `TaskResource`（serial/parallel） |
 | 抽象层 `takflow.flow` | `src/toyflow/flow.py` | 后端无关地搭节点树、trigger、变量 |
-| 转换层 `takflow.backends` | `src/toyflow/generate.py` | 换 backend 输出 ecFlow `.def` / takler JSON |
+| 生成编排 `takflow.generation` | `src/toyflow/generate.py` | 由生成服务选择后端、解析输出路径并保存 ecFlow `.def` / takler JSON |
 | 资源载体 | `flow.py` 的 `setup()` + 作业模板 | `set_runtime()` + 模板里 `render_orvix_resource_block` |
 | 工具层 `takflow.toolkit` | `src/toyflow/cli.py` | 拼出 4 步生成管线 + credential 生成 |
 | hook 系统 | `src/toyflow/hooks.py` | 应用自有 engine hook 注册表 + takflow 共享 credential hook |
 | 可选观测 | `src/toyflow/generate.py` | 启用时声明稳定任务键并导出 Sledra DefinitionManifest |
+
+`toyflow.generate.generate_workflow()` 是面向 toyflow CLI 的薄入口：通用模式和保存编排
+委托 `takflow.generation`，toyflow 继续提供 `create_suite()`，并在保存前后构造、写出
+可选 manifest。应用自己的 `config generate` renderer 和四步 CLI 保持不变。
 
 ## 运行
 

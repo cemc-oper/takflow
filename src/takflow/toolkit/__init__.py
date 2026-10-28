@@ -18,6 +18,7 @@ from takflow.toolkit.resource import copy_resources_to_output, make_scripts_exec
 from takflow.toolkit.observability import (
     ObservabilityConfigError,
     TaskMapping,
+    execution_environment,
     expand_task_parameters,
     export_definition_manifest,
     write_definition_manifest,
@@ -51,6 +52,7 @@ __all__ = [
     "shell_job",
     "ObservabilityConfigError",
     "TaskMapping",
+    "execution_environment",
     "expand_task_parameters",
     "export_definition_manifest",
     "write_definition_manifest",

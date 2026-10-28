@@ -1,7 +1,7 @@
 """toyflow 生成步骤的实现（config generate / workflow generate）。
 
-``resource copy`` 和 ``job generate`` 直接用 ``takflow.toolkit`` 的现成函数，
-这里只实现 takflow 刻意留给应用的两步：配置文件渲染和工作流定义生成。
+``resource copy`` 和 ``job generate`` 使用 ``takflow.toolkit``，工作流生成
+编排使用 ``takflow.generation``；这里保留应用自己的配置渲染和 manifest 回调。
 """
 from __future__ import annotations
 
@@ -13,8 +13,7 @@ from typing import Optional, Union
 from jinja2 import Environment, FileSystemLoader
 
 from takflow.build_info import get_build_info, get_build_info_lines
-from takflow.flow import WorkflowEngine
-from takflow.backends.ecflow import EcflowBackend
+from takflow.generation import generate_workflow as generate_workflow_service
 from takflow.toolkit.observability import (
     ObservabilityConfigError,
     TaskMapping,
@@ -63,24 +62,9 @@ def render_config(
     return output_file_path
 
 
-def _get_backend_class(mode: str):
-    """按 ``workflow_mode`` 返回后端类。
-
-    takler 后端懒加载：``takflow.backends.takler`` 依赖独立的 takler 包，
-    未安装时只有 takler 模式会报错，shell/ecflow 模式不受影响。
-    """
-    if mode == "ecflow":
-        return EcflowBackend
-    if mode == "takler":
-        from takflow.backends.takler import TaklerBackend
-        return TaklerBackend
-    raise ValueError(f"Unsupported workflow_mode: {mode}")
-
-
-_DEFAULT_SUFFIX = {
-    "ecflow": ".def",
-    "takler": ".json",
-}
+def _reject_shell(config: ToyflowConfig, *_args) -> None:
+    """toyflow remains definition-only; retain its historical shell error."""
+    raise ValueError(f"Unsupported workflow_mode: {config.workflow_mode}")
 
 
 def _task_mappings(suite, config: ToyflowConfig) -> list[TaskMapping]:
@@ -131,30 +115,37 @@ def generate_workflow(
 ) -> Path:
     """根据 ``workflow_mode`` 生成工作流定义文件（ecflow .def / takler .json）。
 
-    定义文件写入输出仓库根目录，返回其路径。
+    定义文件写入输出仓库根目录，返回其路径。通用编排由 takflow 提供，
+    toyflow 只保留 suite builder 和可选 manifest 的保存前后回调。
     """
-    resolved_output_repo_base = get_output_repo_base_dir(config, output_repo_base)
-    config.output_repo_base_dir = str(resolved_output_repo_base)
+    manifest = None
 
-    mode = config.workflow_mode
-    backend_cls = _get_backend_class(mode)
+    def before_save(context) -> None:
+        nonlocal manifest
+        manifest = export_definition_manifest(
+            context.suite,
+            _task_mappings(context.suite, config) if config.observability.enabled else (),
+            observability=config.observability,
+            application_revision=config.observability.application_revision or "",
+            config_revision=config.observability.config_revision or "",
+            mapping_version="toyflow-1",
+            generator_version=takflow.__version__,
+            script_invoke_mode=config.script_invoke_mode,
+        )
 
-    engine = WorkflowEngine(backend_cls())
-    suite = create_suite(config, engine=engine)
+    def after_save(context) -> None:
+        if manifest is not None:
+            write_definition_manifest(
+                context.output_repo_base / "definition_manifest.json", manifest
+            )
 
-    manifest = export_definition_manifest(
-        suite,
-        _task_mappings(suite, config) if config.observability.enabled else (),
-        observability=config.observability,
-        application_revision=config.observability.application_revision or "",
-        config_revision=config.observability.config_revision or "",
-        mapping_version="toyflow-1",
-        generator_version=takflow.__version__,
-        script_invoke_mode=config.script_invoke_mode,
+    result = generate_workflow_service(
+        config,
+        output_repo_base=output_repo_base,
+        suite_builder=create_suite,
+        shell_renderer=_reject_shell,
+        before_save=before_save,
+        after_save=after_save,
     )
-
-    output_path = Path(resolved_output_repo_base, f"{config.workflow_name}{_DEFAULT_SUFFIX[mode]}")
-    engine.save_suite(suite, output_path)
-    if manifest is not None:
-        write_definition_manifest(Path(resolved_output_repo_base, "definition_manifest.json"), manifest)
-    return output_path
+    assert result.output_path is not None
+    return result.output_path

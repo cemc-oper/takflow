@@ -117,6 +117,17 @@ def test_toyflow_explicitly_disabled_needs_no_sledra(toyflow):
     assert not (output_repo_base / "definition_manifest.json").exists()
 
 
+def test_toyflow_shell_mode_remains_unsupported(toyflow):
+    from toyflow.generate import generate_workflow
+
+    config, output_repo_base = toyflow
+    config.workflow_mode = "shell"
+
+    with pytest.raises(ValueError, match="^Unsupported workflow_mode: shell$"):
+        generate_workflow(config)
+    assert not output_repo_base.exists()
+
+
 @pytest.mark.parametrize("invoke_mode", ["external", "inline"])
 def test_toyflow_optional_definition_manifest(toyflow, invoke_mode, tmp_path):
     from takflow.config import ObservabilityConfig

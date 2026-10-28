@@ -6,22 +6,45 @@ fields (toggles, component configs).
 """
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Literal, Optional
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from takflow.config.scheduling import CycleConfig, HousekeepConfig, SchedulingConfig
 from takflow.config.workload import WorkloadType
 
 
 class ObservabilityConfig(BaseModel):
-    """Optional, generation-time Sledra integration."""
+    """Opt-in Sledra integration; existing enabled configs retain v1 semantics.
+
+    Execution root namespace/timezone are set by the deployment's init-root,
+    not inferred or created by a workflow generator. Paths refer to the target
+    recording host and need not exist on the generation host.
+    """
 
     enabled: bool = False
+    mode: Literal["legacy-v1", "execution-v2"] = "legacy-v1"
+    recorder_bin: Optional[str] = None
+    bash_library: Optional[str] = None
+    root: Optional[str] = None
     spec_dir: Optional[str] = None
     application_revision: Optional[str] = None
     config_revision: Optional[str] = None
+
+    @model_validator(mode="after")
+    def check_execution_paths(self):
+        if self.enabled and self.mode == "execution-v2":
+            for name in ("recorder_bin", "bash_library", "root"):
+                value = getattr(self, name)
+                if (
+                    not value
+                    or not PurePosixPath(value).is_absolute()
+                    or any(ord(char) < 32 or ord(char) == 127 for char in value)
+                ):
+                    raise ValueError(f"execution-v2 requires an absolute {name} without control characters")
+        return self
 
 
 class BaseWorkflowConfig(BaseModel):

@@ -1,10 +1,9 @@
-# 工作流生成服务设计（TF-06）
+# 工作流生成服务
 
-状态：**设计草案** · 日期：2026-10-28
+状态：**已实现（TF-07）** · 日期：2026-10-28
 
-本文是 TF-06 的四应用对照与最小 API 草案。`takflow.generation` 及下述类型在 TF-07
-实现前**不构成公共 API 承诺**；首版只接入 toyflow，不要求 TYM、GFS-POST、MCV 同步修改，
-也不据此实现公共 CLI。
+本文记录 TF-06 的四应用对照和 TF-07 落地的公共 API。`takflow.generation` 及下述类型
+现已实现；首版只接入 toyflow，不要求 TYM、GFS-POST、MCV 同步修改，也不据此实现公共 CLI。
 
 ## 1. 目标与非目标
 
@@ -65,9 +64,9 @@ MCV oper 继续是独立入口：其 CLI 暴露 `--output/-o`，但不接受 bas
 TYM 的入口与建树函数已经分模块，但建树当前仍在 `workflow/flow.py`，不是独立顶层
 `flow/` 包。TF-08 的目录级前置是否已完成由 TYM 侧另行评审；本设计不提前将其标为就绪。
 
-## 3. 最小 API 草案
+## 3. 公共 API
 
-建议新增 `takflow.generation`，只暴露一个编排入口和两个小数据类型：
+`takflow.generation` 暴露一个编排入口和两个小数据类型：
 
 ```python
 from collections.abc import Callable
@@ -187,6 +186,8 @@ provider。通用服务只统一**调用时机**，不拥有应用品牌内容�
 toyflow facade 保留现有 `generate_workflow(config, output_repo_base=None) -> Path`：
 
 - `suite_builder` 直接使用现有 `create_suite(config, engine)`；
+- `shell_renderer` 只保留 toyflow 历史的 `Unsupported workflow_mode: shell` 错误，不增加
+  shell 生成能力，也不创建引擎或后端；
 - `before_save` 调用现有 `_task_mappings()` 和 `export_definition_manifest()`，把结果暂存于
   本次调用的局部闭包；
 - `after_save` 仅在 manifest 非空时调用 `write_definition_manifest()`；
@@ -223,12 +224,12 @@ toyflow 验证服务，但也不得把 toyflow 成功写成真实应用已经验
 
 TF-09 仍独立评审公共 CLI；本设计不预设需要 `takflow.cli`。
 
-## 8. TF-07 实施验收清单
+## 8. TF-07 验收范围
 
 - 默认输出、显式 output、缺失 output repo、不支持模式和缺失回调均有测试；
 - shell 用测试 renderer 验证不创建后端/引擎，definition hooks 不被误调用；
 - builder → before_save → save → after_save 顺序及两类失败后的文件状态有测试；
-- toyflow 新旧 definition、manifest 和配置驱动产物只有已声明差异，目标为零行为差异；
+- toyflow 新旧 definition、manifest 和配置驱动产物执行逐字节 golden diff，目标为零行为差异；
 - toyflow CLI 不改，未接入的 TYM/GFS-POST/MCV 不改；
-- 现有源码测试、jobspec conformance、CI 和安装后 wheel 冒烟继续通过；
-- 文档将草案状态更新为实际公共 API 后，才能按兼容策略承诺新入口。
+- 现有源码测试、jobspec conformance 和安装后 wheel 冒烟继续作为回归门；
+- 公共入口、兼容策略与 API 参考文档同步更新。

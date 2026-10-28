@@ -2,35 +2,19 @@
 
 ## 选择后端
 
-`takflow` 通过 `backends/` 提供具体后端实现。应用通常按 `workflow_mode` 从映射表中取后端类，
-切换后端只需更换 `WorkflowEngine` 构造参数（对应 toyflow 的 `src/toyflow/generate.py`）：
+`takflow` 通过 `backends/` 提供具体后端实现。应用通常把领域 suite builder 交给
+`takflow.generation`，由生成服务按 `workflow_mode` 选择后端和默认后缀（对应 toyflow 的
+`src/toyflow/generate.py`）：
 
 ```python
-from pathlib import Path
+from takflow.generation import generate_workflow
 
-from takflow.flow import WorkflowEngine
-from takflow.backends.ecflow import EcflowBackend
-from takflow.backends.takler import TaklerBackend
-
-_BACKEND_MAP = {
-    "ecflow": EcflowBackend,
-    "takler": TaklerBackend,
-}
-_DEFAULT_SUFFIX = {
-    "ecflow": ".def",
-    "takler": ".json",
-}
-
-mode = config.workflow_mode
-engine = WorkflowEngine(_BACKEND_MAP[mode]())
-suite = create_suite(config, engine=engine)  # 节点树构建见"流程与钩子"
-
-output_path = Path(
-    config.output_repo_base_dir,
-    f"{config.workflow_name}{_DEFAULT_SUFFIX[mode]}",
-)
-engine.save_suite(suite, output_path)
+result = generate_workflow(config, suite_builder=create_suite)
+output_path = result.output_path  # ecFlow: .def；takler: .json
 ```
+
+需要直接使用低层 API 时，仍可自行实例化 `WorkflowEngine(EcflowBackend())` 或
+`WorkflowEngine(TaklerBackend())` 并调用 `save_suite()`；后端能力边界不变。
 
 ## 后端能力矩阵
 

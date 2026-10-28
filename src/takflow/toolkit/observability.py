@@ -1,4 +1,4 @@
-"""Optional Sledra definition export. No Sledra dependency on the disabled path."""
+"""Optional Sledra configuration and legacy definition export."""
 
 from __future__ import annotations
 
@@ -21,6 +21,23 @@ _SCHEMA_SHA256 = "e1ecd0e3807064a6cc5f125905e397a6b381287a47299a1c2ef7214d60dc35
 
 class ObservabilityConfigError(ValueError):
     """Enabled definition export has invalid configuration or mapping."""
+
+
+def execution_environment(config: ObservabilityConfig) -> dict[str, str]:
+    """Return target-host values for an explicitly enabled Execution adapter.
+
+    This is data, not shell code. The application quotes it for its source
+    templates and skips its adapter entirely for an empty mapping. No files,
+    roots, identities or legacy manifests are created here.
+    """
+    if not config.enabled or config.mode != "execution-v2":
+        return {}
+    return {
+        "SLEDRA_MODE": "execution-v2",
+        "SLEDRA_BIN": config.recorder_bin,
+        "SLEDRA_BASH_LIBRARY": config.bash_library,
+        "SLEDRA_ROOT": config.root,
+    }
 
 
 @dataclass(frozen=True)
@@ -128,7 +145,7 @@ def export_definition_manifest(
     The application supplies every task key and dependency. This function never
     creates a Run, Attempt, runtime context, or recorder event.
     """
-    if not observability.enabled:
+    if not observability.enabled or observability.mode != "legacy-v1":
         return None
     validator = _validator(observability)
     if not all((application_revision, config_revision, mapping_version, generator_version)):

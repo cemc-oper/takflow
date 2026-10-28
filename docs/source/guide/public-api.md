@@ -35,6 +35,7 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.spec.jobspec` | `contract_version`、`load_schema`、`schema_keys`、`schema_path`；只读访问 vendor 资源 |
 | `takflow.flow` | `WorkflowEngine`、`Node`、`NodeType`、`WorkflowBackend`、通用 hook 基类和工厂 |
 | `takflow.flow.node/backend/hook` | 公共节点、后端抽象和 hook 实现；现有应用直接使用 `flow.hook` 的方式继续受支持 |
+| `takflow.generation` | `generate_workflow`、`GenerationContext`、`GenerationResult`；统一模式分发、输出路径和保存编排，builder/renderer 与应用产物回调由应用注入 |
 | `takflow.backends.ecflow` / `takflow.backends.takler` | `EcflowBackend` / `TaklerBackend`；能力差异以矩阵为准，takler 是可选运行时依赖 |
 | `takflow.backends.ecflow.serializer` | 已文档化的纯 Python ecFlow 低层 serializer；新应用优先使用 `EcflowBackend` |
 | `takflow.backends.runtime` | `set_runtime`、`set_scheduling`、`common_setting`、脚本变量和 shell job helpers |

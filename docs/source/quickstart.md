@@ -51,41 +51,47 @@ config = load_config_from_file("config/toyflow.yaml", config_class=ToyflowConfig
 
 ### 2. 定义运行流程
 
-用 `takflow.flow` 中与后端无关的 API 搭节点树：
+用 `takflow.flow` 中与后端无关的 API 搭节点树，并把领域构建留在应用自己的
+suite builder 中：
 
 ```python
 from takflow.flow import WorkflowEngine
-from takflow.backends.ecflow import EcflowBackend
 from takflow.backends.runtime import common_setting, set_runtime
 
-engine = WorkflowEngine(EcflowBackend())
-suite = engine.Suite(config.workflow_name)
 
-set_runtime(suite, config.workload, engine=engine)
-suite.add_variables(common_setting(engine=engine))
+def create_suite(config, engine: WorkflowEngine):
+    suite = engine.Suite(config.workflow_name)
 
-fm_obs = suite.add_family("obs")
-fm_obs.add_task("prepare")
-# ... main / post ...
+    set_runtime(suite, config.workload, engine=engine)
+    suite.add_variables(common_setting(engine=engine))
+
+    fm_obs = suite.add_family("obs")
+    fm_obs.add_task("prepare")
+    # ... main / post ...
+    return suite
 ```
 
 对应文件：`examples/toyflow/src/toyflow/flow.py`。详见 [流程与钩子](guide/flow-and-hooks.md)。
 
-### 3. 选择后端并输出
+### 3. 通过生成服务输出
 
-按 `workflow_mode` 从映射表取后端类，同一套节点树可在公共支持子集上输出 ecFlow `.def` 或
-takler JSON（能力差异见[后端能力矩阵](guide/backends.md)）：
+`takflow.generation` 根据 `workflow_mode` 选择后端和默认后缀，并编排 builder、
+保存前后回调与 definition 保存。同一套节点树可在公共支持子集上输出 ecFlow `.def`
+或 takler JSON（能力差异见[后端能力矩阵](guide/backends.md)）：
 
 ```python
-from takflow.backends.ecflow import EcflowBackend
-from takflow.backends.takler import TaklerBackend
+from takflow.generation import generate_workflow
 
-_BACKEND_MAP = {"ecflow": EcflowBackend, "takler": TaklerBackend}
-engine = WorkflowEngine(_BACKEND_MAP[config.workflow_mode]())
-engine.save_suite(suite, output_path)
+result = generate_workflow(config, suite_builder=create_suite)
+output_path = result.output_path
 ```
 
-对应文件：`examples/toyflow/src/toyflow/generate.py`。详见 [后端与资源载体](guide/backends.md)。
+输出仓库按显式 `output_repo_base` 参数、config 字段的顺序解析；definition 也可用
+`output=` 指定独立路径。shell 模式改为传入应用自己的 `shell_renderer`，不会创建后端
+或引擎。
+
+对应文件：`examples/toyflow/src/toyflow/generate.py`。详见
+[生成服务 API](reference/generation.rst) 和 [后端与资源载体](guide/backends.md)。
 
 ### 4. 构建命令行接口
 

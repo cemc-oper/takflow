@@ -10,6 +10,7 @@ API 参考
    config
    jobspec
    flow
+   generation
    backends
    toolkit
    jobspec-schema
