@@ -46,7 +46,8 @@ src/takflow/
 
 - **Hook 词汇表归应用**：takflow 只提供注册表机制（`BaseHookRegistry`），
   不预定义任何领域 hook 点；各应用定义自己的 `EngineHookPoint` 枚举与上下文。
-- **生成步骤刻意留白**：`config generate` 与 `workflow generate` 两步由应用自己实现，
-  toolkit 只提供原子能力，不规定 CLI 形态。
+- **生成职责分层**：`config generate` 与领域 suite/shell 构建仍由应用实现；
+  `workflow generate` 的模式分发、输出路径和保存编排由生成服务逐步收敛，
+  应用 CLI 与历史选项保持独立，详见[生成服务设计](generation-service.md)。
 - **凭证渲染是共享注册表**：与 engine hook 不同，credential hook 使用 takflow 全局
   注册表，业务包与业务扩展包按优先级向同一文件贡献片段。

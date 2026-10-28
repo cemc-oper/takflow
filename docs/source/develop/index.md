@@ -6,6 +6,7 @@
 :maxdepth: 2
 
 architecture
+generation-service
 testing
 versioning
 ```
