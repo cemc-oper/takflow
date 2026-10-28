@@ -103,3 +103,14 @@ jobs:
 
       - name: Check distributions
         run: twine check dist/*
+
+      - name: Install built wheel and toyflow in a clean environment
+        run: |
+          python -m venv /tmp/takflow-wheel-smoke
+          /tmp/takflow-wheel-smoke/bin/python -m pip install --no-cache-dir dist/takflow-*.whl examples/toyflow
+
+      - name: Check installed jobspec resources
+        run: /tmp/takflow-wheel-smoke/bin/python scripts/smoke_wheel_resources.py
+
+      - name: Run installed toyflow generation smoke
+        run: /tmp/takflow-wheel-smoke/bin/python scripts/smoke_toyflow_wheel.py
