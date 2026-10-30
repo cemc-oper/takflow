@@ -7,6 +7,7 @@ by the app through :func:`set_build_info_provider` (so generated headers read
 from __future__ import annotations
 
 import os
+import shlex
 import stat
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union, TYPE_CHECKING
@@ -171,10 +172,29 @@ def render_jobs_from_directory(
             content = f"%nopp\n{_pad}\n{content}\n{_pad}\n%end\n"
         return content
 
-    def invoke_script(script_path: str) -> str:
+    def invoke_script(script_path: str, *args: str) -> str:
+        """Invoke a business script; arguments are literal strings, not shell code.
+
+        ecFlow callbacks belong to the parent job. Keep exits, shell options,
+        variables and directory changes inside the business subshell. Do not
+        put this command in an if/AND/OR list: that can disable errexit inside.
+        Configuration fragments should use include_raw instead.
+        """
+        arguments = " ".join(shlex.quote(arg) for arg in args)
         if config.script_invoke_mode == "inline":
-            return include_raw(script_path)
-        return f"${{OUTPUT_REPO_BASE}}/{script_path}"
+            invocation = include_raw(script_path)
+            if args:
+                invocation = f"set -- {arguments}\n{invocation}"
+        else:
+            invocation = f"${{OUTPUT_REPO_BASE}}/{script_path}"
+            if config.workflow_mode == "ecflow":
+                invocation = f'"{invocation}"'
+            if args:
+                invocation += f" {arguments}"
+        if config.workflow_mode == "ecflow":
+            # A comment-only marker task still needs a command inside (...).
+            return f"(\n:\n{invocation}\n)\n"
+        return invocation
 
     def build_environment(source_idx: int) -> Environment:
         """Build a Jinja2 env where the current source repo has highest priority.

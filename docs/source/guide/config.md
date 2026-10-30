@@ -69,6 +69,23 @@ post_resource:
 | `cycles` | `dict[str, CycleConfig]` \| None | 预报启动循环配置 |
 | `housekeep` | `HousekeepConfig` \| None | 清理配置 |
 
+### ecFlow 业务脚本执行边界
+
+ecFlow 下，`invoke_script()` 对 inline 和 external 都生成独立的 `( ... )`
+子 shell。业务 `exit 0` 返回父作业并继续执行 tail；非零退出由父作业的
+`set -e` 和退出 trap 上报 abort。head/tail 统一拥有 init/complete/abort，
+业务脚本不得重复发送终态通知。括号内开头的 `:` 让仅含注释的占位任务也能执行。
+
+业务中的变量赋值、`cd` 和 shell 选项修改不会传回父作业；后台进程必须在
+业务内部等待并检查结果。不要把调用放入 `if`、`&&`、`||` 条件上下文，
+否则可能抑制 `set -e`。external 仍按脚本自身解释器和错误处理规则执行，
+不自动追加 `bash -e`。shell/takler 后端保持原有调用方式。
+
+模板可以用 `{{ invoke_script('scripts/check.sh', 'literal-argument') }}`
+传入字面量位置参数；参数由生成器引用，不进行 shell 表达式展开。
+不要在 `{{ invoke_script(...) }}` 后拼接参数。
+配置和函数库需要修改当前 shell 时，继续使用 `include_raw()` 或 `source`。
+
 ## 负载配置
 
 ### `SlurmWorkload`
