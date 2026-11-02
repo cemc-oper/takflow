@@ -92,8 +92,10 @@ if __name__ == "__main__":
 ```
 
 资源/输出目录的解析优先级（CLI 参数 > 配置字段 > 包内 `resources/` 或报错）由应用侧的小工具
-函数实现，见 toyflow 的 `src/toyflow/util.py`。`config generate` 与 `workflow generate` 两步
-由应用自己实现（takflow 刻意留给应用），见 toyflow 的 `src/toyflow/generate.py`。
+函数实现，见 toyflow 的 `src/toyflow/util.py`。`config generate` 的领域 renderer 由应用实现；
+`workflow generate` 的通用模式分发、路径和保存编排使用 `takflow.generation`，应用保留
+builder/renderer 和 CLI。TF-09 已决定不提供公共命令组，详见
+[公共 CLI 决策记录](../develop/cli-decision.md)。
 
 ## 凭证渲染 Hook
 

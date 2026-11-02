@@ -7,6 +7,7 @@
 
 architecture
 generation-service
+cli-decision
 testing
 versioning
 ```

@@ -67,17 +67,19 @@ observability 校验能力的依赖和启用条件见[可观测性](observabilit
 
 ## 3. 应用 CLI 的兼容边界
 
-takflow 当前没有 `takflow.cli` 或公共 console script。`mcv-workflow`、`mcv-oper-workflow`、
-TYM、toyflow 等命令及其 `resource/config/job/workflow/credential` 命令组、历史选项、默认值和
-输出路径覆盖优先级由**各应用仓库**拥有和发布。
+TF-09 已决定**不提供公共 CLI**：takflow 不实现 `takflow.cli`、公共 console script 或 CLI
+插件注册表，决策依据见[公共 CLI 决策记录](../develop/cli-decision.md)。
+`mcv-workflow`、`mcv-oper-workflow`、TYM、toyflow 等命令及其
+`resource/config/job/workflow/credential` 命令组、历史选项、默认值和输出路径覆盖优先级由
+**各应用仓库**拥有和发布。
 
 因此：
 
 - takflow 包版本不替代应用 CLI 的版本和变更记录；toolkit 的 Python API 变更也不等于 CLI
   选项变更。
 - 不在框架升级中静默统一 `--config`/`--config-file`、删除历史选项或改变既有路径优先级。
-- 应用 CLI 的弃用提示、兼容别名和移除版本由所属应用记录；未来是否提供公共 CLI 仍由独立
-  决策任务评审，本文不预先作出承诺。
+- 应用 CLI 的弃用提示、兼容别名和移除版本由所属应用记录；框架共享边界保持为生成服务、
+  toolkit 和其他已列出的 Python API。
 
 ## 4. 生成产物的兼容边界
 

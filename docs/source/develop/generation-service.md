@@ -235,7 +235,8 @@ test-suite 7 个用例、14 个 generate/verify 阶段全部通过。服务接�
 `generate_workflow()` 的重复编排，而不是上述 takflow toolkit 原子能力。私有
 `_BACKEND_MAP`、`_DEFAULT_SUFFIX` 可在消费者接入时删除，公共入口按各应用兼容策略保留。
 
-TF-09 仍独立评审公共 CLI；本设计不预设需要 `takflow.cli`。
+TF-09 已决定保留应用 CLI 与生成服务/toolkit 的边界，不实现 `takflow.cli`，详见
+[公共 CLI 决策记录](cli-decision.md)。
 
 ## 8. TF-07 验收范围
 
