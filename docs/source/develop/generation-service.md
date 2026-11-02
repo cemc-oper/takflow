@@ -1,9 +1,10 @@
 # 工作流生成服务
 
-状态：**已实现（TF-07）** · 日期：2026-10-28
+状态：**已实现（TF-07）；TYM 消费者已验证（TF-08）** · 日期：2026-11-02
 
-本文记录 TF-06 的四应用对照和 TF-07 落地的公共 API。`takflow.generation` 及下述类型
-现已实现；首版只接入 toyflow，不要求 TYM、GFS-POST、MCV 同步修改，也不据此实现公共 CLI。
+本文记录 TF-06 的四应用对照、TF-07 落地的公共 API 和 TF-08 真实消费者证据。
+`takflow.generation` 已接入 toyflow 与 TYM；GFS-POST、MCV 不在本次同步修改，
+也不据此实现公共 CLI。
 
 ## 1. 目标与非目标
 
@@ -54,15 +55,15 @@ MCV oper 继续是独立入口：其 CLI 暴露 `--output/-o`，但不接受 bas
 ### 2.3 源码依据
 
 - toyflow：`framework/takflow/examples/toyflow/src/toyflow/generate.py`、`flow.py`、`cli.py`。
-- TYM：`app/tym/cma-tym-v4-workflow/src/cma_tym/workflow/generator.py`、`workflow/flow.py`、
+- TYM：`app/tym/cma-tym-v4-workflow/src/cma_tym/workflow/generator.py`、`flow/flow.py`、
   `shell/generator.py`、`cli.py`。
 - GFS-POST：`app/gfs-post/cma-gfs-post-workflow/src/cma_gfs_post/workflow/generator.py`、
   `workflow/flow.py`、`cli.py`、`util.py`。
 - MCV：`app/mcv/mcv-workflow/src/mcv_workflow/workflow/{generator,definition,shell}.py`，以及
   `app/mcv/mcv-oper-workflow/src/mcv_oper_workflow/cli.py`。
 
-TYM 的入口与建树函数已经分模块，但建树当前仍在 `workflow/flow.py`，不是独立顶层
-`flow/` 包。TF-08 的目录级前置是否已完成由 TYM 侧另行评审；本设计不提前将其标为就绪。
+TYM 已将领域建树纯移动到独立顶层 `flow/` 包，`workflow/generator.py` 只保留生成入口，
+TF-08 的目录级前置已完成。
 
 ## 3. 公共 API
 
@@ -168,7 +169,7 @@ shell renderer 的模板、build-info、cycles 校验、enable-aware 和可执�
 ## 5. build-info、可执行位与错误边界
 
 首版**不向所有 definition 自动注入 build-info，也不统一 chmod**。当前只有 TYM 需要
-“保存后头部注入 + ugo+x”，应由其 `after_save` 完成；toyflow 的 manifest 构造/落盘则分别
+“保存后头部注入 + ugo+x”，由其 `after_save` 完成；toyflow 的 manifest 构造/落盘则分别
 放在 `before_save` / `after_save`。这样可同时保持：
 
 - toyflow 在 manifest 无效时不先写 definition；
@@ -196,16 +197,28 @@ toyflow facade 保留现有 `generate_workflow(config, output_repo_base=None) ->
 不得新增 definition 头、chmod、shell 支持或 CLI 选项。新旧生成行为以零差异为目标，尤其
 覆盖 observability 禁用、配置无效、manifest 校验失败和重复生成。
 
-### 6.2 后续消费者，仅记录映射，不在 TF-07 切换
+### 6.2 TF-08：TYM 真实消费者
+
+TYM 保留 `generate_workflow(config, output=None, verbose=True) -> Path`，实际接入为：
+
+- builder 调独立 `cma_tym.flow.flow.create_suite()` 并提取 `result["suite"]`；
+- `after_save` 调现有头部注入，保留 `model_version` 与 ugo+x；
+- shell 包装现有 renderer，保留固定 runner 路径、cycles 校验、应用头部、权限和 `Path` 返回；
+- definition 保留 output repo 领域校验，shell 独立 `output` 继续忽略，CLI 选项和成功提示不变。
+
+三形态 ecFlow/shell 新旧 golden 逐字节一致，TYM 全量 `292 passed, 20 skipped`，相关
+test-suite 7 个用例、14 个 generate/verify 阶段全部通过。服务接口无需修改。完整证据见
+`app/tym/doc/2026-11-02-takflow-generation-consumer/TF08_CONSUMER_FEEDBACK.md`。
+
+### 6.3 后续消费者，仅记录映射
 
 | 应用 | 未来 facade 需要保留的适配 |
 |---|---|
-| TYM | builder 提取 `result["suite"]`；`after_save` 调现有头部注入；shell 包装现有 renderer 并返回 `Path`；CLI 提示不变 |
 | GFS-POST | builder 提取 `result["suite"]`；facade 将默认 `output` 显式设为当前目录 `<suite_name>.def`；把统一结果重新组成原字典 |
 | MCV | builder 提取 `result["suite"]`；shell 包装现有 renderer 并保留 `None`；base/oper 各自维护 CLI 选项和 shell 限制 |
 
-真实应用推广仍按 **TYM → GFS-POST → MCV**，每次单独做消费者 golden diff。TF-08 未启动不妨碍
-toyflow 验证服务，但也不得把 toyflow 成功写成真实应用已经验证。
+后续真实应用推广仍按 **GFS-POST → MCV**，每次单独做消费者 golden diff，不把 TYM 的
+验证结果外推为其他应用已经接入。
 
 ## 7. toolkit 与兼容策略
 
