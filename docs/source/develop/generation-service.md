@@ -6,6 +6,8 @@
 `takflow.generation` 已接入 toyflow 与 TYM；GFS-POST、MCV 不在本次同步修改，
 也不据此实现公共 CLI。
 
+上述为 TF-07/08 的原始接入记录。TC-03 已在同一生成服务接入[阶段检查](../guide/generation-checks.md)，并为 MCV/GFS 旧保存入口增加薄检查调用；没有把它们的领域构图或旧返回整体迁成新的默认管线。
+
 ## 1. 目标与非目标
 
 生成服务只收敛各应用重复的工作流生成编排：
@@ -107,6 +109,8 @@ def generate_workflow(
     ] | None = None,
     before_save: Callable[[GenerationContext], None] | None = None,
     after_save: Callable[[GenerationContext], None] | None = None,
+    required_operations: tuple[str, ...] = (),
+    check_report: GenerationCheckReport | None = None,
 ) -> GenerationResult:
     ...
 ```
@@ -130,6 +134,8 @@ lambda 从自己的 `create_suite()` 返回值中提取 `Node`，并保持原有
   保存前校验和保存后收尾，不建立第二套全局 hook 注册表。
 
 服务不接收 `verbose`，不打印应用提示。日志、进度文本、加载/runner 用法提示留在应用 CLI。
+
+TC-03 的可选 check_report 来自 `takflow.checks`，原 Context/Result 字段不变。声明能力、输出条件及公共 Node 树在保存前检查，保存和 after_save 完成后核对实际定义；shell renderer 有路径返回时检查该文件，返回 None 时明确记录无法识别输出。原 builder/save/回调异常继续传播，已写文件与失败状态由收集器记录；新增检查错误使用带阶段/对象的 GenerationCheckError（ValueError 子类）。报告不管理 TC-06 的完整成功清单。旧行为对照与这些增量需一并阅读。
 
 ## 4. 分发与保存语义
 

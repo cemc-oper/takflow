@@ -54,6 +54,8 @@ takler 的三个显式不支持路径在 `test_takler_current_contract.py` 中�
 修改异常语义时必须同步更新该契约和本矩阵。后端的新能力只有在 definition 导出及相应消费者
 验证完成后，才能从“显式不支持”改为“支持”。
 
+同一限制通过 `WorkflowBackend.unsupported_operations` / `TaklerBackend.unsupported_operations` 的方法名集合提供给生成预检。消费者可声明 `required_operations`，在输出前拒绝已知不支持操作；它不是应用或组件注册表，也不替代原方法的异常契约。完整检查边界见[生成检查](generation-checks.md)。
+
 ## 资源载体
 
 **工作流后端与资源载体是正交维度。** `orvix` 和 `slsubmit6` 只负责作业资源、提交和终止命令，

@@ -18,6 +18,9 @@ class WorkflowBackend(ABC):
     均为统一的 ``Node`` 对象，具体底层节点通过 ``node.raw`` 获取。
     """
 
+    # Names correspond to this public interface, also used by preflight checks.
+    unsupported_operations: frozenset[str] = frozenset()
+
     @property
     @abstractmethod
     def backend_type(self) -> str:

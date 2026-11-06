@@ -9,6 +9,7 @@ config
 jobspec
 flow-and-hooks
 backends
+generation-checks
 public-api
 observability
 cli

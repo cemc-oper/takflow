@@ -7,3 +7,10 @@ shell renderer 和可选保存前后回调；shell 分支不会创建工作流�
 .. automodule:: takflow.generation
    :members:
    :show-inheritance:
+
+takflow.checks — 生成检查
+-------------------------
+
+.. automodule:: takflow.checks
+   :members:
+   :show-inheritance:

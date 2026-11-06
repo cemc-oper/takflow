@@ -27,6 +27,8 @@ class TaklerBackend(WorkflowBackend):
     takler 工作流引擎后端。
     """
 
+    unsupported_operations = frozenset({"add_label", "add_late", "add_repeat_day"})
+
     def __init__(self, host: str = None, port: Union[int, str] = None):
         if not _TAKLER_AVAILABLE:
             raise ImportError(
