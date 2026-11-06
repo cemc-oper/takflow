@@ -10,12 +10,15 @@ from pathlib import Path
 
 import takflow
 import toyflow
+from _wheel_smoke import check_installed_package
 
 TAKFLOW_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_FILE = TAKFLOW_ROOT / "examples" / "toyflow" / "config" / "toyflow.yaml"
 
 
 def main() -> None:
+    check_installed_package(takflow, "takflow")
+    check_installed_package(toyflow, "toyflow")
     executable = Path(sys.executable).with_name("toyflow")
     if not executable.is_file():
         raise SystemExit(f"installed toyflow entry point not found: {executable}")
@@ -38,6 +41,7 @@ def main() -> None:
                     str(output),
                 ],
                 check=True,
+                cwd=tmp,
             )
 
         config_path = output / "config" / "config.h"
@@ -55,8 +59,6 @@ def main() -> None:
         assert "/toyflow/obs/prepare == complete" in definition
         assert "#ORVIX nodes=2" in forecast_path.read_text(encoding="utf-8")
 
-    print(f"Installed takflow: {takflow.__file__}")
-    print(f"Installed toyflow: {toyflow.__file__}")
     print("Installed toyflow ecFlow generation smoke passed")
 
 

@@ -18,13 +18,16 @@ from takler.tasks.shell.shell_render import ShellRender  # noqa: E402
 from takler.tasks.shell.shell_script_task import ShellScriptTask  # noqa: E402
 
 from takflow.backends.runtime.orvix import orvix_job  # noqa: E402
+from takflow.backends.runtime import set_runtime  # noqa: E402
 from takflow.backends.takler.backend import TaklerBackend  # noqa: E402
+from takflow.config import ShellWorkload, SlurmWorkload  # noqa: E402
 from takflow.flow import WorkflowEngine  # noqa: E402
+from takflow.jobspec import TaskResource  # noqa: E402
 from takflow.jobspec.model import ResourceSpec  # noqa: E402
 from takflow.jobspec.render import render_resource_block  # noqa: E402
 
 
-def _golden(tmp_path: Path):
+def _golden(tmp_path: Path, *, scheduler="local"):
     engine = WorkflowEngine(TaklerBackend(host="localhost", port="33083"))
     suite = engine.Suite("suite")
     suite.add_variable("TAKLER_HOME", str(tmp_path / "jobs $' with spaces"))
@@ -48,7 +51,7 @@ def _golden(tmp_path: Path):
         encoding="utf-8",
     )
     task.add_variables({"TAKLER_SCRIPT": str(source), "CONFIG": "alpha"})
-    task.add_variables(orvix_job(engine, "local"))
+    task.add_variables(orvix_job(engine, scheduler))
     output = tmp_path / "suite.json"
     engine.save_suite(suite, output)
     return output, source
@@ -160,6 +163,70 @@ def test_real_orvix_generate_accepts_rendered_job_without_submit(tmp_path):
     assert translated.is_file()
     assert "{{" not in translated.read_text(encoding="utf-8")
     assert not Path(task.orvix_info_path).exists()
+
+
+@pytest.mark.parametrize("scheduler", ["slurm", "donau"])
+def test_scheduler_orvix_commands_render_without_submission(tmp_path, scheduler):
+    output, _ = _golden(tmp_path, scheduler=scheduler)
+    flow = _load_flow(output)
+    flow.begin()
+    task = flow.find_node("/suite/run")
+    task.increment_try_no()
+
+    command = task.create_job_script()
+    kill = ShellRender(task).render_command(
+        task.find_parent_parameter("TAKLER_SHELL_KILL_CMD").value
+    )
+    assert shlex.split(command) == [
+        "orvix", "submit", "--scheduler", scheduler, task.job_path,
+    ]
+    assert shlex.split(kill) == ["orvix", "kill", task.orvix_info_path]
+    assert Path(task.job_path).is_file()
+    assert not Path(task.orvix_info_path).exists()
+    assert not Path(task.jobout_path).exists()
+
+
+@pytest.mark.parametrize("carrier", ["direct", "slsubmit6_serial", "slsubmit6_parallel"])
+def test_legacy_carrier_commands_render_without_submission(tmp_path, carrier):
+    engine = WorkflowEngine(TaklerBackend())
+    suite = engine.Suite("suite")
+    suite.add_variable("TAKLER_HOME", str(tmp_path / "jobs"))
+    task = suite.add_task("run")
+    source = tmp_path / "source.takler"
+    source.write_text("#!/bin/sh\nprintf '%s\\n' '{{ TAKLER_ATTEMPT_ID }}'\n", encoding="utf-8")
+    task.add_variable("TAKLER_SCRIPT", str(source))
+    workload = (
+        ShellWorkload(submit_carrier="direct")
+        if carrier == "direct"
+        else SlurmWorkload(wckey="project", submit_carrier="slsubmit6")
+    )
+    resource = TaskResource(job_type="parallel", nodes=2, ntasks_per_node=4) if carrier.endswith("parallel") else None
+    set_runtime(task, workload, engine, resource)
+    output = tmp_path / "suite.json"
+    engine.save_suite(suite, output)
+    flow = _load_flow(output)
+    flow.begin()
+    loaded = flow.find_node("/suite/run")
+    loaded.increment_try_no()
+    command = loaded.create_job_script()
+    # Render only: no shell command, scheduler or kill command is executed.
+    loaded.add_parameter("TAKLER_RID", "12345")
+    kill = ShellRender(loaded).render_command(
+        loaded.find_parent_parameter("TAKLER_SHELL_KILL_CMD").value
+    )
+    if carrier == "direct":
+        assert command == f"{loaded.job_path} 1> {loaded.jobout_path} 2>&1"
+        assert shlex.split(kill) == ["kill", "-15", "12345"]
+    else:
+        assert shlex.split(command) == ["sbatch", loaded.job_path]
+        assert shlex.split(kill) == ["scancel", "12345"]
+        assert "slsubmit6" not in command
+        assert "slcancel4" not in kill
+    assert not loaded._uses_orvix()
+    assert loaded.orvix_info_path is None
+    assert Path(loaded.job_path).is_file()
+    assert loaded.attempt_id in Path(loaded.job_path).read_text(encoding="utf-8")
+    assert not Path(loaded.jobout_path).exists()
 
 
 def test_unsupported_attributes_fail_with_stable_errors():

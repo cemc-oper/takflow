@@ -6,111 +6,162 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    name: test (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: base without engines (py${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-
     steps:
       - uses: actions/checkout@v4
         with:
-          # setuptools_scm derives the version from git history/tags
           fetch-depth: 0
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-
+      - uses: astral-sh/setup-uv@v5
       - name: Install package with dev dependencies
-        run: uv pip install --system -e . --group dev
-
-      - name: Run tests
-        run: pytest -v
+        run: uv sync --locked --no-default-groups --group dev --python "${{ matrix.python-version }}"
+      - name: Require engine-free imports and base tests
+        run: .venv/bin/python scripts/run_contract_tests.py base
 
   conformance:
-    name: jobspec conformance (orvix)
-    runs-on: ubuntu-latest
+    name: pinned orvix conformance
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Read pinned orvix ref
-        run: echo "ORVIX_REF=$(cat src/takflow/spec/jobspec/ORVIX_VERSION)" >> "$GITHUB_ENV"
-
-      - name: Clone orvix at the pinned ref
-        # The pin may be a tag or a SHA; fetch by ref works for both on GitHub.
+      - name: Read pinned orvix revision
+        run: |
+          ORVIX_REF=$(cat src/takflow/spec/jobspec/ORVIX_VERSION)
+          [[ "$ORVIX_REF" =~ ^[0-9a-f]{40}$ ]]
+          echo "ORVIX_REF=$ORVIX_REF" >> "$GITHUB_ENV"
+          echo "ORVIX_BIN=/tmp/orvix-contract/orvix" >> "$GITHUB_ENV"
+      - name: Fetch the exact orvix revision
         run: |
           git init /tmp/orvix
           git -C /tmp/orvix remote add origin https://github.com/cemc-oper/orvix.git
           git -C /tmp/orvix fetch --depth 1 origin "$ORVIX_REF"
-          git -C /tmp/orvix checkout FETCH_HEAD
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+          git -C /tmp/orvix checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/orvix rev-parse HEAD)" = "$ORVIX_REF"
+      - uses: actions/setup-go@v5
         with:
           go-version-file: /tmp/orvix/go.mod
-
       - name: Build orvix from the pinned source
-        run: |
-          go build -o orvix-bin .
-          sudo install -m 755 orvix-bin /usr/local/bin/orvix
         working-directory: /tmp/orvix
-
-      - name: Check vendored contract matches the pin
-        run: python scripts/sync_jobspec.py --check --orvix-repo /tmp/orvix
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+        run: |
+          mkdir /tmp/orvix-contract
+          go build -o /tmp/orvix-contract/orvix .
+          printf '%s\n' "$ORVIX_REF" > /tmp/orvix-contract/ORVIX_VERSION
+          cd /tmp/orvix-contract
+          sha256sum orvix > SHA256SUMS
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-
+      - uses: astral-sh/setup-uv@v5
       - name: Install takflow with dev dependencies
-        run: uv pip install --system -e . --group dev
+        run: uv sync --locked --no-default-groups --group dev --python 3.13
+      - name: Check vendored contract matches the pin
+        run: .venv/bin/python scripts/sync_jobspec.py --check --orvix-repo /tmp/orvix
+      - name: Require all conformance cases to run
+        run: .venv/bin/python scripts/run_contract_tests.py orvix
+      - name: Share the verified binary with the takler pairing job
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinned-orvix
+          path: /tmp/orvix-contract/
+          if-no-files-found: error
 
-      - name: Run conformance tests
-        run: pytest tests/test_conformance.py -v
-
-  build:
-    name: build check
-    runs-on: ubuntu-latest
-
+  takler:
+    name: pinned takler and orvix contracts
+    runs-on: ubuntu-24.04
+    needs: conformance
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: pinned-orvix
+          path: /tmp/orvix-contract
+      - name: Verify the paired orvix artifact
+        run: |
+          cmp src/takflow/spec/jobspec/ORVIX_VERSION /tmp/orvix-contract/ORVIX_VERSION
+          cd /tmp/orvix-contract
+          sha256sum --check SHA256SUMS
+          chmod 755 orvix
+          echo "ORVIX_BIN=/tmp/orvix-contract/orvix" >> "$GITHUB_ENV"
+      - name: Fetch the exact takler revision
+        run: |
+          TAKLER_REF=$(cat src/takflow/spec/takler/TAKLER_VERSION)
+          [[ "$TAKLER_REF" =~ ^[0-9a-f]{40}$ ]]
+          git init /tmp/takler
+          git -C /tmp/takler remote add origin https://github.com/cemc-oper/takler.git
+          git -C /tmp/takler fetch --depth 1 origin "$TAKLER_REF"
+          git -C /tmp/takler checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/takler rev-parse HEAD)" = "$TAKLER_REF"
+          echo "TAKLER_REPO=/tmp/takler" >> "$GITHUB_ENV"
+      - name: Install takler with its authoritative lock
+        run: |
+          uv sync --project /tmp/takler --locked --no-default-groups --group test --python 3.13
+          uv pip install --python /tmp/takler/.venv/bin/python --no-deps -e .
+          sha256sum /tmp/takler/uv.lock
+      - name: Require definition, rendering, submit and kill command contracts
+        run: /tmp/takler/.venv/bin/python scripts/run_contract_tests.py takler
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+  native-ecflow:
+    name: native ecFlow parsing and job preprocessing
+    runs-on: ubuntu-24.04
+    env:
+      ECFLOW_APT_VERSION: 5.12.0-1build3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - name: Install the native Python package for the system Python ABI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y "python3-ecflow=$ECFLOW_APT_VERSION" python3-venv
+          test "$(dpkg-query -W -f='${Version}' python3-ecflow)" = "$ECFLOW_APT_VERSION"
+          uv venv --python /usr/bin/python3 --system-site-packages /tmp/native-ecflow
+          uv pip install --python /tmp/native-ecflow/bin/python -e . pytest
+      - name: Require real native parsing and job creation checks
+        run: /tmp/native-ecflow/bin/python scripts/run_contract_tests.py native
+
+  build:
+    name: isolated sdist and wheel smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Build sdist and wheel
         run: |
           python -m pip install --upgrade pip build twine
           python -m build
-
       - name: Check distributions
         run: twine check dist/*
-
-      - name: Install built wheel and toyflow in a clean environment
+      - name: Install the built wheel and toyflow in a clean environment
         run: |
           python -m venv /tmp/takflow-wheel-smoke
           /tmp/takflow-wheel-smoke/bin/python -m pip install --no-cache-dir dist/takflow-*.whl examples/toyflow
-
-      - name: Check installed jobspec resources
-        run: /tmp/takflow-wheel-smoke/bin/python scripts/smoke_wheel_resources.py
-
-      - name: Run installed toyflow generation smoke
-        run: /tmp/takflow-wheel-smoke/bin/python scripts/smoke_toyflow_wheel.py
+      - name: Check installed APIs and resources outside the source tree
+        working-directory: /tmp
+        run: /tmp/takflow-wheel-smoke/bin/python "$GITHUB_WORKSPACE/scripts/smoke_wheel_resources.py"
+      - name: Run installed toyflow generation smoke outside the source tree
+        working-directory: /tmp
+        run: /tmp/takflow-wheel-smoke/bin/python "$GITHUB_WORKSPACE/scripts/smoke_toyflow_wheel.py"

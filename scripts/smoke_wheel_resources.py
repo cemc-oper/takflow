@@ -5,10 +5,15 @@ from __future__ import annotations
 import importlib.util
 from importlib.resources import files
 from pathlib import Path
+import re
+import tempfile
 
 import takflow
 import takflow.backends.ecflow  # noqa: F401
 import takflow.backends.takler  # noqa: F401
+from takflow.checks import GenerationCheckError, GenerationCheckReport
+from takflow.config import BaseWorkflowConfig, load_validated_config, validate_config
+from takflow.generation import generate_workflow
 from takflow.spec.jobspec import contract_version, schema_keys, schema_path
 from takflow.spec.jobspec.conformance import (
     CASES,
@@ -16,11 +21,14 @@ from takflow.spec.jobspec.conformance import (
     SCHEDULERS,
     build_script,
 )
+from _wheel_smoke import check_installed_package
 
 
 def main() -> None:
-    if importlib.util.find_spec("takler") is not None:
-        raise SystemExit("wheel smoke requires a clean environment without takler")
+    check_installed_package(takflow, "takflow")
+    for dependency in ("takler", "ecflow"):
+        if importlib.util.find_spec(dependency) is not None:
+            raise SystemExit(f"wheel smoke requires a clean environment without {dependency}")
 
     root = files("takflow.spec.jobspec")
     vectors = [f"conformance/vectors/{name}.sh" for name in sorted(CASES)]
@@ -48,6 +56,10 @@ def main() -> None:
     assert len(schema_keys()) == 19
     assert version and contract_version() == version
     assert pin
+    takler_pin = files("takflow").joinpath("spec/takler/TAKLER_VERSION")
+    assert takler_pin.is_file(), "missing packaged takler source pin"
+    takler_revision = takler_pin.read_text(encoding="utf-8").strip()
+    assert re.fullmatch(r"[0-9a-f]{40}", takler_revision), "takler source pin must be a full SHA"
 
     for name in sorted(CASES):
         vector = root.joinpath(f"conformance/vectors/{name}.sh").read_text(
@@ -59,11 +71,35 @@ def main() -> None:
     for name in goldens:
         assert root.joinpath(name).read_text(encoding="utf-8").strip(), name
 
-    print(f"Installed takflow: {takflow.__file__}")
+    with tempfile.TemporaryDirectory(prefix="takflow-wheel-api-") as temporary:
+        raw = {"project_base_dir": "/program", "run_base_dir": "/run",
+               "output_repo_base_dir": temporary, "workflow_name": "original",
+               "workflow_mode": "ecflow", "workload": {"workload_type": "shell"}}
+        config = validate_config(raw, overrides={"workflow_name": "wheel_smoke"})
+        assert isinstance(config, BaseWorkflowConfig)
+        assert config.workflow_name == "wheel_smoke" and raw["workflow_name"] == "original"
+        assert callable(load_validated_config) and issubclass(GenerationCheckError, ValueError)
+        report = GenerationCheckReport()
+
+        def build_suite(settings, engine):
+            suite = engine.Suite(settings.workflow_name)
+            suite.add_task("run")
+            return suite
+
+        result = generate_workflow(config, suite_builder=build_suite, check_report=report)
+        assert result.output_path == Path(temporary) / "wheel_smoke.def"
+        assert "task run" in result.output_path.read_text(encoding="utf-8")
+        assert len(report.artifacts) == 1 and report.artifacts[0]["role"] == "definition"
+        checks = {(item.code, item.status) for item in report.checks}
+        assert ("GEN_SERIALIZER_VALID", "passed") in checks
+        assert ("GEN_NATIVE_ECFLOW_UNAVAILABLE", "unchecked") in checks
+
     print(
         f"Wheel resources OK: schema/19 keys, VERSION={version}, "
-        f"{len(vectors)} vectors, {len(goldens)} goldens; takler absent"
+        f"{len(vectors)} vectors, {len(goldens)} goldens; takler/ecflow absent"
     )
+    print(f"Packaged dependency pins: orvix={pin}, takler={takler_revision}")
+    print("Installed configuration validation and generation-check APIs passed")
 
 
 if __name__ == "__main__":
