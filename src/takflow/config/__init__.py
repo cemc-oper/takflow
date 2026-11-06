@@ -18,6 +18,13 @@ from takflow.config.scheduling import (
     SchedulingConfig,
 )
 from takflow.config.workflow import BaseWorkflowConfig, ObservabilityConfig, load_config_from_file
+from takflow.config.validation import (
+    ConfigDiagnostic,
+    ConfigValidationError,
+    load_validated_config,
+    validate_config,
+    validation_diagnostics,
+)
 
 __all__ = [
     "BaseWorkload",
@@ -30,6 +37,11 @@ __all__ = [
     "BaseWorkflowConfig",
     "ObservabilityConfig",
     "load_config_from_file",
+    "ConfigDiagnostic",
+    "ConfigValidationError",
+    "load_validated_config",
+    "validate_config",
+    "validation_diagnostics",
     "FortranBool",
     "fortran_variables",
     "flag_variables",

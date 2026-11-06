@@ -156,3 +156,68 @@ print(config.workload.submit_carrier)
 ```
 
 配置中的任务资源使用 `TaskResource` 作为面向应用的串行/并行模型，编译方式见 [jobspec](jobspec.md)。
+
+## 公共校验与安全诊断
+
+`SchedulingConfig` 校验八位 `YYYYMMDD` 的真实日历日期及 `start_date <= end_date`，同一天和合法闰日均允许。`TaskResource.nodes`、`ntasks_per_node` 显式填写时必须为正整数，`None` 继续表示未指定；原有整数类型转换规则保持。扁平 `ResourceSpec` 的字符串、范围及运行时表达式仍按 orvix 契约保留，不强套高层整数规则。
+
+这些规则在应用模型构造时生效，因此旧 loader 也会在生成资源、作业和定义之前拒绝上述非法值。有效旧配置的业务派生、别名和返回行为保持。日期或资源非法但过去能够加载的输入属于有意收紧，需要修正配置，不能用兼容模式绕过。
+
+新的安全入口适用于需要结构化诊断和有效覆盖的调用：
+
+```python
+from takflow.config import ConfigValidationError, load_validated_config
+
+try:
+    config = load_validated_config(
+        "config.yaml",
+        config_class=ToyflowConfig,  # 应用的真实领域类
+        overrides={"output_repo_base_dir": "/tmp/toyflow"},
+        strict_fields=True,
+    )
+except ConfigValidationError as error:
+    for diagnostic in error.diagnostics:
+        print(diagnostic.as_dict())
+else:
+    # 只有有效配置才进入资源/配置/作业/流程生成。
+    print(config.output_repo_base_dir)
+```
+
+`validate_config(data, config_class=..., overrides=..., strict_fields=...)` 提供同样的内存映射入口。输入必须是原始 mapping，不接收已构建模型；不通过 `model_dump` 重建模型，以保留省略和显式 `None` 的区别。两个入口均深拷贝输入，先应用覆盖，再调用原配置类的 before/字段/after 验证器，返回原领域类实例。
+
+`overrides` 使用顶层 **canonical 字段名**，整字段替换；嵌套 mapping 作为完整节替换，不做深合并。例如覆盖 scheduling 时须提供该节所需的起止日期。覆盖前移除同一字段的旧 alias，避免原 YAML 的 alias 抢过显式覆盖；因此 GFS 的 machine 等派生能够读取最终输出根。未知覆盖字段始终拒绝。现有应用的简单字符串 alias 可用，AliasPath/AliasChoices 字段的覆盖当前明确报 `CONFIG_OVERRIDE_ALIAS`，不猜测复杂路径。未覆盖的字段和 `None` 不被删除或改写。
+
+### 兼容与严格未知字段路径
+
+原 `load_config_from_file(file_path, config_class)` 的签名、原生异常类型及模型 extra 策略保持，应用历史 CLI 未改为统一展示。新的安全入口默认同样保留配置类的 extra 策略；TYM 原有 `extra="forbid"` 不会被放宽。安全入口的异常为 `ConfigValidationError`，调用者应明确采用这个契约。
+
+`strict_fields=True` 使用 Pydantic 的递归 `extra="forbid"`，在消费者 before 归一化之后拒绝未知字段，包括 workload、TaskResource 等原本会忽略额外键的嵌套模型。它不启用 Pydantic 的严格类型模式，不附带禁用合法历史整数转换。安装此可选能力：
+
+```bash
+uv pip install 'takflow[strict-config]'
+```
+
+基础依赖仍为 `pydantic>=2.0`；`strict-config` 要求 `pydantic>=2.12`。在没有该官方接口的旧版本上请求 strict 会明确报 `CONFIG_STRICT_UNAVAILABLE`，不会静默按兼容路径执行。标准支撑后续接入时须选择该依赖能力；不通过改写 Pydantic 内部 schema 或替换应用类实现递归校验。
+
+GFS 的路径/default partition alias 与 partition/tasks_per_node 归一化由原应用继续处理。strict 不会忽略归一化后仍剩余的旧键、重复别名或冗余字段。例如旧配置的 `housekeep.workload.workload_type` 不是 `TaskResource` 字段，兼容路径沿用旧忽略行为，严格输入需删除该冗余键。不能承诺每份旧配置未经迁移就能进入严格路径。领域科学校验、目标端文件可用性和业务资格仍归应用/部署检查。
+
+### 稳定诊断格式
+
+每项诊断包含 `code`、`path`（由字段名/索引组成的列表）、受控 `reason` 和负责 `stage`；例子：
+
+```json
+{"code":"CONFIG_DATE_INVALID","path":["scheduling","start_date"],"reason":"must be a real calendar date in YYYYMMDD format","stage":"config.validation"}
+```
+
+| code | 含义 |
+|---|---|
+| `CONFIG_DATE_INVALID` / `CONFIG_DATE_ORDER` | 日期不存在/格式错误，或起止倒序 |
+| `CONFIG_RESOURCE_POSITIVE` | 高层申请资源非正 |
+| `CONFIG_UNKNOWN_FIELD` / `CONFIG_REQUIRED` | 未知字段或必填字段缺失 |
+| `CONFIG_TYPE` / `CONFIG_CHOICE` / `CONFIG_RANGE` | 类型/选择/已声明边界错误 |
+| `CONFIG_DOMAIN_RULE` / `CONFIG_INVALID` | 领域验证器拒绝对象或其他配置规则不满足 |
+| `CONFIG_READ_ERROR` / `CONFIG_YAML_SYNTAX` / `CONFIG_ROOT_TYPE` | UTF-8 文件读取、YAML 语法或顶层结构错误 |
+| `CONFIG_OVERRIDES_TYPE` / `CONFIG_OVERRIDE_ALIAS` | 覆盖结构错误或复杂 alias 覆盖不支持 |
+| `CONFIG_STRICT_UNAVAILABLE` | 未安装严格字段检查所需的 Pydantic 接口 |
+
+输入读取负责 `config.read`，覆盖负责 `config.overrides`，模型校验负责 `config.validation`。`validation_diagnostics(pydantic_error)` 可用于适配旧入口抛出的 `ValidationError`。诊断不包含 input、ctx、YAML 出错行或任意验证器原始消息；领域验证器消息也可能含敏感值，所以未知/领域错误使用固定原因和对象路径。需要领域细节的应用可基于自己的受控代码补充说明，不应直接打印原始异常。该适配不改变应用验证器的执行和拒绝行为。

@@ -1299,6 +1299,9 @@ dependencies = [
 observability = [
     { name = "jsonschema" },
 ]
+strict-config = [
+    { name = "pydantic" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1326,9 +1329,10 @@ requires-dist = [
     { name = "jinja2" },
     { name = "jsonschema", marker = "extra == 'observability'", specifier = ">=4.10" },
     { name = "pydantic", specifier = ">=2.0" },
+    { name = "pydantic", marker = "extra == 'strict-config'", specifier = ">=2.12" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
-provides-extras = ["observability"]
+provides-extras = ["observability", "strict-config"]
 
 [package.metadata.requires-dev]
 dev = [

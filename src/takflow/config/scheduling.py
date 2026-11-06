@@ -1,13 +1,11 @@
-"""Generic scheduling / cycle / housekeep config models.
-
-Copied verbatim from the mcv baseline to preserve behavior during extraction
-(Phase 1). The richer variants (e.g. RepeatDay) are unified in a later phase.
-"""
+"""Generic scheduling / cycle / housekeep config models."""
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationInfo, field_validator
+from pydantic_core import PydanticCustomError
 
 
 class SchedulingConfig(BaseModel):
@@ -26,6 +24,31 @@ class SchedulingConfig(BaseModel):
     scheduling_type: Literal["RepeatDate"] = "RepeatDate"
     start_date: int
     end_date: int
+
+    @field_validator("start_date", "end_date")
+    @classmethod
+    def _check_calendar_date(cls, value: int) -> int:
+        encoded = str(value)
+        try:
+            if len(encoded) != 8:
+                raise ValueError
+            date(int(encoded[:4]), int(encoded[4:6]), int(encoded[6:]))
+        except ValueError:
+            raise PydanticCustomError(
+                "config_date_invalid",
+                "must be a real calendar date in YYYYMMDD format",
+            ) from None
+        return value
+
+    @field_validator("end_date")
+    @classmethod
+    def _check_date_order(cls, value: int, info: ValidationInfo) -> int:
+        start_date = info.data.get("start_date")
+        if start_date is not None and value < start_date:
+            raise PydanticCustomError(
+                "config_date_order", "end_date must be on or after start_date",
+            )
+        return value
 
 
 class CycleConfig(BaseModel):

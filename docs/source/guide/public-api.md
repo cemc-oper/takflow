@@ -28,8 +28,9 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | 公共命名空间 | 主要入口与用途 |
 |---|---|
 | `takflow` | `__version__`；只暴露包版本，不承载应用生成入口 |
-| `takflow.config` | `BaseWorkflowConfig`、`load_config_from_file`、workload/scheduling 配置、`FortranBool` 和变量组装 helpers |
+| `takflow.config` | `BaseWorkflowConfig`、`load_config_from_file`、`load_validated_config`、`validate_config`、`ConfigDiagnostic`、`ConfigValidationError`、`validation_diagnostics`，workload/scheduling 配置、`FortranBool` 和变量组装 helpers |
 | `takflow.config.workload/scheduling/workflow/types` | API 参考页列出的配置模型与字段 helpers；需要明确模块路径时可继续使用 |
+| `takflow.config.validation` | 安全配置加载/原始映射校验、canonical 覆盖、结构化诊断和可选递归未知字段检查；[配置指南](config.md)列出兼容与严格依赖边界 |
 | `takflow.jobspec` | `TaskResource`、`ResourceSpec`、`to_orvix_directives`、`render_resource_block` |
 | `takflow.jobspec.highlevel/model/render` | API 参考页列出的高层模型、扁平契约模型和指令渲染器 |
 | `takflow.spec.jobspec` | `contract_version`、`load_schema`、`schema_keys`、`schema_path`；只读访问 vendor 资源 |

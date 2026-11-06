@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from pydantic_core import PydanticCustomError
 
 from takflow.config.workload import SlurmWorkload
 from takflow.jobspec.model import ResourceSpec
@@ -30,6 +31,15 @@ class TaskResource(BaseModel):
     memory: Optional[str] = None
     #: Whether the scheduler may auto-requeue. None = scheduler default.
     requeue: Optional[bool] = None
+
+    @field_validator("nodes", "ntasks_per_node")
+    @classmethod
+    def _check_positive_count(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value <= 0:
+            raise PydanticCustomError(
+                "resource_positive", "must be a positive integer or None",
+            )
+        return value
 
     def compile(self, workload: SlurmWorkload) -> ResourceSpec:
         """Compile this high-level resource against a slurm workload.

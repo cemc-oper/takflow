@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 observability = ["jsonschema>=4.10"]
+strict-config = ["pydantic>=2.12"]
 
 [dependency-groups]
 dev = [
