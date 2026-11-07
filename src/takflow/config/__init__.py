@@ -19,6 +19,8 @@ from takflow.config.scheduling import (
 )
 from takflow.config.workflow import BaseWorkflowConfig, ObservabilityConfig, load_config_from_file
 from takflow.config.validation import (
+    apply_config_overrides,
+    load_config_data,
     ConfigDiagnostic,
     ConfigValidationError,
     load_validated_config,
@@ -40,6 +42,8 @@ __all__ = [
     "ConfigDiagnostic",
     "ConfigValidationError",
     "load_validated_config",
+    "load_config_data",
+    "apply_config_overrides",
     "validate_config",
     "validation_diagnostics",
     "FortranBool",

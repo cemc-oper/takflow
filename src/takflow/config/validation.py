@@ -92,14 +92,13 @@ def _fail(code: str, reason: str, stage: str, path: tuple[str | int, ...] = ()) 
     raise ConfigValidationError((ConfigDiagnostic(code, path, reason, stage),)) from None
 
 
-def validate_config(
+def apply_config_overrides(
     data: Mapping[str, Any],
     config_class: type[ConfigT] = BaseWorkflowConfig,
     *,
     overrides: Mapping[str, Any] | None = None,
-    strict_fields: bool = False,
-) -> ConfigT:
-    """Validate raw configuration after applying canonical top-level overrides.
+) -> dict[str, Any]:
+    """Copy raw configuration and apply canonical top-level overrides.
 
     An override replaces the entire field, including a mapping-valued section;
     it is not a deep merge. Aliases for that field are removed first so they
@@ -127,6 +126,18 @@ def validate_config(
                 if isinstance(key, str):
                     values.pop(key, None)
             values[alias] = deepcopy(value)
+    return values
+
+
+def validate_config(
+    data: Mapping[str, Any],
+    config_class: type[ConfigT] = BaseWorkflowConfig,
+    *,
+    overrides: Mapping[str, Any] | None = None,
+    strict_fields: bool = False,
+) -> ConfigT:
+    """Validate raw configuration after canonical whole-field overrides."""
+    values = apply_config_overrides(data, config_class, overrides=overrides)
     if strict_fields and "extra" not in inspect.signature(config_class.model_validate).parameters:
         _fail("CONFIG_STRICT_UNAVAILABLE", "strict_fields requires takflow[strict-config] (Pydantic >= 2.12)",
               "config.validation")
@@ -138,14 +149,8 @@ def validate_config(
         raise ConfigValidationError(validation_diagnostics(error)) from None
 
 
-def load_validated_config(
-    file_path: str | Path,
-    config_class: type[ConfigT] = BaseWorkflowConfig,
-    *,
-    overrides: Mapping[str, Any] | None = None,
-    strict_fields: bool = False,
-) -> ConfigT:
-    """Read UTF-8 YAML and validate without exposing input lines in errors."""
+def load_config_data(file_path: str | Path) -> Mapping[str, Any]:
+    """Read a raw YAML mapping using the same safe diagnostics as validation."""
     try:
         content = Path(file_path).read_text(encoding="utf-8")
     except (OSError, UnicodeError):
@@ -154,8 +159,22 @@ def load_validated_config(
         data = yaml.safe_load(content)
     except yaml.YAMLError:
         _fail("CONFIG_YAML_SYNTAX", "configuration is not valid YAML", "config.read")
+    if not isinstance(data, Mapping):
+        _fail("CONFIG_ROOT_TYPE", "configuration must be a mapping", "config.validation")
+    return data
+
+
+def load_validated_config(
+    file_path: str | Path,
+    config_class: type[ConfigT] = BaseWorkflowConfig,
+    *,
+    overrides: Mapping[str, Any] | None = None,
+    strict_fields: bool = False,
+) -> ConfigT:
+    """Read UTF-8 YAML and validate without exposing input lines in errors."""
+    data = load_config_data(file_path)
     return validate_config(data, config_class, overrides=overrides, strict_fields=strict_fields)
 
 
 __all__ = ["ConfigDiagnostic", "ConfigValidationError", "validation_diagnostics",
-           "validate_config", "load_validated_config"]
+           "validate_config", "load_validated_config", "load_config_data", "apply_config_overrides"]

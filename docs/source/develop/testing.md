@@ -30,7 +30,7 @@ ORVIX_BIN=/path/to/orvix pytest tests/test_conformance.py
 
 | CI job | 固定来源与环境 | 必测内容及失败条件 |
 |---|---|---|
-| `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试；公共配置、jobspec、serializer、ecFlow 生成和缺 takler 行为必须通过 |
+| `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试；公共配置、jobspec、serializer、ecFlow 生成和缺 takler 行为，以及应用路径来源和验证失败时注册恢复共7项必须通过 |
 | `conformance` | `spec/jobspec/ORVIX_VERSION` 的完整 commit，使用该源码的 go.mod；Python 依赖消费框架 uv.lock | 原有18文件 vendor 对照与全部向量/golden 对拍；没有 binary、少 case、skip 或漂移均失败 |
 | `takler` | `spec/takler/TAKLER_VERSION` 的完整 commit、该修订自身 uv.lock、Python3.13；复用本次 conformance job 的已验证 orvix artifact | 核对 checkout HEAD/clean、实际模块原点与 Scheduler 导入；8函数11case覆盖定义 export/parse/build/load、job render、orvix/direct/slsubmit6 的 submit/kill 命令合同；全数执行，零skip/xfail |
 | `native-ecflow` | ubuntu-24.04 的 `python3-ecflow=5.12.0-1build3`，系统 Python3.12 ABI；API5.12.0 | 真 `ecflow.Defs(file)` 和 `check_job_creation`、include/变量替换、缺 include 负例；3case全数执行；包缺失或版本变化直接失败 |

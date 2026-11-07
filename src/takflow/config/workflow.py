@@ -82,6 +82,8 @@ class BaseWorkflowConfig(BaseModel):
 
     workflow_repo_base_dir: Optional[str] = None
     output_repo_base_dir: Optional[str] = None
+    machine_name: Optional[str] = None
+    machine_dir: Optional[str] = None
 
     workflow_name: str = "workflow"
     workflow_mode: Literal["shell", "ecflow", "takler"] = "shell"

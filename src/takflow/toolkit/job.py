@@ -16,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFoun
 
 from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
+from takflow.build_info import _scoped_lines
 from takflow.checks import (
     GenerationCheckReport,
     GenerationCheckError,
@@ -49,6 +50,9 @@ def set_build_info_provider(provider: Callable[[], Dict[str, str]]) -> None:
 
 
 def _current_build_info_lines() -> Dict[str, str]:
+    scoped = _scoped_lines.get()
+    if scoped is not None:
+        return dict(scoped)
     if _build_info_provider is not None:
         return _build_info_provider()
     return _generic_build_info_lines(_generic_build_info("unknown"), "takflow")

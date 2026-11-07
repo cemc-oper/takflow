@@ -8,6 +8,7 @@ API 参考
    :maxdepth: 2
 
    config
+   application
    jobspec
    flow
    generation

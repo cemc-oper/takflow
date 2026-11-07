@@ -6,6 +6,7 @@
 :maxdepth: 2
 
 config
+application
 jobspec
 flow-and-hooks
 backends

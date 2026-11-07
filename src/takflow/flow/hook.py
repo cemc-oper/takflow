@@ -5,6 +5,7 @@
 """
 from typing import Callable, Dict, List, Tuple, Any, Optional, TypeVar, Generic
 from enum import Enum
+from contextlib import contextmanager
 import logging
 
 
@@ -62,6 +63,20 @@ class BaseHookRegistry(Generic[T, R]):
 
     def __init__(self):
         self._hooks: Dict[str, List[Tuple[int, Callable[[T], R]]]] = {}
+
+    @contextmanager
+    def isolated(self):
+        """Use an empty registry for one sequential build, then restore it.
+
+        Original registrations survive normal exit and exceptions. This scope
+        is not safe for concurrent use of a singleton registry.
+        """
+        previous = self._hooks
+        self._hooks = {}
+        try:
+            yield self
+        finally:
+            self._hooks = previous
 
     def register(
         self,

@@ -28,9 +28,10 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | 公共命名空间 | 主要入口与用途 |
 |---|---|
 | `takflow` | `__version__`；只暴露包版本，不承载应用生成入口 |
+| `takflow.application` | `Application`、`BuildContext`、`BuildPaths`、品牌/资源层/组件/machine/扩展声明；[应用上下文](application.md)规定准备生命周期与扩展边界，完整写出管线尚未交付 |
 | `takflow.config` | `BaseWorkflowConfig`、`load_config_from_file`、`load_validated_config`、`validate_config`、`ConfigDiagnostic`、`ConfigValidationError`、`validation_diagnostics`，workload/scheduling 配置、`FortranBool` 和变量组装 helpers |
 | `takflow.config.workload/scheduling/workflow/types` | API 参考页列出的配置模型与字段 helpers；需要明确模块路径时可继续使用 |
-| `takflow.config.validation` | 安全配置加载/原始映射校验、canonical 覆盖、结构化诊断和可选递归未知字段检查；[配置指南](config.md)列出兼容与严格依赖边界 |
+| `takflow.config.validation` | 安全配置加载/原始映射校验、`load_config_data`/`apply_config_overrides`（同时由 config 根部导出）、结构化诊断和可选递归未知字段检查；[配置指南](config.md)列出兼容与严格依赖边界 |
 | `takflow.jobspec` | `TaskResource`、`ResourceSpec`、`to_orvix_directives`、`render_resource_block` |
 | `takflow.jobspec.highlevel/model/render` | API 参考页列出的高层模型、扁平契约模型和指令渲染器 |
 | `takflow.spec.jobspec` | `contract_version`、`load_schema`、`schema_keys`、`schema_path`；只读访问 vendor 资源 |
@@ -43,7 +44,7 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.backends.runtime` | `set_runtime`、`set_scheduling`、`common_setting`、脚本变量和 shell job helpers |
 | `takflow.toolkit` | resource/job/credential 的可复用生成入口及已导出的 observability helpers |
 | `takflow.toolkit.job/resource/credential/observability` | 已文档化的模板渲染、资源复制、credential hook 和静态 definition manifest 入口 |
-| `takflow.build_info` | `BuildInfo`、`get_build_info`、`get_build_info_lines` |
+| `takflow.build_info` | `BuildInfo`、`get_build_info`、`get_build_info_lines`、`build_info_scope` |
 
 可选依赖不改变默认导入契约：没有 takler 包时可以导入 `takflow` 和
 `takflow.backends.takler`，但实例化 `TaklerBackend` 会明确抛出 `ImportError`。可选

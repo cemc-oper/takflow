@@ -7,8 +7,24 @@ injected into every generated file.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from contextlib import contextmanager
+from contextvars import ContextVar
+from collections.abc import Mapping
 
 from pydantic import BaseModel
+
+
+_scoped_lines: ContextVar[Mapping[str, str] | None] = ContextVar("takflow_build_info", default=None)
+
+
+@contextmanager
+def build_info_scope(lines: Mapping[str, str]):
+    """Supply explicit build headers without replacing the legacy provider."""
+    token = _scoped_lines.set(dict(lines))
+    try:
+        yield
+    finally:
+        _scoped_lines.reset(token)
 
 
 class BuildInfo(BaseModel):
@@ -43,4 +59,4 @@ def get_build_info_lines(build_info: BuildInfo, tool_name: str) -> dict[str, str
     }
 
 
-__all__ = ["BuildInfo", "get_build_info", "get_build_info_lines"]
+__all__ = ["BuildInfo", "get_build_info", "get_build_info_lines", "build_info_scope"]

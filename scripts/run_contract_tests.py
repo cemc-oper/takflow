@@ -16,6 +16,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_application.py::test_file_and_parameter_paths_use_different_bases",
+        "tests/test_application.py::test_registries_restore_on_success_and_failure[validation]",
         "tests/test_serialize_ecflow.py::test_suite_family_task_round_trip",
         "tests/test_jobspec.py::test_pydantic_fields_match_schema",
         "tests/test_config_validation.py::test_compatibility_ignores_extra_without_mutating_input",
