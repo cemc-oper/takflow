@@ -15,4 +15,5 @@ generation-checks
 public-api
 observability
 cli
+cli-migration
 ```

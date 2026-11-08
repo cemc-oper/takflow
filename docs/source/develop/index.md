@@ -8,6 +8,7 @@
 architecture
 generation-service
 cli-decision
+standard-cli-decision
 testing
 versioning
 ```

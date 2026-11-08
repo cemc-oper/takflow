@@ -29,6 +29,7 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 |---|---|
 | `takflow` | `__version__`；只暴露包版本，不承载应用生成入口 |
 | `takflow.application` | `Application`、`BuildContext`、`BuildPaths`、品牌/资源层/组件/machine/扩展声明；[应用上下文](application.md)规定准备生命周期与扩展边界 |
+| `takflow.cli` | `create_cli`、`load_application`、`ApplicationLoadError`；标准 build 与五组分步命令，仅解析参数与展示公共结果 |
 | `takflow.build` | `build`、`run_stage`、`BuildResult`、`BuildError`、`StageResult`、`BuildArtifact`；[标准管线](build.md)规定写出、失败和成功清单契约 |
 | `takflow.config` | `BaseWorkflowConfig`、`load_config_from_file`、`load_validated_config`、`validate_config`、`ConfigDiagnostic`、`ConfigValidationError`、`validation_diagnostics`，workload/scheduling 配置、`FortranBool` 和变量组装 helpers |
 | `takflow.config.workload/scheduling/workflow/types` | API 参考页列出的配置模型与字段 helpers；需要明确模块路径时可继续使用 |
@@ -71,19 +72,9 @@ observability 校验能力的依赖和启用条件见[可观测性](observabilit
 
 ## 3. 应用 CLI 的兼容边界
 
-TF-09 已决定**不提供公共 CLI**：takflow 不实现 `takflow.cli`、公共 console script 或 CLI
-插件注册表，决策依据见[公共 CLI 决策记录](../develop/cli-decision.md)。
-`mcv-workflow`、`mcv-oper-workflow`、TYM、toyflow 等命令及其
-`resource/config/job/workflow/credential` 命令组、历史选项、默认值和输出路径覆盖优先级由
-**各应用仓库**拥有和发布。
+[TC-12 新决策](../develop/standard-cli-decision.md)替代 TF-09 的公共 CLI 限制。`takflow.cli`、console script `takflow` 与 `python -m takflow` 执行同一[标准命令契约](cli.md)，应用可绑定同一命令工厂。框架不发现插件、不合并历史选项超集。
 
-因此：
-
-- takflow 包版本不替代应用 CLI 的版本和变更记录；toolkit 的 Python API 变更也不等于 CLI
-  选项变更。
-- 不在框架升级中静默统一 `--config`/`--config-file`、删除历史选项或改变既有路径优先级。
-- 应用 CLI 的弃用提示、兼容别名和移除版本由所属应用记录；框架共享边界保持为生成服务、
-  toolkit 和其他已列出的 Python API。
+既有应用入口的版本、默认值与旧选项迁移仍由所属仓库发布；标准入口使用统一配置、路径、阶段与受控结果。不得静默切换旧生产布局。逐仓库弃用/移除版本和最低依赖见[迁移公告](cli-migration.md)。
 
 ## 4. 生成产物的兼容边界
 

@@ -162,6 +162,9 @@ jobs:
       - name: Check installed APIs and resources outside the source tree
         working-directory: /tmp
         run: /tmp/takflow-wheel-smoke/bin/python "$GITHUB_WORKSPACE/scripts/smoke_wheel_resources.py"
+      - name: Run installed standard CLI contract outside the source tree
+        working-directory: /tmp
+        run: /tmp/takflow-wheel-smoke/bin/python "$GITHUB_WORKSPACE/scripts/smoke_cli_wheel.py"
       - name: Run installed toyflow generation smoke outside the source tree
         working-directory: /tmp
         run: /tmp/takflow-wheel-smoke/bin/python "$GITHUB_WORKSPACE/scripts/smoke_toyflow_wheel.py"

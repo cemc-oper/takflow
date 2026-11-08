@@ -16,6 +16,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_cli.py::test_cli_and_python_full_build_are_equivalent[shell]",
+        "tests/test_cli.py::test_controlled_failures_and_partial_results[partial]",
+        "tests/test_cli.py::test_single_stages_share_preconditions_and_invalidate_manifest",
         "tests/test_build.py::test_complete_and_step_business_artifacts_are_equivalent[ecflow]",
         "tests/test_build.py::test_resource_copy_failure_retains_partial_output_and_stops",
         "tests/test_build.py::test_manifest_publish_failure_never_leaves_success",

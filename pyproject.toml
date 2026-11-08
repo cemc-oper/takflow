@@ -20,7 +20,11 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "jinja2",
+    "click>=8.0",
 ]
+
+[project.scripts]
+takflow = "takflow.cli:main"
 
 [project.optional-dependencies]
 observability = ["jsonschema>=4.10"]

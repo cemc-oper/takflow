@@ -10,6 +10,7 @@ API 参考
    config
    application
    build
+   cli
    jobspec
    flow
    generation

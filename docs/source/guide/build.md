@@ -2,7 +2,7 @@
 
 `takflow.build` 消费 [Application.prepare](application.md) 的同一有效上下文，不重新读取配置。
 完整构建和分步调用共享阶段实现；不执行 machine、业务程序、引擎 load 或调度提交。
-本页是 TC-06 公开契约，公共 CLI 仍待 TC-12，TYM 生产入口和旧布局迁移仍由 TC-07 负责。
+本页是 TC-06 公开契约，公共 CLI 见[命令契约](cli.md)，TYM 生产入口和旧布局迁移仍由 TC-07 负责。
 
 ## 调用和结果
 
@@ -39,7 +39,7 @@ prepare 的加载/校验失败继续使用 TC-02 异常；这时尚未开始写�
 | manifest_path | 只有完整成功发布后存在，其他调用为None |
 
 `BuildError` 的公开消息及 `result.as_dict()` 为受控展示；`original` 和 `__cause__` 保留捕获到的同一原异常。
-默认日志/将来 CLI 不应打印可能含敏感值的异常正文或 traceback。
+默认日志/CLI 不应打印可能含敏感值的异常正文或 traceback。
 标准管线作用域中的公共 Hook 错误日志不含异常正文，旧入口的默认日志行为保持。
 
 ## 默认阶段

@@ -1,127 +1,38 @@
-# 构建命令行接口
+# 标准命令契约
 
-`takflow.toolkit` 提供构建 CLI 的原子能力。典型业务应用 CLI 如下（对应 toyflow 的
-`src/toyflow/cli.py`，省略了 click 选项声明）：
+本契约执行 [TC-12 决策](../develop/standard-cli-decision.md)。应用 CLI 可通过 `create_cli(application, name=...)` 绑定 Application、无参工厂或显式引用；通用入口需要 `--application module:attribute`。不提供自动发现。
 
-```python
-from pathlib import Path
-
-import click
-
-from takflow.toolkit import (
-    copy_resources_to_output,
-    render_credential,
-    render_jobs_from_directory,
-    set_build_info_provider,
-)
-
-from toyflow.config import ToyflowConfig, load_config_from_file
-from toyflow.generate import toyflow_build_info_lines
-
-# 让 toolkit 渲染的文件头带上应用品牌(否则是通用 takflow 头)
-set_build_info_provider(toyflow_build_info_lines)
-
-
-def _load_config(config_file: str) -> ToyflowConfig:
-    # 先 import hooks,触发 @register_engine_hook / @register_credential_hook
-    # 的 import 时注册(与 mcv-oper-workflow 的扩展模式一致)
-    import toyflow.hooks  # noqa: F401
-
-    return load_config_from_file(config_file, config_class=ToyflowConfig)
-
-
-@click.group()
-def main():
-    pass
-
-
-@main.group()
-def resource():
-    pass
-
-
-@resource.command("copy")
-@click.option("--config-file", required=True, type=click.Path(exists=True, dir_okay=False))
-def resource_copy(config_file: str):
-    """Copy static resources (scripts/, ecflow/include/) to OUTPUT_REPO_BASE."""
-    config = _load_config(config_file)
-    copy_resources_to_output(
-        output_repo_base=Path(config.output_repo_base_dir),
-        src_base=Path(config.workflow_repo_base_dir),
-    )
-
-
-@main.group()
-def job():
-    pass
-
-
-@job.command("generate")
-@click.option("--config-file", required=True, type=click.Path(exists=True, dir_okay=False))
-def job_generate(config_file: str):
-    """Generate job scripts from Jinja2 templates (jobs/**/*.j2)."""
-    config = _load_config(config_file)
-    render_jobs_from_directory(
-        config=config,
-        repo_base=config.workflow_repo_base_dir,
-        output_repo_base=config.output_repo_base_dir,
-    )
-
-
-@main.group()
-def credential():
-    pass
-
-
-@credential.command("generate")
-@click.option("--credential-file", required=True, type=click.Path(exists=True, dir_okay=False))
-@click.option("--config-file", required=True, type=click.Path(exists=True, dir_okay=False))
-def credential_generate(credential_file: str, config_file: str):
-    """Render config/credential.sh from credential.yaml via credential hooks."""
-    config = _load_config(config_file)
-    render_credential(
-        credential_file=credential_file,
-        config=config,
-        output_repo_base=config.output_repo_base_dir,
-        build_info_lines=toyflow_build_info_lines(),
-    )
-
-
-if __name__ == "__main__":
-    main()
+```bash
+takflow --application cma_tym.application:make_application --format json build --config-file config.yaml --machine-name hpc2023 --output-repo-base ./output
+cma-tym-v4-workflow standard --format json resource copy --config-file config.yaml --machine-name hpc2023
+python -m takflow --help
 ```
 
-资源/输出目录的解析优先级（CLI 参数 > 配置字段 > 包内 `resources/` 或报错）由应用侧的小工具
-函数实现，见 toyflow 的 `src/toyflow/util.py`。`config generate` 的领域 renderer 由应用实现；
-`workflow generate` 的通用模式分发、路径和保存编排使用 `takflow.generation`，应用保留
-builder/renderer 和 CLI。TF-09 已决定不提供公共命令组，详见
-[公共 CLI 决策记录](../develop/cli-decision.md)。
+## 命令与参数
 
-## 凭证渲染 Hook
+根参数必须放在命令之前：`--application module:attribute`、`--format text|json`（默认 text）、`--version`、`--help`。绑定入口拒绝 `--application`，防止误选其他应用。help/version 不执行应用工厂或读取配置。
 
-`takflow.toolkit.credential` 提供共享的凭证渲染钩子注册表（对应 toyflow `hooks.py` 的
-credential 部分）：
+| 命令 | 操作 | 特有参数 |
+| --- | --- | --- |
+| build | 完整 resource→config→credential→job→workflow→check→report | --output、--credential-file |
+| resource copy | 仅 resource | 无 |
+| config generate | 仅 config | 无 |
+| credential generate | 仅 credential，可选未启用则 skipped | --credential-file |
+| job generate | 仅 job | 无 |
+| workflow generate | 仅 workflow | --output |
 
-```python
-from takflow.toolkit.credential import (
-    CredentialContext,
-    CredentialHookPoint,
-    register_credential_hook,
-)
+每个叶命令接受 `--config-file`（必需）、`--output-repo-base`、`--workflow-repo-base`（资源根）、`--machine-name`、`--machine-dir`。模式由配置选择，不新增模式覆盖参数、通用 --set 或 oper 历史参数超集。命令未声明的参数被拒绝。machine 覆盖先于领域归一化与路径派生；冲突由应用受控校验。shell 不支持 --output，固定根 run_workflow.sh，传入时受控失败。其余路径与来源优先级直接遵循 [Application](application.md)，CLI 不预先检查目标机路径。
 
+完整 build 使用 build；五个分步命令调用同名 run_stage，每次独立 prepare 一次。分步不补跑前置阶段，未选择阶段为 not_run，成功不等于 complete。任何改写入口按公共管线规则撤销旧成功清单，只有完整验证后才原子发布 generation_manifest.json。
 
-@register_credential_hook(CredentialHookPoint.RENDER, priority=10)
-def render_toyflow_credential(context: CredentialContext) -> str:
-    """把 credential.yaml 中的应用段渲染为 credential.sh 片段。"""
-    toyflow = context.credential.get("toyflow", {})
-    return "\n".join(
-        [
-            "# toyflow API 凭证",
-            f'export TOYFLOW_API_HOST="{toyflow.get("api_host", "")}"',
-            f'export TOYFLOW_API_KEY="{toyflow.get("api_key", "")}"',
-        ]
-    )
-```
+## 结果与退出码
 
-`render_credential()` 按优先级收集所有注册片段并写入 `config/credential.sh`。业务扩展包
-（如 `mcv-oper-workflow`）在**同一个 takflow 全局注册表**上以更高优先级注册自己的渲染器。
+执行成功退出 0；应用引用/工厂、配置、准备、模板、写入、验证失败退出 1；命令语法、缺参、非法选项或非法选择退出 2；执行中用户中断退出 130。帮助/版本退出 0。语法错误使用 Click 的 stderr 提示（包括所给参数），不输出 JSON；`--format` 只控制已正确解析的执行报告，不应在命令行参数中传递凭证内容。
+
+JSON 在 stdout 输出一个对象：`schema_version: 1`、`status: success|failed`、`result: BuildResult.as_dict()|null`、`diagnostics: []`、`warnings: []`。构建失败保留部分 result，其诊断和阶段包含 passed/skipped/failed/not_run；准备失败没有 result。warnings 只包含受控代码和数量，不含原 warning 文本。text 输出相同状态、各阶段原因、诊断及全部产物路径/角色/权限，完整成功时显示清单位置。JSON 的 artifacts 包含同一管线记录的来源与摘要，敏感产物遵循 BuildResult 的摘要省略规则。
+
+框架捕获执行期间应用任意打印、日志、warning 和原异常，禁止 traceback 与原异常正文进入 CLI；初始化和工厂失败使用 CLI_APPLICATION_LOAD/PREPARE_FAILED，配置/检查沿用受控诊断，BuildError 保留公共部分结果。显式 module 引用会执行该 Python 模块，须使用可信的已安装应用。调用命令期间不要并行改变进程日志或标准流；Python 并行与 hook 的限制与 Application 一致。
+
+## 发布与迁移
+
+参见[迁移公告](cli-migration.md)。TYM 当前显式 standard 子命令供候选验收，默认生产命令切换和领域路径闭合属于 TC-07。
