@@ -83,6 +83,42 @@ def statuses(result):
     return {item.name: item.status for item in result.stages}
 
 
+@pytest.mark.parametrize("invoke", ["inline", "external"])
+def test_full_build_cannot_reuse_a_script_removed_from_sources(tmp_path, resources, invoke):
+    output = tmp_path / "output"
+    app = application(resources)
+    raw = data(output, invoke=invoke)
+    with app.prepare(raw) as context:
+        build(context)
+    source = resources / "scripts/on/task.sh"
+    copied = output / "scripts/on/task.sh"
+    previous = copied.read_bytes()
+    source.unlink()
+    with app.prepare(raw) as context, pytest.raises(BuildError) as caught:
+        build(context)
+    assert statuses(caught.value.result)["job"] == "failed"
+    assert statuses(caught.value.result)["workflow"] == "not_run"
+    assert any(item["code"] == "BUILD_SCRIPT_INPUT_NOT_PREPARED" for item in caught.value.result.diagnostics)
+    assert not (output / "generation_manifest.json").exists()
+    assert copied.read_bytes() == previous
+    # A deliberate single-stage call may consume already prepared inputs.
+    with app.prepare(raw) as context:
+        result = run_stage(context, "job")
+    assert result.scope == "stage" and statuses(result)["job"] == "passed"
+    assert str(copied) not in {item.path for item in result.artifacts}
+
+
+def test_full_build_can_include_a_script_generated_by_config(tmp_path, resources):
+    put(resources, "templates/generated.sh.j2", "#!/usr/bin/env bash\necho generated-script\n")
+    template = resources / "jobs/on/task.sh.j2"
+    template.write_text(template.read_text().replace("scripts/on/task.sh", "config/generated.sh"))
+    app = application(resources, outputs=(TemplateOutput("templates/generated.sh.j2", "config/generated.sh", mode=0o755),))
+    with app.prepare(data(tmp_path / "out")) as context:
+        result = build(context)
+    assert result.complete
+    assert "echo generated-script" in (tmp_path / "out/jobs/on/task.ecf").read_text()
+
+
 @pytest.mark.parametrize("mode", ["ecflow", "shell"])
 @pytest.mark.parametrize("invoke", ["inline", "external"])
 def test_complete_pipeline_and_native_artifact_roles(tmp_path, resources, mode, invoke):

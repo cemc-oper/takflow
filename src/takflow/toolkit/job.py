@@ -314,6 +314,7 @@ def render_jobs_from_directory(
     template_context: Mapping | None = None,
     file_mode: int | None = None,
     verbose: bool = True,
+    script_input_check: Callable[[str], None] | None = None,
 ) -> None:
     """Render every ``jobs/**/*.j2`` template under one or more repo roots.
 
@@ -345,6 +346,9 @@ def render_jobs_from_directory(
         Collect checks, unresolved dynamic references and this invocation's
         actual outputs. Static checks finish before any selected job is written;
         later rendering/output failures retain files already produced.
+    script_input_check : callable, optional
+        Additional validation of local scripts actually consumed while rendering.
+        The standard full build uses this to reject stale prerequisite files.
     """
     report = check_report if check_report is not None else GenerationCheckReport()
     preflight_generation(config, check_report=report)
@@ -377,6 +381,8 @@ def render_jobs_from_directory(
     def include_raw(script_path: str) -> str:
         script_file = check_relative_path(output_repo_base, script_path, stage="job.render",
                                           report=report)
+        if script_input_check is not None:
+            script_input_check(script_path)
         check_input_file(script_file, stage="job.render", report=report)
         with open(script_file, "r", encoding="utf-8" if environment is not None else None) as f:
             content = f.read()
@@ -405,6 +411,8 @@ def render_jobs_from_directory(
         else:
             _check_script_reference(script_path, output_repo_base, config, report,
                                     helper="invoke_script", stage="job.render")
+            if script_input_check is not None and not _runtime_reference(script_path):
+                script_input_check(script_path)
             invocation = f"${{OUTPUT_REPO_BASE}}/{script_path}"
             if environment is not None:
                 invocation = '"${OUTPUT_REPO_BASE}"/' + shlex.quote(script_path)
