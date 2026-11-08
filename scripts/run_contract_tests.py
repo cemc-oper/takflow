@@ -16,6 +16,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_build.py::test_required_resource_input_checks_current_layers_before_writing",
+        "tests/test_application.py::test_configured_extension_root_uses_source_and_override_bases",
+        "tests/test_build.py::test_required_machine_source_cannot_be_satisfied_by_stale_output",
+        "tests/test_build.py::test_sourced_config_values_are_shell_literals",
+        "tests/test_build.py::test_credential_selection_uses_effective_config",
         "tests/test_build.py::test_context_suite_builder_receives_the_prepared_context",
         "tests/test_flow_core.py::test_ecflow_script_command_quotes_a_real_local_filename",
         "tests/test_cli.py::test_cli_and_python_full_build_are_equivalent[shell]",

@@ -29,7 +29,7 @@ with application.prepare(
 
 必需声明是 `config_type`、`resources` 和显式 `brand`。默认只声明 ecFlow 支持，
 definition 模式要求 `suite_builder`，shell 模式要求 `shell_template`。
-可选凭证通过 `credential_enabled=False` 显式选择，TYM 等未启用的应用无需空 handler；
+可选凭证通过 `credential_enabled=False` 或接收有效 config 的布尔判定函数显式选择，TYM 等未启用的应用无需空 handler；
 凭证文件输入及生成/缺失/skipped 结果由 TC-06 处理。观测选择沿用有效 config.observability。
 `supported_modes` 必须反映实际消费者能力；公共模型接受 takler 不代表应用已支持它。
 接口直接引用 Python 对象，允许入口分布在多层包中，不要求统一文件名或动态插件发现。
@@ -81,7 +81,7 @@ mapping 或文件，以保证覆盖先于派生。显式 definition `output` 仍
 
 | 声明 | 责任与限制 |
 |---|---|
-| `ResourceLayer(name, root)` | base 后按声明顺序覆盖，扩展层在后；名称唯一；模板搜索应按反向层序，TC-06 实现复制/搜索与来源记录 |
+| `ResourceLayer(name, root, config_field=None)` | base 后按声明顺序覆盖，扩展层在后；名称唯一；可声明配置中的资源目录字段，其非空值优先于 root，配置相对路径基于 source_dir、canonical overrides 基于调用 cwd；空值使用包 root；静态与模板共用层序与来源记录 |
 | `ResourceEntry(source, destination, executable=False, required=False)` | 声明静态目录/文件映射，路径相对且不逃逸；默认 scripts、ecflow/include、takler/include、utils；迁移映射由应用给出，不新增应用名 profile |
 | `TemplateOutput(template, output, required=True, mode=0o644)` | 声明额外模板产物，mode 仅 0644/0755/0600；TC-06 检查实际模板、目标碰撞、编码、权限及写出 |
 | `select_components(config)` | 只计算一次，返回 `ComponentSelection`；enabled 与两个路径分类器供资源/作业共用，不读禁用文件 |
@@ -132,3 +132,12 @@ Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/�
 TYM 的 create_suite 接受显式 paths，并把同一 BuildPaths 传给原有 derived 领域函数；完整 config/flow 和 Node 建树组织保留。旧 config/engine 领域入口若未提供 paths，使用 Application.prepare 解析同一上下文，不保留第二套路径公式。
 
 未启用 observability 时，准备报告记录 APPLICATION_OBSERVABILITY_DISABLED，完整清单保留这一可选能力选择；它不授予任何运行资格。
+
+## 业务 Shell 延后加载 machine（TC-08）
+
+`required_machine_fragments=("env/forecast_mpi.sh", ...)` 声明业务脚本将在原位置 source 的片段。资源阶段先检查本轮所选 machine 的有序来源，再复制并登记引用；输出目录中的陈旧文件不能代替缺少的来源。默认目录检查存在性与摘要，显式外部目录保持 unchecked、不作生成机探测。框架不执行或提前 source，不改变业务 cwd/作用域，不自动把片段正文嵌进父作业。片段内容、加载位置和库/MPI 参数继续由消费者维护。
+
+MCV base/oper 已作为真实消费者使用配置字段选择 oper 层、显式 Hook 初始化和 credential 判定；完整跨应用扩展验收仍由 TC-10 承接。`ApplicationExtension` 不新增整套 handler 接管口。
+
+
+`required_resource_inputs` 为相对文件名元组或接收有效 config 的纯判定函数，用于声明选定业务能力的必需脚本/模板。资源阶段从同一有序来源验证输入，缺失即失败，输出目录里的旧 job 不作替代。MCV oper 只在上传启用时声明其上传 job 模板和脚本；稀疏 oper 不启用上传时仍可回落基础资源。

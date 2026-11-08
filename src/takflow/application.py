@@ -73,6 +73,7 @@ class ResourceLayer:
 
     name: str
     root: ResourceRoot
+    config_field: str | None = None
 
 
 @dataclass(frozen=True)
@@ -264,10 +265,12 @@ class Application(Generic[ConfigT]):
     extensions: tuple[ApplicationExtension, ...] = ()
     registries: tuple[BaseHookRegistry, ...] = ()
     require_machine: bool = False
-    credential_enabled: bool = False
+    credential_enabled: bool | Callable[[ConfigT], bool] = False
     strict_fields: bool = False
     required_operations: Callable[[ConfigT], tuple[str, ...]] | None = None
     context_suite_builder: Callable[[BuildContext[ConfigT], WorkflowEngine], Node] | None = None
+    required_machine_fragments: tuple[str, ...] = ()
+    required_resource_inputs: tuple[str, ...] | Callable[[ConfigT], tuple[str, ...]] = ()
 
     def __post_init__(self):
         if not isinstance(self.config_type, type) or not issubclass(self.config_type, BaseWorkflowConfig):
@@ -291,6 +294,11 @@ class Application(Generic[ConfigT]):
         _relative(self.config_template)
         if self.shell_template is not None:
             _relative(self.shell_template)
+        for fragment in self.required_machine_fragments:
+            _relative(fragment)
+        if not callable(self.required_resource_inputs):
+            for resource in self.required_resource_inputs:
+                _relative(resource)
         names = set()
         for extension in self.extensions:
             if not extension.name or extension.name in names:
@@ -383,8 +391,22 @@ class Application(Generic[ConfigT]):
                 if not layer.name or layer.name in layer_names:
                     _error("APPLICATION_LAYER_DUPLICATE", "resource_layers", "resource layer names must be nonempty and unique")
                 layer_names.add(layer.name)
-                root = layer.root() if callable(layer.root) else layer.root
-                layers.append(ResolvedResourceLayer(layer.name, _local_path(root, cwd, "resource_layers")))
+                configured = None
+                if layer.config_field is not None:
+                    if layer.config_field not in self.config_type.model_fields:
+                        _error("APPLICATION_LAYER_CONFIG_FIELD", "resource_layers", "resource layer field must name a declared config field")
+                    configured = getattr(config, layer.config_field)
+                if configured is not None:
+                    # A config path is relative to its source; a canonical
+                    # explicit override uses the caller's cwd, like base.
+                    overridden = not isinstance(source, BaseWorkflowConfig) and layer.config_field in effective_overrides
+                    root = _local_path(configured, cwd if overridden else base, layer.config_field)
+                else:
+                    root = layer.root() if callable(layer.root) else layer.root
+                    root = _local_path(root, cwd, "resource_layers")
+                if layer.config_field is not None:
+                    setattr(config, layer.config_field, str(root))
+                layers.append(ResolvedResourceLayer(layer.name, root))
             config.workflow_repo_base_dir = str(layers[0].root)
             config.output_repo_base_dir = str(output_root)
             report = preflight_generation(

@@ -45,3 +45,8 @@ TYM 标准入口直接使用 cma_tym.application 的配置、组件、构图及�
 TYM 默认根入口现已切换为 create_cli；standard 仅作为 0.4.0 前的临时转发别名，旧五套外围实现已由共享管线替代。当前使用顶层 machine_name，post.machine_name 的限期归一化、Python Path/None 返回桥接和版本窗口见 TYM docs/standard-cli.md。此前“默认入口尚待 TC-07”的说明属于 TC-12 交付时点；当前入口和候选配套以此节和 TYM 公告为准。
 
 TYM 元数据已收紧到 takflow>=0.2.0,<0.3、Python>=3.10；test-suite 0.2.0.dev0 配套 lock 已更新。发布前使用显式 setuptools_scm 本地候选版本 0.2.0+tc07.g<实际HEAD> 验证 wheel 和依赖范围，同时保留原始 SCM describe/HEAD/diff，不把 local candidate 当成正式 tag。正式发布后使用 0.2.0 配套和实际 lock；逐仓库首弃用/移除目标不变。
+
+
+## R2 开发配套（TC-08）
+
+MCV base/oper 已接入同一公共服务，迁移公告位于各应用 docs/standard-cli.md。工作树配套升级到明确未发布的 takflow/TYM 0.3.0、MCV base/oper 2026.4.0 local candidate；test-suite 0.3.0.dev0 通过 scripts/r2_candidates.py 同步 lock。TYM 元数据窗口随配套变为 >=0.3.0,<0.4，R1 冻结产物及历史验收不改写。MCV 的旧 Python 返回适配保留至 2026.5.0，完整旧布局/历史 CLI 参数通过冻结旧配套回退；各应用公告明确这一兼容范围。候选不等于 tag/正式发布，TC-09、TC-10 其余消费者及阶段 3 继续按各自验收推进。

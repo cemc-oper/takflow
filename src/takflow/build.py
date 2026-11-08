@@ -263,6 +263,14 @@ class _Pipeline:
         return '. "${MACHINE_DIR}"/' + shlex.quote(path.as_posix())
 
     def resource(self):
+        required = self.context.application.required_resource_inputs
+        if callable(required):
+            required = required(self.context.config)
+        for relative in required:
+            candidates = [check_relative_path(layer.root, relative, stage="resource.input", report=self.report)
+                          for layer in self.context.paths.resource_layers]
+            if not any(path.is_file() for path in candidates):
+                self.fail("BUILD_RESOURCE_INPUT_REQUIRED", relative, "required input is absent from all source layers")
         entries = list(self.context.application.resource_entries)
         if any(PurePosixPath(item.destination).parts[0] == "machine" for item in entries):
             self.fail("BUILD_MACHINE_MAPPING", "resource_entries", "machine copying is managed by the common selection")
@@ -274,6 +282,11 @@ class _Pipeline:
         for entry in entries:
             if entry.required and not any((layer.root / entry.source).exists() for layer in self.context.paths.resource_layers):
                 self.fail("BUILD_RESOURCE_REQUIRED", entry.source, "required resource is absent from all layers")
+        if machine is not None and not machine.external:
+            for fragment in self.context.application.required_machine_fragments:
+                if not any((layer.root / "machine" / machine.name / fragment).is_file()
+                           for layer in self.context.paths.resource_layers):
+                    self.fail("BUILD_MACHINE_FRAGMENT_REQUIRED", fragment, "required machine fragment is absent from all source layers")
         for layer in self.context.paths.resource_layers:
             mappings = [(entry.source, entry.destination, entry.executable) for entry in entries
                         if (layer.root / entry.source).exists() and self.context.components.keep_resource(entry.source)]
@@ -281,6 +294,11 @@ class _Pipeline:
                                   check_report=self.report, check_target=lambda path: self.reserve(path, "resource"),
                                   source_layer=layer.name)
             self.collect()
+
+        for fragment in self.context.application.required_machine_fragments:
+            # Business scripts can source a fragment later in their own cwd
+            # and Shell scope; validate/record it without moving that source.
+            self.include_machine(fragment)
 
     def config(self):
         context = self.context
@@ -303,8 +321,8 @@ class _Pipeline:
             if role == "config":
                 lines = []
                 for name, value in self.variables.items():
-                    encoded = shlex.quote(value) if context.config.workflow_mode == "shell" else (
-                        f"%{name}%" if context.config.workflow_mode == "ecflow" else "{{ " + name + " }}")
+                    encoded = (f"%{name}%" if context.config.workflow_mode == "ecflow"
+                               else shlex.quote(value))
                     lines.append(f"export {name}={encoded}")
                 text = "\n".join(lines) + "\n" + text
             self.write(path, text, role, mode)
@@ -313,7 +331,10 @@ class _Pipeline:
                 check_shell_output(path, check_report=self.report, stage="config.output", role=role)
 
     def credential(self):
-        if not self.context.application.credential_enabled:
+        enabled = self.context.application.credential_enabled
+        if callable(enabled):
+            enabled = enabled(self.context.config)
+        if not enabled:
             if self.credential_file is not None:
                 self.fail("BUILD_CREDENTIAL_DISABLED", "credential_file", "credential capability is disabled")
             return "credential capability disabled"

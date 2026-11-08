@@ -69,7 +69,7 @@ before_save/after_save为已有保存扩展点，不用整套handler替换默认
 ## 变量与machine
 
 框架从输出根提供OUTPUT_REPO_BASE，合并BuildContext.variables的同一有效映射，包含MACHINE_NAME/MACHINE_DIR，实际写出export。
-shell配置写Shell字面值；ecFlow/takler配置写原生变量引用，保存前将这个显式导出通道的suite值编码为Shell字面值。
+shell/takler配置写Shell字面值；ecFlow配置写原生变量引用，保存前将这个显式导出通道的suite值编码为Shell字面值。
 空格、引号、美元符号替换后仍为数据；其他领域变量保持原语义。直接在引擎alter导出通道时，也须提供对应Shell字面值。
 标准ecFlow保存作用域使用原生规则保留混合单/双引号，不加入改变变量值的额外反斜杠。
 旧入口默认写出保持；公共定义检查同时认识两种兼容写法，标准调用退出作用域后仍可复验。
@@ -104,3 +104,9 @@ serializer、真实原生解析、动态模板/远端unchecked分别报告，不
 片段相对名称在 ecFlow 模式不能含空白，否则受控失败；Shell 模式仍按 Shell 规则引用名称。外部 machine 目录仍不在生成主机探测，实际读取由目标预处理/运行端决定。默认片段更新在新建原生 job 时可见，已经创建的 job 不自动更新；Shell 点号加载在原位置保留当前作用域并读取届时内容。
 
 共享 ECF_SCRIPT_CMD 的 cat 文件参数采用 Shell 引用，普通路径的原字节保持，带空格/引号的有效路径经过真实原生预处理验证。
+
+## TC-08 的消费者补齐
+
+资源层可用 `ResourceLayer.config_field` 从同一已验证配置选择扩展根；`credential_enabled` 可按该配置判定，不额外加载配置。`required_machine_fragments` 检查本轮来源并保留业务脚本延后加载的作用域。
+
+MCV 的真实 takler 作业通过 Shell source 外部 config.sh，该文件不会再经过运行期 Jinja；因此标准 config 阶段将 takler 与 Shell 一样编码成 Shell 字面值。ecFlow 仍保留 suite 可 alter 的变量引用。此修正有真实 takler 定义与生成作业加载回归，不增加应用名分支。

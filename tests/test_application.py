@@ -360,3 +360,31 @@ def test_duplicate_resource_layer_and_reserved_variables(tmp_path):
     with pytest.raises(ConfigValidationError, match="APPLICATION_VARIABLE_CONFLICT"):
         with app.prepare(config_data(machine_name="site")):
             pass
+
+
+def test_configured_extension_root_uses_source_and_override_bases(tmp_path, monkeypatch):
+    class ExtendedConfig(BaseWorkflowConfig):
+        oper_root: str | None = None
+
+    source = tmp_path / 'source'
+    caller = tmp_path / 'caller'
+    source.mkdir()
+    caller.mkdir()
+    monkeypatch.chdir(caller)
+    app = application(tmp_path, config_type=ExtendedConfig,
+                      resource_layers=(ResourceLayer('oper', tmp_path / 'default', config_field='oper_root'),))
+    raw = config_data(output_repo_base_dir=str(tmp_path / 'out'), oper_root='oper')
+    with app.prepare(raw, source_dir=source) as context:
+        assert context.paths.resource_layers[-1].root == source / 'oper'
+        assert context.config.oper_root == str(source / 'oper')
+    with app.prepare(raw, source_dir=source, overrides={'oper_root': 'override'}) as context:
+        assert context.paths.resource_layers[-1].root == caller / 'override'
+    with app.prepare({**raw, 'oper_root': None}, source_dir=source) as context:
+        assert context.paths.resource_layers[-1].root == tmp_path / 'default'
+
+
+def test_extension_layer_rejects_unknown_config_field(tmp_path):
+    app = application(tmp_path, resource_layers=(ResourceLayer('oper', tmp_path, config_field='missing'),))
+    with pytest.raises(ConfigValidationError, match='APPLICATION_LAYER_CONFIG_FIELD'):
+        with app.prepare(config_data()):
+            pass

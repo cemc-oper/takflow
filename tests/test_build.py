@@ -544,3 +544,59 @@ def test_machine_fragment_whitespace_has_an_explicit_native_boundary(tmp_path, r
             assert not (context.paths.output_root / "generation_manifest.json").exists()
         else:
             assert build(context).complete
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_credential_selection_uses_effective_config(tmp_path, resources, enabled):
+    from takflow.config import BaseWorkflowConfig
+
+    class CredentialConfig(BaseWorkflowConfig):
+        enable_credential: bool = False
+
+    put(resources, 'config/credential_workflow.sh.j2', 'export TOKEN=unused\n')
+    credential = put(tmp_path, 'credential.yaml', 'token: synthetic\n', 0o600)
+    app = application(resources, config_type=CredentialConfig,
+                      credential_enabled=lambda config: config.enable_credential,
+                      extensions=(credentials(resources),))
+    with app.prepare(data(tmp_path / 'out', enable_credential=enabled)) as context:
+        result = build(context, credential_file=credential if enabled else None)
+    assert statuses(result)['credential'] == ('passed' if enabled else 'skipped')
+    assert (tmp_path / 'out/config/credential.sh').exists() == enabled
+
+
+def test_required_machine_source_cannot_be_satisfied_by_stale_output(tmp_path, resources):
+    app = application(resources, required_machine_fragments=('env/runtime.sh',))
+    with app.prepare(data(tmp_path / 'out')) as context:
+        build(context)
+    (resources / 'machine/site/env/runtime.sh').unlink()
+    assert (tmp_path / 'out/machine/site/env/runtime.sh').exists()
+    with app.prepare(data(tmp_path / 'out')) as context, pytest.raises(BuildError) as caught:
+        build(context)
+    assert statuses(caught.value.result)['resource'] == 'failed'
+    assert statuses(caught.value.result)['config'] == 'not_run'
+    assert not (tmp_path / 'out/generation_manifest.json').exists()
+    assert any(item['code'] == 'BUILD_MACHINE_FRAGMENT_REQUIRED' for item in caught.value.result.diagnostics)
+
+
+@pytest.mark.parametrize('mode', ['shell', 'takler'])
+def test_sourced_config_values_are_shell_literals(tmp_path, resources, mode):
+    import subprocess
+    literal = "space ' dollar $literal"
+    app = application(resources, supported_modes=('shell', 'ecflow', 'takler'), variables=lambda config: {'VALUE': literal})
+    with app.prepare(data(tmp_path / 'out', mode=mode)) as context:
+        run_stage(context, 'config')
+        output = subprocess.check_output(['bash', '-c', context.paths.config_file.read_text() + '\nprintf "%s" "$VALUE"'], text=True)
+    assert output == literal
+
+
+def test_required_resource_input_checks_current_layers_before_writing(tmp_path, resources):
+    app = application(resources, required_resource_inputs=lambda config: ('jobs/on/task.sh.j2',))
+    with app.prepare(data(tmp_path / 'out')) as context:
+        build(context)
+    (resources / 'jobs/on/task.sh.j2').unlink()
+    with app.prepare(data(tmp_path / 'out')) as context, pytest.raises(BuildError) as caught:
+        build(context)
+    assert statuses(caught.value.result)['resource'] == 'failed'
+    assert statuses(caught.value.result)['config'] == 'not_run'
+    assert any(item['code'] == 'BUILD_RESOURCE_INPUT_REQUIRED' for item in caught.value.result.diagnostics)
+    assert not (tmp_path / 'out/generation_manifest.json').exists()
