@@ -124,3 +124,11 @@ Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/�
 `MACHINE_NAME/MACHINE_DIR`，拒绝领域覆盖，检查报告注明远端可见性/执行未验。
 实际变量写出、所选站点分发和 include_machine 原生引用 helper 由 [TC-06](build.md)提供，
 原生消费者、Shell 加载位置及可更新片段语义由 TC-07 验证。
+
+## 构图消费有效路径（TC-07）
+
+`context_suite_builder(context, engine)` 是 `suite_builder(config, engine)` 的可选替代，二者互斥。新增字段位于声明末尾，不改变既有位置参数；原签名继续工作。需要输出/组件路径的应用可直接从本轮 `BuildContext.paths` 构图，无需把运行上下文塞回配置、使用全局变量或重新推导布局。仅 definition 模式调用，Shell 仍由声明的模板生成。
+
+TYM 的 create_suite 接受显式 paths，并把同一 BuildPaths 传给原有 derived 领域函数；完整 config/flow 和 Node 建树组织保留。旧 config/engine 领域入口若未提供 paths，使用 Application.prepare 解析同一上下文，不保留第二套路径公式。
+
+未启用 observability 时，准备报告记录 APPLICATION_OBSERVABILITY_DISABLED，完整清单保留这一可选能力选择；它不授予任何运行资格。

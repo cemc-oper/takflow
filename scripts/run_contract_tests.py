@@ -16,6 +16,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_build.py::test_context_suite_builder_receives_the_prepared_context",
+        "tests/test_flow_core.py::test_ecflow_script_command_quotes_a_real_local_filename",
         "tests/test_cli.py::test_cli_and_python_full_build_are_equivalent[shell]",
         "tests/test_cli.py::test_controlled_failures_and_partial_results[partial]",
         "tests/test_cli.py::test_single_stages_share_preconditions_and_invalidate_manifest",

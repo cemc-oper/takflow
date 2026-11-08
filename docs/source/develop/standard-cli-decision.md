@@ -2,6 +2,8 @@
 
 状态：已决定 · 日期：2026-11-08 · 替代 TF-09 的公共 CLI 禁令。
 
+实施更新：TC-07 已将 TYM 默认根入口切换到公共命令，standard 成为限期转发别名；以下决策保留立项时的切片边界，当前调用和配套见[迁移公告](../guide/cli-migration.md)。
+
 ## 背景与替代关系
 
 TF-09 针对原子 toolkit 与应用各自 renderer 作出不提供公共 CLI 的决定，原文保留为历史证据。TC-05 已建立 Application/BuildContext 的声明、初始化与路径规则，TC-06 已实现标准阶段和结果；现在不再需要以各应用 handler 注入重建第二套插件架构。本决定替代 TF-09 第 1、5、6 节中禁止 takflow.cli 和公共 console script 的限制；仍不建立 CLI 插件发现或统一历史选项超集。

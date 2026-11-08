@@ -252,6 +252,13 @@ class _Pipeline:
             check_input_file(local, stage=self.stage, report=self.report)
             self.record(local, "machine", kind="reference", mutable=True)
         if self.context.config.workflow_mode == "ecflow":
+            if any(char.isspace() for char in relative):
+                self.fail("BUILD_MACHINE_REFERENCE", "machine", "ecFlow fragment names cannot contain whitespace")
+            # ecFlow tokenizes a literal include path before expanding variables.
+            # Use a raw native path channel when the selected directory has spaces;
+            # MACHINE_DIR remains shell-encoded for config exports.
+            if " " in str(machine.directory):
+                return f"%includenopp <%TAKFLOW_MACHINE_INCLUDE_DIR%/{relative}>"
             return f"%includenopp <{target}>"
         return '. "${MACHINE_DIR}"/' + shlex.quote(path.as_posix())
 
@@ -378,6 +385,11 @@ class _Pipeline:
             # exported config cannot introduce command syntax. Domain variables
             # outside this explicit channel retain their existing semantics.
             context.suite.add_variables({name: shlex.quote(value) for name, value in self.variables.items()})
+            machine = self.context.machine
+            if self.context.config.workflow_mode == "ecflow" and machine and " " in str(machine.directory):
+                if "TAKFLOW_MACHINE_INCLUDE_DIR" in self.variables:
+                    self.fail("BUILD_VARIABLE_CONFLICT", "TAKFLOW_MACHINE_INCLUDE_DIR", "native machine path channel is reserved")
+                context.suite.add_variable("TAKFLOW_MACHINE_INCLUDE_DIR", str(machine.directory))
             if self.before_save is not None:
                 self.before_save(context)
 
@@ -387,11 +399,16 @@ class _Pipeline:
             self.record(path, "workflow", source={"template": self.template_sources[self.context.application.shell_template]})
             return path
 
+        suite_builder = self.context.application.suite_builder
+        if self.context.application.context_suite_builder is not None:
+            def suite_builder(config, engine):
+                return self.context.application.context_suite_builder(self.context, engine)
+
         before = file_state(path)
         quote_token = _native_variable_quotes.set(True)
         try:
             self.result.generation = generate_workflow(
-                self.context.config, output=path, suite_builder=self.context.application.suite_builder,
+                self.context.config, output=path, suite_builder=suite_builder,
                 shell_renderer=shell_renderer, before_save=before_save, after_save=self.after_save,
                 required_operations=self.context.application.required_operations(self.context.config) if self.context.application.required_operations else (),
                 check_report=self.report,

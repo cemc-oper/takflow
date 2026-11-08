@@ -96,3 +96,11 @@ reference摘要仅为构建时观察，不冻结运行时内容；陈旧文件�
 
 此清单不是Sledra definition manifest，也不是引擎job创建、实际提交、HPC或产品合格证明。
 serializer、真实原生解析、动态模板/远端unchecked分别报告，不用skip代替必测能力通过。
+
+## ecFlow machine 引用的路径边界（TC-07）
+
+普通路径仍使用绝对 `%includenopp <...>`。ecFlow 5.12 在替换变量前按空白切分直接 include 路径；有效 machine 目录含空格时，helper 使用 `%includenopp <%TAKFLOW_MACHINE_INCLUDE_DIR%/fragment>`，保存阶段为此添加原始路径的专用原生变量。该名字保留给框架，不作为 Shell 环境导出；MACHINE_DIR 继续采用同一有效目录的 Shell 字面值通道，避免路径中的引号和美元符号被执行。完整与 workflow 分步均建立相同通道。
+
+片段相对名称在 ecFlow 模式不能含空白，否则受控失败；Shell 模式仍按 Shell 规则引用名称。外部 machine 目录仍不在生成主机探测，实际读取由目标预处理/运行端决定。默认片段更新在新建原生 job 时可见，已经创建的 job 不自动更新；Shell 点号加载在原位置保留当前作用域并读取届时内容。
+
+共享 ECF_SCRIPT_CMD 的 cat 文件参数采用 Shell 引用，普通路径的原字节保持，带空格/引号的有效路径经过真实原生预处理验证。

@@ -267,6 +267,7 @@ class Application(Generic[ConfigT]):
     credential_enabled: bool = False
     strict_fields: bool = False
     required_operations: Callable[[ConfigT], tuple[str, ...]] | None = None
+    context_suite_builder: Callable[[BuildContext[ConfigT], WorkflowEngine], Node] | None = None
 
     def __post_init__(self):
         if not isinstance(self.config_type, type) or not issubclass(self.config_type, BaseWorkflowConfig):
@@ -278,7 +279,10 @@ class Application(Generic[ConfigT]):
         if not self.supported_modes or set(self.supported_modes) - {"ecflow", "takler", "shell"}:
             _error("APPLICATION_MODES", "supported_modes", "declare supported ecflow, takler or shell modes",
                    "application.declaration")
-        if set(self.supported_modes) - {"shell"} and not callable(self.suite_builder):
+        if self.suite_builder is not None and self.context_suite_builder is not None:
+            _error("APPLICATION_BUILDER_CONFLICT", "suite_builder", "declare only one config or context suite builder",
+                   "application.declaration")
+        if set(self.supported_modes) - {"shell"} and not (callable(self.suite_builder) or callable(self.context_suite_builder)):
             _error("APPLICATION_BUILDER_REQUIRED", "suite_builder", "a suite builder is required for definition modes",
                    "application.declaration")
         if "shell" in self.supported_modes and self.shell_template is None:
@@ -387,6 +391,9 @@ class Application(Generic[ConfigT]):
                 config, supported_modes=self.supported_modes,
                 required_operations=self.required_operations(config) if self.required_operations else (),
             )
+            if not config.observability.enabled:
+                report.passed("APPLICATION_OBSERVABILITY_DISABLED", "application.context", "observability",
+                              "optional observability is not enabled")
             suffix = ".def" if config.workflow_mode == "ecflow" else ".json"
             if config.workflow_mode == "shell":
                 if output is not None:

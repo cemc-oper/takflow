@@ -132,3 +132,23 @@ def test_common_capability_subset_supports_chaining_and_save(engine, tmp_path):
     assert engine.save_suite(suite, output) is None
     assert output.is_file()
     assert output.stat().st_size > 0
+
+
+def test_ecflow_script_command_quotes_a_real_local_filename(tmp_path):
+    import subprocess
+    from takflow.backends.ecflow import EcflowBackend
+    from takflow.flow import WorkflowEngine
+    directory = tmp_path / "space ' dollar $root"
+    directory.mkdir()
+    (directory / "job.ecf").write_text("literal-script-body\n")
+    command = script_cmd_value(WorkflowEngine(EcflowBackend()), directory, "job.ecf")
+    assert subprocess.check_output(["sh", "-c", command], text=True) == "literal-script-body\n"
+
+
+
+def test_ecflow_script_lookup_retains_legacy_separator_spelling():
+    from takflow.backends.ecflow import EcflowBackend
+    from takflow.flow import WorkflowEngine
+    engine = WorkflowEngine(EcflowBackend())
+    assert script_cmd_value(engine, "jobs/", "run.ecf") == "cat jobs//run.ecf"
+    assert script_cmd_value(engine, "jobs", "/run.ecf") == "cat jobs//run.ecf"

@@ -47,7 +47,8 @@ def script_cmd_value(
     from pathlib import Path
 
     if _is_ecflow(engine):
-        return f"cat {jobs_dir}/{relative_path}"
+        import shlex
+        return "cat " + shlex.quote(f"{jobs_dir}/{relative_path}")
     relative_sh = relative_path.replace(".ecf", ".sh")
     return str(Path(jobs_dir) / relative_sh)
 

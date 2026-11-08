@@ -503,3 +503,44 @@ def test_disabled_component_does_not_require_its_declared_resource(tmp_path, res
     assert not (tmp_path / "out/scripts/off-missing").exists()
 
 
+
+
+def test_context_suite_builder_receives_the_prepared_context(tmp_path, resources):
+    calls = []
+    def builder(context, engine):
+        calls.append(context)
+        suite = engine.Suite(context.config.workflow_name)
+        suite.add_variables({"ECF_FILES": str(context.paths.jobs_dir / "on"),
+                             "ECF_INCLUDE": str(context.paths.config_dir)})
+        suite.add_task("task")
+        return suite
+    app = application(resources, suite_builder=None, context_suite_builder=builder)
+    with app.prepare(data(tmp_path / "old"), output_repo_base=tmp_path / "effective") as context:
+        result = build(context)
+        single = run_stage(context, "workflow")
+        assert calls == [context, context]
+        assert all(value is context for value in calls)
+        assert result.complete and not single.complete
+        assert str(context.paths.jobs_dir / "on") in context.paths.workflow_output.read_text()
+
+
+def test_config_and_context_suite_builders_are_mutually_exclusive(resources):
+    from takflow.config import ConfigValidationError
+    with pytest.raises(ConfigValidationError) as error:
+        application(resources, context_suite_builder=lambda context, engine: None)
+    assert error.value.diagnostics[0].code == "APPLICATION_BUILDER_CONFLICT"
+
+
+@pytest.mark.parametrize("mode", ["ecflow", "shell"])
+def test_machine_fragment_whitespace_has_an_explicit_native_boundary(tmp_path, resources, mode):
+    put(resources, "machine/site/env/with space.sh", "VALUE=ready\n")
+    job = resources / "jobs/on/task.sh.j2"
+    job.write_text(job.read_text().replace("env/runtime.sh", "env/with space.sh"))
+    with application(resources).prepare(data(tmp_path / "output", mode)) as context:
+        if mode == "ecflow":
+            with pytest.raises(BuildError) as error:
+                build(context)
+            assert error.value.original.diagnostic.code == "BUILD_MACHINE_REFERENCE"
+            assert not (context.paths.output_root / "generation_manifest.json").exists()
+        else:
+            assert build(context).complete

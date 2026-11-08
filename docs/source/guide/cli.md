@@ -35,4 +35,4 @@ JSON 在 stdout 输出一个对象：`schema_version: 1`、`status: success|fail
 
 ## 发布与迁移
 
-参见[迁移公告](cli-migration.md)。TYM 当前显式 standard 子命令供候选验收，默认生产命令切换和领域路径闭合属于 TC-07。
+参见[迁移公告](cli-migration.md)。TYM 默认根命令已由 TC-07 切换到公共实现；standard 子命令仅作临时转发别名，0.4.0 移除。当前发布状态仍为未发布 R1 候选，依赖配套见迁移公告。
