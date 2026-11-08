@@ -11,6 +11,7 @@ import shlex
 import stat
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union, TYPE_CHECKING
+from collections.abc import Mapping
 
 from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFound, TemplateSyntaxError, nodes
 
@@ -309,6 +310,10 @@ def render_jobs_from_directory(
     template_filter: Optional[Callable[[Path], bool]] = None,
     *,
     check_report: Optional[GenerationCheckReport] = None,
+    environment: Environment | None = None,
+    template_context: Mapping | None = None,
+    file_mode: int | None = None,
+    verbose: bool = True,
 ) -> None:
     """Render every ``jobs/**/*.j2`` template under one or more repo roots.
 
@@ -373,7 +378,7 @@ def render_jobs_from_directory(
         script_file = check_relative_path(output_repo_base, script_path, stage="job.render",
                                           report=report)
         check_input_file(script_file, stage="job.render", report=report)
-        with open(script_file, "r") as f:
+        with open(script_file, "r", encoding="utf-8" if environment is not None else None) as f:
             content = f.read()
 
         # ecflow 模式下需用 %nopp/%end 包裹原生脚本内容，
@@ -401,7 +406,9 @@ def render_jobs_from_directory(
             _check_script_reference(script_path, output_repo_base, config, report,
                                     helper="invoke_script", stage="job.render")
             invocation = f"${{OUTPUT_REPO_BASE}}/{script_path}"
-            if config.workflow_mode == "ecflow":
+            if environment is not None:
+                invocation = '"${OUTPUT_REPO_BASE}"/' + shlex.quote(script_path)
+            elif config.workflow_mode == "ecflow":
                 invocation = f'"{invocation}"'
             if args:
                 invocation += f" {arguments}"
@@ -421,7 +428,7 @@ def render_jobs_from_directory(
         if source_idx > 0:
             search_paths.extend(repo_bases[source_idx - 1::-1])
 
-        env = Environment(
+        env = environment if environment is not None else Environment(
             loader=_JobTemplateLoader(search_paths, report),
             lstrip_blocks=True,
             trim_blocks=True,
@@ -444,13 +451,14 @@ def render_jobs_from_directory(
     destinations = {}
     for source_idx, repo_base_str, jobs_dir in repo_jobs_pairs:
         env = build_environment(source_idx)
-        j2_files = jobs_dir.rglob("*.j2")
+        j2_files = sorted(jobs_dir.rglob("*.j2")) if environment is not None else jobs_dir.rglob("*.j2")
         for j2_file in j2_files:
             relative_path = j2_file.relative_to(repo_base_str)
             jobs_relative_path = j2_file.relative_to(jobs_dir)
 
             if template_filter is not None and not template_filter(jobs_relative_path):
-                print(f"Skipped (disabled): {jobs_relative_path}")
+                if verbose:
+                    print(f"Skipped (disabled): {jobs_relative_path}")
                 continue
 
             if jobs_relative_path.stem.endswith(".sh"):
@@ -477,6 +485,11 @@ def render_jobs_from_directory(
             destinations[resolved] = relative_path
             planned.append((env, relative_path, output_file_relative_path))
 
+    if environment is not None:
+        # The supplied standard loader searches the final effective layer set.
+        # Shadowed templates must neither render nor fail on obsolete inputs.
+        planned = list({destination: (env, relative, destination)
+                        for env, relative, destination in planned}.values())
     seen_by_environment = {}
     inputs = set()
     for env, relative_path, _ in planned:
@@ -495,9 +508,12 @@ def render_jobs_from_directory(
             config=config,
             env=env,
             report=report,
+            template_context=template_context,
+            file_mode=file_mode,
         )
 
-        print(f"Generated: {output_file_relative_path}")
+        if verbose:
+            print(f"Generated: {output_file_relative_path}")
 
 
 def render_single_job_file(
@@ -525,6 +541,7 @@ def render_single_job_file(
 def _render_single_job_file(
     relative_path: Path, output_repo_base: str, output_relative_path: Path,
     config: "BaseWorkflowConfig", env: Environment, report: GenerationCheckReport,
+    *, template_context: Mapping | None = None, file_mode: int | None = None,
 ) -> None:
     base_name = output_relative_path.stem
     output_log_dict = generate_output_log_data(
@@ -532,9 +549,13 @@ def _render_single_job_file(
         name=base_name,
         output_repo_base=output_repo_base,
     )
+    if file_mode is not None and config.workflow_mode == "shell" and config.workload.workload_type == "slurm":
+        from takflow._files import make_parents
+        make_parents(Path(output_repo_base) / "logs/.log", Path(output_repo_base))
 
     build_info_lines = _current_build_info_lines()
     data = {
+        **(template_context or {}),
         "config": config,
         "build_info_warning": build_info_lines["warning"],
         "build_info_detail": build_info_lines["info"],
@@ -547,17 +568,31 @@ def _render_single_job_file(
     except GenerationCheckError:
         raise
     except (TemplateError, TypeError, ValueError, OSError, UnicodeError):
+        if file_mode is not None:
+            report.failed("GEN_JOB_RENDER", "job.render", relative_path.as_posix(),
+                          "job rendering failed; original exception retained")
+            raise
         report.fail("GEN_JOB_RENDER", "job.render", relative_path.as_posix(),
                     "job rendering failed; unresolved references may require generation or runtime context")
 
     output_file_path = Path(output_repo_base, output_relative_path)
     try:
+        if file_mode is not None:
+            from takflow._files import write_text
+            write_text(output_file_path, rendered_content, file_mode, Path(output_repo_base))
+            check_shell_output(output_file_path, check_report=report, executable=True,
+                               stage="job.output", role="job")
+            return
         output_file_path.parent.mkdir(exist_ok=True, parents=True)
         with open(output_file_path, "w") as f:
             f.write(rendered_content)
         mode = os.stat(output_file_path).st_mode
         os.chmod(output_file_path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     except OSError:
+        if file_mode is not None:
+            report.failed("GEN_JOB_WRITE", "job.output", output_relative_path.as_posix(),
+                          "job writing failed; partial output is retained")
+            raise
         report.fail("GEN_JOB_WRITE", "job.output", output_relative_path.as_posix(),
                     "job output could not be written or its permissions could not be set")
     check_shell_output(output_file_path, check_report=report, executable=True,

@@ -16,6 +16,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_build.py::test_complete_and_step_business_artifacts_are_equivalent[ecflow]",
+        "tests/test_build.py::test_resource_copy_failure_retains_partial_output_and_stops",
+        "tests/test_build.py::test_manifest_publish_failure_never_leaves_success",
         "tests/test_application.py::test_file_and_parameter_paths_use_different_bases",
         "tests/test_application.py::test_registries_restore_on_success_and_failure[validation]",
         "tests/test_serialize_ecflow.py::test_suite_family_task_round_trip",
@@ -28,7 +31,7 @@ REQUIRED = {
         "test_rendered_script_matches_committed_vector",
         "test_orvix_generate_matches_golden",
     )),
-    "takler": tuple(f"tests/test_takler_current_contract.py::{name}" for name in (
+    "takler": ("tests/test_build_takler_contract.py::test_takler_pipeline_uses_real_native_json",) + tuple(f"tests/test_takler_current_contract.py::{name}" for name in (
         "test_backend_does_not_create_legacy_application_bunch",
         "test_suite_name_is_caller_supplied",
         "test_saved_suite_builds_and_loads_current_definition",
@@ -42,6 +45,7 @@ REQUIRED = {
         "test_native_ecflow_parses_takflow_definition",
         "test_native_ecflow_preprocesses_job_without_running_it",
         "test_native_ecflow_rejects_missing_job_include",
+        "test_native_pipeline_retains_machine_updates_without_regenerating_ecf",
     )),
 }
 
@@ -159,9 +163,9 @@ def main():
         from takflow.spec.jobspec.conformance import CASES, SCHEDULERS
         expected = len(CASES) * (1 + len(SCHEDULERS))
     elif args.suite == "takler":
-        expected = 11
+        expected = 12
     elif args.suite == "native":
-        expected = 3
+        expected = 4
     targets = ["tests"] if args.suite == "base" else sorted({name.split("::", 1)[0] for name in required})
     gate = ContractGate(required, allow_optional_skips=args.suite == "base", expected_count=expected)
     return int(pytest.main([*targets, "-v", "-ra"], plugins=[gate]))

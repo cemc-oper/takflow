@@ -14,7 +14,7 @@ from takflow.toolkit.job import (
     render_single_job_file,
     set_build_info_provider,
 )
-from takflow.toolkit.resource import copy_resources_to_output, make_scripts_executable
+from takflow.toolkit.resource import copy_resource_entries, copy_resources_to_output, make_scripts_executable
 from takflow.toolkit.observability import (
     ObservabilityConfigError,
     TaskMapping,
@@ -33,6 +33,7 @@ from takflow.toolkit.util import (
 
 __all__ = [
     "copy_resources_to_output",
+    "copy_resource_entries",
     "make_scripts_executable",
     "render_jobs_from_directory",
     "render_single_job_file",

@@ -4,6 +4,7 @@ The dedicated native contract gate must provide ecFlow and reject all skips.
 Ordinary source tests may run without this optional system dependency.
 """
 from pathlib import Path
+import shlex
 
 import pytest
 
@@ -86,3 +87,42 @@ def test_native_ecflow_rejects_missing_job_include(tmp_path):
     errors = control.get_error_msg()
     assert errors, "the real native preprocessor must reject a missing include"
     assert "missing.h" in errors
+
+
+def test_native_pipeline_retains_machine_updates_without_regenerating_ecf(tmp_path):
+    from takflow.build import build
+    from test_build import application, data
+
+    source = tmp_path / "resources"
+    for relative, text in {
+        "config/config.sh.j2": "# config\n",
+        "scripts/on/task.sh": "#!/bin/sh\necho business-marker\n",
+        "machine/site/env/runtime.sh": "VALUE=before\n",
+        "jobs/on/task.sh.j2": "#!/bin/sh\n%include <config.h>\n{{ include_machine('env/runtime.sh') }}\n",
+        "templates/runner.sh.j2": "#!/bin/sh\ntrue\n",
+    }.items():
+        path = source / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    app = application(source, variables=lambda config: {"QUOTE_VALUE": "space ' quote $HOME"})
+    with app.prepare(data(tmp_path / "out")) as context:
+        result = build(context)
+    original_ecf = (tmp_path / "out/jobs/on/task.ecf").read_bytes()
+
+    def create_jobs(destination):
+        control = ecflow.JobCreationCtrl()
+        control.set_dir_for_job_creation(str(destination))
+        ecflow.Defs(str(result.workflow_output)).check_job_creation(control)
+        assert not control.get_error_msg(), control.get_error_msg()
+        return next(destination.rglob("*.job0")).read_text()
+
+    before = create_jobs(tmp_path / "first-jobs")
+    (tmp_path / "out/machine/site/env/runtime.sh").write_text("VALUE=after\n")
+    after = create_jobs(tmp_path / "second-jobs")
+    assert "VALUE=before" in before and "VALUE=after" in after
+    assert "export QUOTE_VALUE=" in before
+    export = next(line for line in before.splitlines() if line.startswith("export QUOTE_VALUE="))
+    assert shlex.split(export) == ["export", "QUOTE_VALUE=space ' quote $HOME"]
+    assert (tmp_path / "out/jobs/on/task.ecf").read_bytes() == original_ecf
+    # Public validation also works after the standard serializer scope exits.
+    check_definition_output(result.generation.suite, result.workflow_output)

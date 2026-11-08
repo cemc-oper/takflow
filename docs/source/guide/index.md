@@ -7,6 +7,7 @@
 
 config
 application
+build
 jobspec
 flow-and-hooks
 backends

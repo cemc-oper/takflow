@@ -7,8 +7,12 @@ via the method API (``add_trigger(...)``) or via the constructor-style API
 """
 from __future__ import annotations
 
+from contextvars import ContextVar
 from enum import Enum
 from typing import Any, Dict, Optional, Union
+
+
+_native_variable_quotes = ContextVar("takflow_native_variable_quotes", default=False)
 
 
 class DState(str, Enum):
@@ -329,5 +333,9 @@ def _quote(value: str) -> str:
         return f"'{value}'"
     if '"' not in value:
         return f'"{value}"'
+    if _native_variable_quotes.get():
+        # Native ecFlow delimits values with the first/last quote, preserving
+        # mixed internal quotes literally. Backslash-escaping changes the value.
+        return f"'{value}'"
     escaped = value.replace("'", "\\'")
     return f"'{escaped}'"

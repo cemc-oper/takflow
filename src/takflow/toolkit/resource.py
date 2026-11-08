@@ -13,6 +13,7 @@ import shutil
 import stat
 from pathlib import Path
 from typing import NoReturn
+from collections.abc import Callable
 
 from takflow.checks import (
     GenerationCheckError,
@@ -60,6 +61,10 @@ def _copy_plan(
     output: Path,
     trees: list[tuple[Path, Path, bool]],
     report: GenerationCheckReport,
+    *,
+    keep: Callable[[Path], bool] | None = None,
+    standard: bool = False,
+    directories: list[Path] | None = None,
 ) -> list[list[tuple[Path, Path, str, int]]]:
     """Check every selected source/target before the first output mutation.
 
@@ -84,12 +89,26 @@ def _copy_plan(
         if any(_overlap(real_source, target) for target in destinations):
             report.fail("RESOURCE_COPY_OVERLAP", stage, str(src),
                         "selected source and destination trees overlap")
-        _check_directory(src, report, source=True)
+        if src.is_dir() or not standard:
+            _check_directory(src, report, source=True)
+        else:
+            check_input_file(src, stage=stage, report=report)
         check_relative_path(output, dst.relative_to(output), stage=stage,
                             report=report, object=str(dst))
-        _check_directory(dst, report, source=False)
-        for child in sorted(src.iterdir()):
+        if src.is_dir() or not standard:
+            _check_directory(dst, report, source=False)
+        else:
+            check_output_path(dst, stage=stage, report=report)
+        if directories is not None and src.is_dir():
+            directories.append(dst)
+        for child in sorted(src.iterdir()) if src.is_dir() else [src]:
+            if keep is not None and not keep(child.relative_to(src_base)):
+                continue
             target = dst / child.name
+            if not src.is_dir():
+                target = dst
+            if standard:
+                check_relative_path(src_base, child.relative_to(src_base), stage=stage, report=report)
             if child.is_dir():
                 walk(child, target, executable, ancestors | {real_source}, files)
                 continue
@@ -108,6 +127,8 @@ def _copy_plan(
             mode = stat.S_IMODE(child.stat().st_mode)
             if executable and child.suffix == ".sh":
                 mode |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+            if standard:
+                mode = 0o755 if executable else 0o644
             digest = hashlib.sha256(child.read_bytes()).hexdigest()
             files.append((child, target, digest, mode))
 
@@ -256,4 +277,58 @@ def copy_resources_to_output(
                      "dynamic and target-host references inside copied files were not evaluated")
 
 
-__all__ = ["copy_resources_to_output", "make_scripts_executable"]
+def copy_resource_entries(
+    output_repo_base: Path, src_base: Path,
+    entries: list[tuple[str, str, bool]], *,
+    keep: Callable[[Path], bool], check_report: GenerationCheckReport,
+    check_target: Callable[[Path], None] | None = None,
+    source_layer: str | None = None,
+) -> None:
+    """Copy declared selected mappings with exact standard permissions.
+
+    Entries are source-relative, destination-relative and executable. The
+    caller resolves optional/required entries across layers. Original copy
+    exceptions and partial invocation artifacts survive failures.
+    """
+    from takflow._files import file_state, make_parents
+
+    trees = []
+    for source, destination, executable in entries:
+        src = check_relative_path(src_base, source, stage="resource.preflight", report=check_report)
+        dst = check_relative_path(output_repo_base, destination, stage="resource.preflight", report=check_report)
+        trees.append((src, dst, executable))
+    directories = []
+    plans = _copy_plan(src_base, output_repo_base, trees, check_report, keep=keep, standard=True, directories=directories)
+    if check_target is not None:
+        for files in plans:
+            for _, target, _, _ in files:
+                check_target(target)
+    for directory in directories:
+        make_parents(directory / ".directory", output_repo_base)
+    for files in plans:
+        for source, target, _, mode in files:
+            before = file_state(target)
+            try:
+                make_parents(target, output_repo_base)
+                shutil.copy2(source, target)
+                target.chmod(mode)
+            except Exception:
+                check_report.failed("RESOURCE_COPY_FAILED", "resource.copy", str(target),
+                                    "resource copy failed; partial output is retained")
+                try:
+                    if file_state(target) != before and target.is_file():
+                        check_report.artifact(target, "resource_partial", stage="resource.copy")
+                except Exception:
+                    check_report.unchecked("RESOURCE_PARTIAL_UNREADABLE", "resource.copy", str(target),
+                                           "partial file metadata could not be collected")
+                raise
+            check_report.artifact(target, "resource", stage="resource.copy")
+            check_report.artifacts[-1]["source"] = str(source)
+            check_report.artifacts[-1]["layer"] = source_layer
+        _check_copied_files(files, check_report)
+        for source, target, _, _ in files:
+            item = next(item for item in check_report.artifacts if item["path"] == str(target))
+            item.update(source=str(source), layer=source_layer)
+
+
+__all__ = ["copy_resources_to_output", "make_scripts_executable", "copy_resource_entries"]

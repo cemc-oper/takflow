@@ -254,7 +254,14 @@ def check_definition_output(
         except (OSError, UnicodeError):
             report.fail("GEN_DEFINITION_INVALID", stage, str(path), "definition is not readable UTF-8 text")
         if body(actual) != body(expected):
-            report.fail("GEN_DEFINITION_INVALID", stage, str(path), "saved ecFlow body differs from the current serializer output")
+            from takflow.backends.ecflow.serializer.attributes import _native_variable_quotes
+            token = _native_variable_quotes.set(True)
+            try:
+                native_expected = Defs(suite.raw).to_def()
+            finally:
+                _native_variable_quotes.reset(token)
+            if body(actual) != body(native_expected):
+                report.fail("GEN_DEFINITION_INVALID", stage, str(path), "saved ecFlow body differs from the supported serializer encodings")
         report.passed("GEN_SERIALIZER_VALID", stage, str(path), "saved ecFlow body matches the serializer; full-line branding comments excluded")
         if importlib.util.find_spec("ecflow") is None:
             report.unchecked("GEN_NATIVE_ECFLOW_UNAVAILABLE", stage, str(path), "native ecFlow parsing and job preprocessing were not run")

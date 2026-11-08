@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from contextvars import ContextVar
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, TYPE_CHECKING
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from takflow.config import BaseWorkflowConfig
 
 logger = logging.getLogger(__name__)
+_credential_environment = ContextVar("takflow_credential_environment", default=None)
 
 
 def render_credential_template(
@@ -31,12 +33,14 @@ def render_credential_template(
     template_name: str = "credential_workflow.sh.j2",
 ) -> str:
     """Render a credential fragment from ``{repo_base}/config/{template_name}``."""
-    env = Environment(
+    scoped = _credential_environment.get()
+    env = scoped if scoped is not None else Environment(
         loader=FileSystemLoader(f"{repo_base}/config"),
         lstrip_blocks=True,
         trim_blocks=True,
     )
-    template = env.get_template(template_name)
+    name = "config/" + template_name if scoped is not None and not template_name.startswith("config/") else template_name
+    template = env.get_template(name)
     return template.render(credential=credential, config=config)
 
 
@@ -87,6 +91,7 @@ def render_credential(
     config: "BaseWorkflowConfig",
     output_repo_base: str,
     build_info_lines: Dict[str, str],
+    *, environment: Environment | None = None, file_mode: int | None = None,
 ) -> None:
     """Render and merge ``config/credential.sh`` from all registered hooks.
 
@@ -101,8 +106,12 @@ def render_credential(
     build_info_lines : dict
         ``{"warning": ..., "info": ...}`` header lines (app-branded).
     """
-    with open(credential_file, "r") as f:
-        credential = yaml.safe_load(f)
+    if file_mode is None:
+        with open(credential_file, "r") as f:
+            credential = yaml.safe_load(f)
+    else:
+        from takflow.config import load_config_data
+        credential = load_config_data(credential_file)
 
     parts = [
         "#!/usr/bin/env bash",
@@ -119,7 +128,11 @@ def render_credential(
 
     registry = get_credential_registry()
     context = CredentialContext(credential=credential, config=config)
-    rendered_parts = registry.execute(CredentialHookPoint.RENDER, context)
+    token = _credential_environment.set(environment)
+    try:
+        rendered_parts = registry.execute(CredentialHookPoint.RENDER, context)
+    finally:
+        _credential_environment.reset(token)
 
     for part in rendered_parts:
         if part and part.strip():
@@ -129,10 +142,13 @@ def render_credential(
     parts.append('echo "END: credential.sh"')
 
     output_path = Path(output_repo_base) / "config" / "credential.sh"
-    output_path.parent.mkdir(exist_ok=True, parents=True)
-    output_path.write_text("\n".join(parts))
-
-    os.chmod(output_path, 0o700)
+    if file_mode is None:
+        output_path.parent.mkdir(exist_ok=True, parents=True)
+        output_path.write_text("\n".join(parts))
+        os.chmod(output_path, 0o700)
+    else:
+        from takflow._files import write_text
+        write_text(output_path, "\n".join(parts) + "\n", file_mode, Path(output_repo_base))
 
     logger.info(f"Generated credential.sh at {output_path}")
 

@@ -9,6 +9,7 @@ API 参考
 
    config
    application
+   build
    jobspec
    flow
    generation

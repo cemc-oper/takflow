@@ -6,10 +6,12 @@
 from typing import Callable, Dict, List, Tuple, Any, Optional, TypeVar, Generic
 from enum import Enum
 from contextlib import contextmanager
+from contextvars import ContextVar
 import logging
 
 
 logger = logging.getLogger(__name__)
+_safe_hook_errors = ContextVar("takflow_safe_hook_errors", default=False)
 
 
 # 类型变量
@@ -156,6 +158,11 @@ class BaseHookRegistry(Generic[T, R]):
                 results.append(result)
                 logger.debug(f"Hook '{func.__name__}' completed successfully")
             except Exception as e:
+                if _safe_hook_errors.get():
+                    logger.error("Hook '%s' at '%s' failed; original exception retained", func.__name__, hook_name)
+                    if stop_on_error:
+                        raise
+                    continue
                 error_msg = f"Error executing hook '{func.__name__}' at '{hook_name}': {e}"
                 logger.error(error_msg, exc_info=True)
 

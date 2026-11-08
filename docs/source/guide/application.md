@@ -1,8 +1,8 @@
 # 应用声明与有效上下文
 
 `takflow.application` 提供应用声明、一次配置加载和有作用域的有效上下文。
-本次交付 TC-05 的准备生命周期；资源复制、模板写出、作业/流程保存、完整成功清单
-由后续 TC-06 接续，公共命令由 TC-12 决策与实现。`prepare` 不写生成文件。
+TC-05 交付准备生命周期；资源复制、模板写出、作业/流程保存、完整成功清单
+由 [TC-06 标准管线](build.md)消费同一上下文，公共命令仍由 TC-12 决策与实现。`prepare` 不写生成文件。
 
 ## 公开入口
 
@@ -122,5 +122,5 @@ Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/�
 
 `MachineContext.external` 区分两种来源；`BuildContext.variables` 合入同一份
 `MACHINE_NAME/MACHINE_DIR`，拒绝领域覆盖，检查报告注明远端可见性/执行未验。
-实际变量写出、所选站点分发和 include_machine 原生引用 helper 由 TC-06 实现，
+实际变量写出、所选站点分发和 include_machine 原生引用 helper 由 [TC-06](build.md)提供，
 原生消费者、Shell 加载位置及可更新片段语义由 TC-07 验证。
