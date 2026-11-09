@@ -1,4 +1,5 @@
 """takflow toolkit — reusable CLI building blocks for workflow generators."""
+from takflow.toolkit.config import render_config_template
 from takflow.toolkit.credential import (
     CredentialContext,
     CredentialHookPoint,
@@ -32,6 +33,7 @@ from takflow.toolkit.util import (
 )
 
 __all__ = [
+    "render_config_template",
     "copy_resources_to_output",
     "copy_resource_entries",
     "make_scripts_executable",

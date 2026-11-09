@@ -122,3 +122,12 @@ MCV 的真实 takler 作业通过 Shell source 外部 config.sh，该文件不�
 此旧接口沿用来源权限及 *.sh 补执行位的既有行为，映射目录的 executable 为 False 时不补执行位；
 标准 `copy_resource_entries` 和构建阶段的精确权限策略不变。GFS base/oper 及旧 Execution 准备复用此机制，
 其历史 include 布局、默认来源和 None 返回由兼容适配保留，不能将该低层映射当作完整标准构建或业务扩展的验收。
+
+## 旧配置渲染适配（TC-09.4）
+
+旧配置接口可以委托 `takflow.toolkit.render_config_template(config, template_path, output_path)`，
+集中保留历史 Jinja 默认环境、写入和0755权限；返回 None，缺失模板抛出 TemplateNotFound，
+可选/WARN策略由旧门面适配。此接口用于尚未切换的旧消费者，不发布成功清单，
+随旧 toolkit 的[迁移窗口](cli-migration.md)退出。
+标准应用继续通过 config 阶段使用同一严格环境、模板声明、0644角色权限和公共结果，
+不调用该 legacy helper，也不添加应用环境 profile。

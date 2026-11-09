@@ -16,6 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_legacy_config_rendering.py::test_legacy_config_rendering_preserves_whitespace_permissions_and_failure",
         "tests/test_generation_resource_checks.py::test_additional_directory_mappings_preserve_legacy_copy_contract",
         "tests/test_generation_resource_checks.py::test_additional_directory_mappings_reject_invalid_sources_before_copying",
         "tests/test_build.py::test_full_build_cannot_reuse_a_script_removed_from_sources",
