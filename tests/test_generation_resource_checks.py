@@ -31,6 +31,39 @@ def assert_failure(error, code, stage="resource.preflight"):
     assert error.diagnostic.reason
 
 
+def test_additional_directory_mappings_preserve_legacy_copy_contract(tmp_path):
+    source, output = tmp_path / "source", tmp_path / "output"
+    files = {
+        "scripts/run.sh": write(source, "scripts/run.sh", "#!/bin/sh\nexit 0\n", 0o640),
+        "scripts/data.txt": write(source, "scripts/data.txt", "data\n", 0o600),
+        "include/head.h": write(source, "include/head.h", "# head\n", 0o750),
+    }
+    report = GenerationCheckReport()
+    copy_resources_to_output(
+        output, source, check_report=report,
+        additional_entries=(("include", "ecflow/include", False),),
+    )
+    expected = {"scripts/run.sh": 0o751, "scripts/data.txt": 0o600, "ecflow/include/head.h": 0o750}
+    assert {Path(item["path"]).relative_to(output).as_posix(): int(item["mode"], 8) for item in report.artifacts} == expected
+    for relative, mode in expected.items():
+        target = output / relative
+        original = files[relative.replace("ecflow/", "")]
+        assert target.read_bytes() == original.read_bytes()
+        assert stat.S_IMODE(target.stat().st_mode) == mode
+
+
+@pytest.mark.parametrize("kind", ["file", "missing"])
+def test_additional_directory_mappings_reject_invalid_sources_before_copying(tmp_path, kind):
+    source, output = tmp_path / "source", tmp_path / "output"
+    write(source, "scripts/run.sh")
+    if kind == "file":
+        write(source, "include", "invalid directory\n")
+    with pytest.raises(GenerationCheckError) as caught:
+        copy_resources_to_output(output, source, additional_entries=(("include", "include", False),))
+    assert_failure(caught.value, "RESOURCE_SOURCE_TYPE" if kind == "file" else "RESOURCE_SOURCE_MISSING")
+    assert not output.exists()
+
+
 def test_copy_preserves_bytes_modes_return_and_reports_only_current_files(tmp_path):
     src, output = tmp_path / "src", tmp_path / "output"
     inputs = {

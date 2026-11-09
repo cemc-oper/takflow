@@ -220,6 +220,7 @@ def copy_resources_to_output(
     include_takler: bool = True,
     *,
     check_report: GenerationCheckReport | None = None,
+    additional_entries: tuple[tuple[str, str, bool], ...] = (),
 ) -> None:
     """Copy static resource subtrees from ``src_base`` into ``output_repo_base``.
 
@@ -234,6 +235,10 @@ def copy_resources_to_output(
     check_report : GenerationCheckReport, optional
         Collect preflight checks and files copied by this invocation. Dynamic
         and target-host references inside resource text are not evaluated.
+    additional_entries : tuple, optional
+        Extra (source, destination, executable) directory mappings relative to
+        the declared roots. Explicit mappings require their directories. They use this
+        helper's existing source-permission and *.sh executable-bit semantics.
     """
     report = check_report if check_report is not None else GenerationCheckReport()
     output_repo_base = Path(output_repo_base)
@@ -251,6 +256,10 @@ def copy_resources_to_output(
         elif enabled:
             report.unchecked("RESOURCE_SUBTREE_ABSENT", "resource.preflight", str(source),
                              "optional resource subtree is absent")
+    for source, destination, executable in additional_entries:
+        src = check_relative_path(src_base, source, stage="resource.preflight", report=report)
+        dst = check_relative_path(output_repo_base, destination, stage="resource.preflight", report=report)
+        trees.append((src, dst, executable))
     plans = _copy_plan(src_base, output_repo_base, trees, report)
     output_repo_base.mkdir(parents=True, exist_ok=True)
     for (src, dst, executable), files in zip(trees, plans):

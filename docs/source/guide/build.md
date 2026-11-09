@@ -110,3 +110,15 @@ serializer、真实原生解析、动态模板/远端unchecked分别报告，不
 资源层可用 `ResourceLayer.config_field` 从同一已验证配置选择扩展根；`credential_enabled` 可按该配置判定，不额外加载配置。`required_machine_fragments` 检查本轮来源并保留业务脚本延后加载的作用域。
 
 MCV 的真实 takler 作业通过 Shell source 外部 config.sh，该文件不会再经过运行期 Jinja；因此标准 config 阶段将 takler 与 Shell 一样编码成 Shell 字面值。ecFlow 仍保留 suite 可 alter 的变量引用。此修正有真实 takler 定义与生成作业加载回归，不增加应用名分支。
+
+## 旧复制接口的额外目录映射（TC-09.3）
+
+标准阶段继续按 ResourceEntry 和 ResourceLayer 处理复制及来源；相同有序层同时供配置和作业模板读取。
+旧 `takflow.toolkit.copy_resources_to_output` 可用 `additional_entries=((source, destination, executable), ...)`
+声明额外目录，不再由应用补写 copytree。source/destination 均相对各自根目录，声明的目录必须存在，
+统一进入类型、权限、重叠及目标冲突预检；可选目录由调用方在存在时才声明。同名目标冲突不能用此参数模拟覆盖，
+标准多来源覆盖使用有序 ResourceLayer。
+
+此旧接口沿用来源权限及 *.sh 补执行位的既有行为，映射目录的 executable 为 False 时不补执行位；
+标准 `copy_resource_entries` 和构建阶段的精确权限策略不变。GFS base/oper 及旧 Execution 准备复用此机制，
+其历史 include 布局、默认来源和 None 返回由兼容适配保留，不能将该低层映射当作完整标准构建或业务扩展的验收。
