@@ -60,6 +60,7 @@ REQUIRED = {
         "test_native_ecflow_parses_takflow_definition",
         "test_native_ecflow_preprocesses_job_without_running_it",
         "test_native_ecflow_rejects_missing_job_include",
+        "test_native_orvix_resource_variables_and_application_default",
         "test_native_pipeline_retains_machine_updates_without_regenerating_ecf",
     )),
 }
@@ -180,7 +181,7 @@ def main():
     elif args.suite == "takler":
         expected = 12
     elif args.suite == "native":
-        expected = 4
+        expected = 5
     targets = ["tests"] if args.suite == "base" else sorted({name.split("::", 1)[0] for name in required})
     gate = ContractGate(required, allow_optional_skips=args.suite == "base", expected_count=expected)
     return int(pytest.main([*targets, "-v", "-ra"], plugins=[gate]))
