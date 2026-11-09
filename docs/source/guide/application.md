@@ -81,7 +81,7 @@ mapping 或文件，以保证覆盖先于派生。显式 definition `output` 仍
 
 | 声明 | 责任与限制 |
 |---|---|
-| `ResourceLayer(name, root, config_field=None)` | base 后按声明顺序覆盖，扩展层在后；名称唯一；可声明配置中的资源目录字段，其非空值优先于 root，配置相对路径基于 source_dir、canonical overrides 基于调用 cwd；空值使用包 root；静态与模板共用层序与来源记录 |
+| `ResourceLayer(name, root, config_field=None, required_inputs=())` | base 后按声明顺序覆盖，扩展层在后；名称唯一；配置目录字段的非空值优先于 root，配置相对路径基于 source_dir、canonical overrides 基于调用 cwd；required_inputs 是本层必须提供的相对文件，不能由其他层或旧输出满足；静态与模板共用层序及来源记录 |
 | `ResourceEntry(source, destination, executable=False, required=False)` | 声明静态目录/文件映射，路径相对且不逃逸；默认 scripts、ecflow/include、takler/include、utils；迁移映射由应用给出，不新增应用名 profile |
 | `TemplateOutput(template, output, required=True, mode=0o644)` | 声明额外模板产物，mode 仅 0644/0755/0600；TC-06 检查实际模板、目标碰撞、编码、权限及写出 |
 | `select_components(config)` | 只计算一次，返回 `ComponentSelection`；enabled 与两个路径分类器供资源/作业共用，不读禁用文件 |
@@ -115,6 +115,24 @@ context=None, outputs=())` 只提供局部初始化、数据和规则。名称�
 不接受 resource/config/job/workflow 整套 handler 注册，也不提供阶段接管开关。
 业务构图、科学配置、组件判定、变量值、模板、Shell runner 调用序列与领域 Hook 内容由应用维护。
 Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/分步结果及公共命令属于 TC-06/12。
+
+### 按有效配置选择可选输入（TC-09.6）
+
+`Application.resource_layers/outputs` 和 `ApplicationExtension.resource_layers/outputs`
+既可以保持固定 tuple，也可以传入 `selector(config) -> tuple`。Application 的
+required_machine_fragments 同样接受该形式。每个选择器在一次 prepare 中只调用一次，
+读取同一个已验证配置；base 的默认资源 factory 先按需调用一次并解析成有效目录，
+因此层选择器能从 config.workflow_repo_base_dir 构造其子目录。现有 config_field
+字段仍按表中规则解析，不增加第二次 YAML 加载或领域模型校验。
+
+选择结果固定在 BuildPaths.resource_layers、BuildContext.outputs 和
+BuildContext.required_machine_fragments；完整与单步构建读取同一结果。
+选择器只返回数据，不复制、写出或执行脚本。扩展初始化仍在加载配置前执行，
+可选层/产物不构成按配置接管完整阶段或重排业务 Hook 的接口。
+
+选定层的 required_inputs 在 resource 复制前逐项检查来源、类型及可读性。
+用它声明必须存在的覆盖文件，可以防止缺少扩展 head 时悄悄落回基础 head；
+未选择的层不会被检查。普通稀疏覆盖继续使用不带这些必需项的 ResourceLayer。
 
 ## 品牌和 machine
 

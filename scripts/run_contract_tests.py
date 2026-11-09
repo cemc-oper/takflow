@@ -16,6 +16,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_optional_inputs.py::test_optional_declarations_share_one_effective_config",
+        "tests/test_optional_inputs.py::test_optional_layers_receive_the_resolved_default_resource_factory",
+        "tests/test_optional_inputs.py::test_optional_layers_outputs_and_fragments_use_standard_stages",
+        "tests/test_optional_inputs.py::test_required_layer_inputs_cannot_fall_back_to_another_layer_or_stale_output",
+        "tests/test_optional_inputs.py::test_required_extra_config_outputs_are_stage_inputs",
         "tests/test_legacy_config_rendering.py::test_legacy_config_rendering_preserves_whitespace_permissions_and_failure",
         "tests/test_generation_resource_checks.py::test_additional_directory_mappings_preserve_legacy_copy_contract",
         "tests/test_generation_resource_checks.py::test_additional_directory_mappings_reject_invalid_sources_before_copying",

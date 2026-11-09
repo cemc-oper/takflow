@@ -131,3 +131,13 @@ MCV 的真实 takler 作业通过 Shell source 外部 config.sh，该文件不�
 随旧 toolkit 的[迁移窗口](cli-migration.md)退出。
 标准应用继续通过 config 阶段使用同一严格环境、模板声明、0644角色权限和公共结果，
 不调用该 legacy helper，也不添加应用环境 profile。
+
+## 配置选择的输入与后续阶段（TC-09.6）
+
+可选资源层、额外模板输出和 machine 必需片段的选择由 Application.prepare 固定，
+具体声明见 [应用指南](application.md)。resource 阶段先验证每个选定层的 required_inputs；
+该来源要求不能由别的层或磁盘旧产物满足，随后继续使用同一复制、覆盖与来源记录机制。
+
+job/workflow 除主配置外，还要求本轮声明中 required=True 的额外配置产物已经存在且可读。
+因此删除必需设置文件后，单步会在 job.input/workflow.input 报错并使旧成功清单失效，
+不会仅因主配置还在就继续。optional 输出仍按自身声明处理，单步不发布完整成功清单。

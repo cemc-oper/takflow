@@ -74,12 +74,18 @@ class ResourceLayer:
     name: str
     root: ResourceRoot
     config_field: str | None = None
+    required_inputs: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        for relative in self.required_inputs:
+            _relative(relative)
 
 
 @dataclass(frozen=True)
 class ResolvedResourceLayer:
     name: str
     root: Path
+    required_inputs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -195,9 +201,9 @@ class ApplicationExtension:
     name: str
     initialize: Callable[[], None] | None = None
     registries: tuple[BaseHookRegistry, ...] = ()
-    resource_layers: tuple[ResourceLayer, ...] = ()
+    resource_layers: tuple[ResourceLayer, ...] | Callable[[BaseWorkflowConfig], tuple[ResourceLayer, ...]] = ()
     context: Callable[[BuildContext], Mapping[str, Any]] | None = None
-    outputs: tuple[TemplateOutput, ...] = ()
+    outputs: tuple[TemplateOutput, ...] | Callable[[BaseWorkflowConfig], tuple[TemplateOutput, ...]] = ()
 
 
 @dataclass(frozen=True)
@@ -220,6 +226,7 @@ class BuildContext(Generic[ConfigT]):
     outputs: tuple[TemplateOutput, ...]
     checks: GenerationCheckReport
     domain_context: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    required_machine_fragments: tuple[str, ...] = ()
 
     def template_context(self) -> Mapping[str, Any]:
         return MappingProxyType({
@@ -253,7 +260,7 @@ class Application(Generic[ConfigT]):
     select_components: Callable[[ConfigT], ComponentSelection] | None = None
     variables: Callable[[ConfigT], Mapping[str, str]] | None = None
     context: Callable[[BuildContext[ConfigT]], Mapping[str, Any]] | None = None
-    resource_layers: tuple[ResourceLayer, ...] = ()
+    resource_layers: tuple[ResourceLayer, ...] | Callable[[ConfigT], tuple[ResourceLayer, ...]] = ()
     resource_entries: tuple[ResourceEntry, ...] = (
         ResourceEntry("scripts", "scripts", executable=True),
         ResourceEntry("ecflow/include", "ecflow/include"),
@@ -261,7 +268,7 @@ class Application(Generic[ConfigT]):
         ResourceEntry("utils", "utils"),
     )
     config_template: str = "config/config.sh.j2"
-    outputs: tuple[TemplateOutput, ...] = ()
+    outputs: tuple[TemplateOutput, ...] | Callable[[ConfigT], tuple[TemplateOutput, ...]] = ()
     extensions: tuple[ApplicationExtension, ...] = ()
     registries: tuple[BaseHookRegistry, ...] = ()
     require_machine: bool = False
@@ -269,7 +276,7 @@ class Application(Generic[ConfigT]):
     strict_fields: bool = False
     required_operations: Callable[[ConfigT], tuple[str, ...]] | None = None
     context_suite_builder: Callable[[BuildContext[ConfigT], WorkflowEngine], Node] | None = None
-    required_machine_fragments: tuple[str, ...] = ()
+    required_machine_fragments: tuple[str, ...] | Callable[[ConfigT], tuple[str, ...]] = ()
     required_resource_inputs: tuple[str, ...] | Callable[[ConfigT], tuple[str, ...]] = ()
 
     def __post_init__(self):
@@ -294,8 +301,9 @@ class Application(Generic[ConfigT]):
         _relative(self.config_template)
         if self.shell_template is not None:
             _relative(self.shell_template)
-        for fragment in self.required_machine_fragments:
-            _relative(fragment)
+        if not callable(self.required_machine_fragments):
+            for fragment in self.required_machine_fragments:
+                _relative(fragment)
         if not callable(self.required_resource_inputs):
             for resource in self.required_resource_inputs:
                 _relative(resource)
@@ -382,9 +390,14 @@ class Application(Generic[ConfigT]):
             output_root = _local_path(config.output_repo_base_dir, base, "output_repo_base_dir")
             base_resources = (self.resources if config.workflow_repo_base_dir is None else
                               _local_path(config.workflow_repo_base_dir, base, "workflow_repo_base_dir"))
-            raw_layers = [ResourceLayer("base", base_resources), *self.resource_layers]
+            # Select only data, using the same validated config and final base.
+            base_resources = base_resources() if callable(base_resources) else base_resources
+            base_resources = _local_path(base_resources, cwd, "resource_layers")
+            config.workflow_repo_base_dir = str(base_resources)
+            selected_layers = self.resource_layers(config) if callable(self.resource_layers) else self.resource_layers
+            raw_layers = [ResourceLayer("base", base_resources), *selected_layers]
             for extension in self.extensions:
-                raw_layers.extend(extension.resource_layers)
+                raw_layers.extend(extension.resource_layers(config) if callable(extension.resource_layers) else extension.resource_layers)
             layers = []
             layer_names = set()
             for layer in raw_layers:
@@ -406,7 +419,7 @@ class Application(Generic[ConfigT]):
                     root = _local_path(root, cwd, "resource_layers")
                 if layer.config_field is not None:
                     setattr(config, layer.config_field, str(root))
-                layers.append(ResolvedResourceLayer(layer.name, root))
+                layers.append(ResolvedResourceLayer(layer.name, root, layer.required_inputs))
             config.workflow_repo_base_dir = str(layers[0].root)
             config.output_repo_base_dir = str(output_root)
             report = preflight_generation(
@@ -449,9 +462,15 @@ class Application(Generic[ConfigT]):
                 variables.update(machine.variables)
                 report.unchecked("APPLICATION_MACHINE_RUNTIME_UNCHECKED", "application.context", "machine_dir",
                                  "target-side visibility and fragment execution are not checked")
-            outputs = self.outputs + tuple(item for extension in self.extensions for item in extension.outputs)
+            outputs = self.outputs(config) if callable(self.outputs) else self.outputs
+            for extension in self.extensions:
+                outputs += extension.outputs(config) if callable(extension.outputs) else extension.outputs
+            fragments = (self.required_machine_fragments(config) if callable(self.required_machine_fragments)
+                         else self.required_machine_fragments)
+            for fragment in fragments:
+                _relative(fragment)
             context = BuildContext(self, config, base, paths, brand, brand.lines(), components, machine,
-                                   MappingProxyType(variables), outputs, report)
+                                   MappingProxyType(variables), outputs, report, required_machine_fragments=tuple(fragments))
             stack.enter_context(build_info_scope(context.build_info))
             contributions = {}
             for contribute in [self.context, *(extension.context for extension in self.extensions)]:
