@@ -1,5 +1,6 @@
 """Application lifecycle, path provenance and declarative extension contracts."""
 from pathlib import Path, PurePosixPath
+from contextlib import contextmanager
 
 import pytest
 from jinja2 import Environment, FileSystemLoader
@@ -209,6 +210,53 @@ def test_registries_restore_on_success_and_failure(tmp_path, failure):
         assert registry.execute("point", None) == ["outside"]
         assert credential.list_hooks() == before
     assert calls == ["initialize", "initialize"]
+
+
+@pytest.mark.parametrize("phase", ["initialize", "body"])
+@pytest.mark.parametrize("exception_type", [KeyboardInterrupt, SystemExit])
+def test_registry_ownership_deduplicates_scopes_and_restores_base_exceptions(tmp_path, monkeypatch, phase, exception_type):
+    first, second = BaseHookRegistry(), BaseHookRegistry()
+    credential = get_credential_registry()
+    with credential.isolated():
+        for registry in (first, second, credential):
+            registry.register("point", lambda context: "foreign", priority=1)
+        previous = [registry._hooks for registry in (first, second, credential)]
+        entries = []
+        for registry in (first, second, credential):
+            original = registry.isolated
+
+            @contextmanager
+            def isolated(registry=registry, original=original):
+                entries.append(registry)
+                with original():
+                    yield registry
+
+            monkeypatch.setattr(registry, "isolated", isolated)
+        failure = exception_type("owned scope failure")
+        calls = []
+
+        def initialize():
+            calls.append(1)
+            for registry in (first, second, credential):
+                assert not registry._hooks
+                registry.register("point", lambda context: "owned", priority=50)
+            if phase == "initialize":
+                raise failure
+
+        app = application(tmp_path, registries=(first, credential), extensions=(
+            ApplicationExtension("owned", initialize=initialize, registries=(first, second, credential, second)),
+        ))
+        for _ in range(2):
+            entries.clear()
+            with pytest.raises(exception_type) as caught:
+                with app.prepare(config_data()):
+                    assert [registry.execute("point", None) for registry in (first, second, credential)] == [["owned"]] * 3
+                    raise failure
+            assert caught.value is failure
+            assert len(entries) == 3 and set(entries) == {first, second, credential}
+            assert all(registry._hooks is old for registry, old in zip((first, second, credential), previous))
+            assert [registry.execute("point", None) for registry in (first, second, credential)] == [["foreign"]] * 3
+        assert len(calls) == 2
 
 
 def test_scoped_brand_through_actual_job_renderer(tmp_path, monkeypatch):
