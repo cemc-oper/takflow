@@ -16,6 +16,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_extension_composition.py::test_composed_choices_and_extension_data_share_effective_config",
+        "tests/test_extension_composition.py::test_extension_context_conflicts_restore_brand_without_exposing_values",
+        "tests/test_extension_composition.py::test_composed_variables_cannot_replace_framework_values",
+        "tests/test_extension_composition.py::test_extension_output_collisions_keep_sensitive_partial_results_private",
         "tests/test_optional_inputs.py::test_optional_declarations_share_one_effective_config",
         "tests/test_optional_inputs.py::test_optional_layers_receive_the_resolved_default_resource_factory",
         "tests/test_optional_inputs.py::test_later_selectors_receive_resolved_preceding_layer_fields",

@@ -116,6 +116,36 @@ context=None, outputs=())` 只提供局部初始化、数据和规则。名称�
 业务构图、科学配置、组件判定、变量值、模板、Shell runner 调用序列与领域 Hook 内容由应用维护。
 Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/分步结果及公共命令属于 TC-06/12。
 
+### 组合 oper 的最终声明（TC-10.4）
+
+`config_type`、`brand`、`variables` 和 `credential_enabled` 属于最终 Application，
+不由扩展隐式合并。应用工厂可用 `dataclasses.replace(base, config_type=OperConfig,
+extensions=(*base.extensions, oper_extension), ...)` 明确选择最终类型与规则；品牌、变量
+和凭证选择无需变化时沿用 base。配置继承、具体变量和凭证字段由应用维护，不自动建立
+多个模型、品牌或变量字典的合并协议。MCV/GFS oper 当前均沿用 base 品牌；MCV
+凭证选择读取最终 config.enable_credential，base 和 oper 片段按已声明优先级组合，
+GFS oper 当前关闭凭证能力。
+
+品牌、变量、可选层及 outputs 选择器读取同一个已验证 config；credential_enabled
+在凭证阶段读取该对象。Application.context 先执行，再按扩展顺序执行 context；
+每项贡献接收相同基础 BuildContext，不读取前一贡献临时合并后的 domain_context。
+所有贡献成功后才形成最终模板上下文，config、job、额外模板与凭证模板共用它。
+outputs 的选择发生在 context 贡献之前，接收 config；实际渲染时可使用最终合并的领域数据。
+
+保留键或贡献之间重名使用 APPLICATION_CONTEXT_CONFLICT，诊断不含冲突值。
+machine 变量沿用 APPLICATION_VARIABLE_CONFLICT；OUTPUT_REPO_BASE 必须与有效
+输出根一致，标准阶段使用 BUILD_VARIABLE_CONFLICT 检查。额外产物不会静默覆盖
+其他贡献、运行配置、凭证、definition、清单、静态文件或 job；复用 BUILD_OUTPUT_COLLISION，
+诊断在发现冲突的阶段返回部分结果。prepare 贡献失败尚未开始生成；已开始的变更阶段
+清除上一份成功清单，部分产物按实际写出记录。
+
+凭证及 mode=0o600 的额外输出保留路径、权限和来源元数据，公开报告与清单不含正文
+或内容摘要；这同样适用于写出后因后续碰撞而失败的部分结果。原始配置、canonical
+覆盖值、domain_context 和凭证 mapping 不写入这些报告。应用仍负责把敏感模板声明为
+0600 并避免把敏感字段放入公开产物或品牌。实际异常对象保留给调用者，公开 CLI 和
+错误消息使用受控诊断。MCV shadow 和 GFS base Execution 的实际贡献可使用这些接口；
+GFS oper 的观测拒绝边界仍由应用判定。
+
 ### 按有效配置选择可选输入（TC-09.6）
 
 `Application.resource_layers/outputs` 和 `ApplicationExtension.resource_layers/outputs`
