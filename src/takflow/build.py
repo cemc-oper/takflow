@@ -32,7 +32,7 @@ from takflow.flow.hook import _safe_hook_errors
 from takflow.generation import GenerationContext, GenerationResult, generate_workflow
 from takflow.spec.jobspec import contract_version
 from takflow.toolkit.credential import CredentialHookPoint, get_credential_registry, render_credential
-from takflow.toolkit.job import render_jobs_from_directory, render_orvix_resource_block
+from takflow.toolkit.job import render_jobs_from_directory, _render_workflow_orvix_resource_block
 from takflow.toolkit.resource import copy_resource_entries
 
 
@@ -157,7 +157,7 @@ class _Pipeline:
                                        lstrip_blocks=True, trim_blocks=True, keep_trailing_newline=True)
         self.environment.globals.update(context.template_context())
         self.environment.globals.update(include_machine=self.include_machine,
-                                        render_orvix_resource_block=render_orvix_resource_block)
+                                        render_orvix_resource_block=_render_workflow_orvix_resource_block)
         self.variables = {"OUTPUT_REPO_BASE": str(self.root), **context.variables}
 
     def fail(self, code, subject, reason):

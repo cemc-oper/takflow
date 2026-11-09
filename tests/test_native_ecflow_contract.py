@@ -89,6 +89,49 @@ def test_native_ecflow_rejects_missing_job_include(tmp_path):
     assert "missing.h" in errors
 
 
+def test_native_orvix_resource_variables_and_application_default(tmp_path):
+    from types import SimpleNamespace
+
+    from jinja2 import Environment
+
+    from takflow.backends.runtime import set_runtime
+    from takflow.config import SlurmWorkload
+    from takflow.toolkit.job import _render_workflow_orvix_resource_block
+
+    suite, output, scripts, _ = _save_suite(tmp_path)
+    workload = SlurmWorkload(wckey="project-value")
+    set_runtime(suite, workload, suite.engine)
+    suite.engine.save_suite(suite, output)
+    env = Environment()
+    env.globals["render_orvix_resource_block"] = _render_workflow_orvix_resource_block
+    text = env.from_string(
+        '#!/bin/sh\n{{ render_orvix_resource_block(application="template-app") }}\n'
+    ).render(config=SimpleNamespace(workflow_mode="ecflow", workload=workload))
+    (scripts / "smoke.ecf").write_text(text)
+    definition = ecflow.Defs(str(output))
+
+    def create_job(name):
+        generated = tmp_path / name
+        control = ecflow.JobCreationCtrl()
+        control.set_dir_for_job_creation(str(generated))
+        definition.check_job_creation(control)
+        assert not control.get_error_msg(), control.get_error_msg()
+        return next(generated.rglob("*.job0")).read_text()
+
+    before = create_job("before")
+    assert "#ORVIX queue=serial" in before
+    assert "#ORVIX project=project-value" in before
+    assert "#ORVIX application=template-app" in before
+    task = definition.find_abs_node("/native_gate/smoke")
+    task.add_variable("QUEUE", "custom-queue")
+    task.add_variable("WCKEY", "custom-project")
+    task.add_variable("APPLICATION", "custom-app")
+    after = create_job("after")
+    assert "#ORVIX queue=custom-queue" in after
+    assert "#ORVIX project=custom-project" in after
+    assert "#ORVIX application=custom-app" in after
+
+
 def test_native_pipeline_retains_machine_updates_without_regenerating_ecf(tmp_path):
     from takflow.build import build
     from test_build import application, data

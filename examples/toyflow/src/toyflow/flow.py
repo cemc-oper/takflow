@@ -125,6 +125,7 @@ class ToyflowSystem:
     def main(self, suite: "Node") -> "Node":
         fm_main = suite.add_family("main")
         tk = fm_main.add_task("forecast")
+        set_runtime(tk, self.config.workload, self.engine, self.config.forecast.resource)
         if self.config.enable_obs:
             tk.add_trigger(f"/{self.name}/obs/prepare == complete")
         self._set_script(tk, "main/forecast")
@@ -141,6 +142,7 @@ class ToyflowSystem:
     def post(self, suite: "Node") -> "Node":
         fm_post = suite.add_family("post")
         tk = fm_post.add_task("plot")
+        set_runtime(tk, self.config.workload, self.engine, self.config.post_resource)
         if self.config.enable_main:
             tk.add_trigger(f"/{self.name}/main/forecast == complete")
         self._set_script(tk, "post/plot")

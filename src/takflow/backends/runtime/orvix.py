@@ -12,6 +12,7 @@ from takflow.jobspec.render import (
 if TYPE_CHECKING:
     from takflow.config import WorkloadType
     from takflow.flow import Node, WorkflowEngine
+    from takflow.jobspec import TaskResource
 
 
 def _is_ecflow(engine: "WorkflowEngine") -> bool:
@@ -44,15 +45,26 @@ def set_runtime(
     node: "Node",
     workload_config: "WorkloadType",
     engine: "WorkflowEngine",
-    task_resource=None,
+    task_resource: "TaskResource | None" = None,
 ):
     """Configure the orvix carrier on ``node``.
 
-    ``task_resource`` is accepted for signature compatibility but ignored here:
-    orvix resources are rendered into the job script separately.
+    ecFlow scripts reference QUEUE, WCKEY and APPLICATION at preprocessing time.
+    Set global defaults when no task resource is supplied; resource-specific
+    nodes override only QUEUE so project and application remain inherited.
     """
     scheduler = workload_config.scheduler or "slurm"
     node.add_variables(orvix_job(engine, scheduler))
+    if _is_ecflow(engine):
+        if task_resource is None:
+            node.add_variables({
+                "QUEUE": workload_config.default_serial_queue,
+                "WCKEY": workload_config.wckey,
+            })
+            if workload_config.application is not None:
+                node.add_variable("APPLICATION", workload_config.application)
+        else:
+            node.add_variable("QUEUE", task_resource.compile(workload_config).queue)
 
 
 __all__ = [

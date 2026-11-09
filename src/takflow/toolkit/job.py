@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union, TYPE_CHECKING
 from collections.abc import Mapping
 
-from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFound, TemplateSyntaxError, nodes
+from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFound, TemplateSyntaxError, nodes, pass_context
 
 from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
@@ -106,6 +106,24 @@ def render_orvix_resource_block(
     if error is not None:
         spec.error = error
     return "\n".join(to_orvix_directives(spec))
+
+
+@pass_context
+def _render_workflow_orvix_resource_block(context, **resources) -> str:
+    """Bind the template helper to the current workflow's resource policy."""
+    config = context["config"]
+    if config.workflow_mode == "ecflow":
+        resources["queue"] = "%QUEUE%"
+        resources["wckey"] = "%WCKEY%"
+        application = resources.get("application")
+        if application is not None:
+            # Keep an app's template default usable when the optional workload
+            # label is unset. ecFlow can still override it through APPLICATION.
+            resources["application"] = (
+                "%APPLICATION%" if config.workload.application is not None
+                else f"%APPLICATION:{application}%"
+            )
+    return render_orvix_resource_block(**resources)
 
 
 # --- rendering ---------------------------------------------------------------
@@ -443,7 +461,7 @@ def render_jobs_from_directory(
         )
         env.globals["include_raw"] = include_raw
         env.globals["invoke_script"] = invoke_script
-        env.globals["render_orvix_resource_block"] = render_orvix_resource_block
+        env.globals["render_orvix_resource_block"] = _render_workflow_orvix_resource_block
         return env
 
     if config.workflow_mode == "shell":

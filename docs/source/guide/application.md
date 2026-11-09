@@ -95,6 +95,15 @@ components、machine、variables、两个 build_info 行以及领域贡献。保
 `include_raw`、`invoke_script`、`include_machine`、`render_orvix_resource_block`、stdout/stderr，
 领域贡献不可覆写。底层 config 及嵌套领域对象仍是 Python 模型，按只读契约消费。
 
+`render_orvix_resource_block(...)` 模板 helper 由 takflow 按 `config.workflow_mode`
+自动选择资源表达方式。ecFlow 模式下，queue、project、application 分别引用 `%QUEUE%`、
+`%WCKEY%`、`%APPLICATION%`；Shell/takler 模式直接渲染传入值。应用模板只传资源值，
+无需自行判断模式或拼接这些引用。调用 `set_runtime` 为 suite 设置全局 workload 默认值，
+为任务传入 `task_resource` 设置其队列；项目和应用名由上级节点继承。未传 application 时
+省略该指令；如果应用模板提供 application 默认值而 workload 未配置标签，则使用
+`%APPLICATION:默认值%`，保留模板默认值并允许 ecFlow 变量覆盖。直接调用 Python 函数
+`takflow.toolkit.job.render_orvix_resource_block` 仍按原样渲染参数。
+
 `ApplicationExtension(name, initialize=None, registries=(), resource_layers=(),
 context=None, outputs=())` 只提供局部初始化、数据和规则。名称唯一；同一个构建各扩展
 初始化一次，在配置加载前按声明顺序执行。初始化器应每次显式注册函数，不能依赖仅导入
