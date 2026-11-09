@@ -125,6 +125,22 @@ required_machine_fragments 同样接受该形式。每个选择器在一次 prep
 因此层选择器能从 config.workflow_repo_base_dir 构造其子目录。现有 config_field
 字段仍按表中规则解析，不增加第二次 YAML 加载或领域模型校验。
 
+资源层按 `base → Application.resource_layers → 各 ApplicationExtension.resource_layers`
+的声明顺序选择并解析。每项贡献解析完成后再调用下一项贡献的选择器，因此后续扩展
+能从前面 `config_field` 的有效绝对根（包含包默认）派生观测子目录。一个选择器返回的
+tuple 内各层随后依次解析；该选择器执行期间不能读取其尚未返回的层的解析结果。
+依赖 oper 根的独立观测层应声明在 oper 贡献之后，未启用时返回空 tuple；框架不替应用
+推断启用条件。MCV 的 shadow 按 ecFlow 与 observability.enabled 选择资源条目，
+GFS base 的 Execution 试点使用 base 后的 execution 层；GFS oper 仍拒绝观测模式。
+
+`config_field` 必须使用规范字段名，历史字符串 alias 由原配置模型校验；Python
+canonical overrides 在校验前替换 alias 值。YAML 根相对 YAML 所在目录，mapping/model
+根相对 source_dir；相对 canonical override 基于调用 cwd；声明的默认 root 基于调用
+cwd。显式 workflow_repo_base 仅替换 base，扩展仍按自己的有效字段或包默认解析。
+静态 ResourceEntry、config/job、TemplateOutput 与嵌套 Jinja include 均使用最终层序，
+同名项后层覆盖、缺失项向前回落。公共结果中静态文件保留有序 layer/path 来源，渲染
+产物的 template 指向选中的源文件；成功清单记录相同的层根，不记录模板正文。
+
 选择结果固定在 BuildPaths.resource_layers、BuildContext.outputs 和
 BuildContext.required_machine_fragments；完整与单步构建读取同一结果。
 选择器只返回数据，不复制、写出或执行脚本。扩展初始化仍在加载配置前执行，

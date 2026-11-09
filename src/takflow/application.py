@@ -394,13 +394,17 @@ class Application(Generic[ConfigT]):
             base_resources = base_resources() if callable(base_resources) else base_resources
             base_resources = _local_path(base_resources, cwd, "resource_layers")
             config.workflow_repo_base_dir = str(base_resources)
-            selected_layers = self.resource_layers(config) if callable(self.resource_layers) else self.resource_layers
-            raw_layers = [ResourceLayer("base", base_resources), *selected_layers]
-            for extension in self.extensions:
-                raw_layers.extend(extension.resource_layers(config) if callable(extension.resource_layers) else extension.resource_layers)
+            def declared_layers():
+                yield ResourceLayer("base", base_resources)
+                # Resolve each contribution before asking the next selector.
+                # Later extensions can derive roots from earlier config fields.
+                yield from self.resource_layers(config) if callable(self.resource_layers) else self.resource_layers
+                for extension in self.extensions:
+                    yield from extension.resource_layers(config) if callable(extension.resource_layers) else extension.resource_layers
+
             layers = []
             layer_names = set()
-            for layer in raw_layers:
+            for layer in declared_layers():
                 if not layer.name or layer.name in layer_names:
                     _error("APPLICATION_LAYER_DUPLICATE", "resource_layers", "resource layer names must be nonempty and unique")
                 layer_names.add(layer.name)

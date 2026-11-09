@@ -2,7 +2,8 @@
 from pathlib import Path
 
 import pytest
-from pydantic import model_validator
+from pydantic import Field, model_validator
+import yaml
 
 from takflow.application import ApplicationExtension, ResourceLayer, TemplateOutput
 from takflow.build import BuildError, build, run_stage
@@ -129,6 +130,103 @@ def test_optional_layers_receive_the_resolved_default_resource_factory(tmp_path)
     with app.prepare(config_data()) as context:
         assert context.paths.resource_layers[1].root == tmp_path / 'package/optional'
     assert calls == ['root', str(tmp_path / 'package')]
+
+
+@pytest.mark.parametrize('origin', ['default', 'alias', 'canonical', 'override', 'model'])
+@pytest.mark.parametrize('enabled', [False, True])
+@pytest.mark.parametrize('owner', ['application', 'extension'])
+def test_later_selectors_receive_resolved_preceding_layer_fields(tmp_path, monkeypatch, origin, enabled, owner):
+    class Config(BaseWorkflowConfig):
+        oper_root: str | None = Field(default=None, alias='legacy_oper')
+
+        model_config = {'populate_by_name': True}
+
+    source, caller = tmp_path / 'source', tmp_path / 'caller'
+    source.mkdir()
+    caller.mkdir()
+    monkeypatch.chdir(caller)
+    calls = []
+    expected = tmp_path / 'package-oper' if origin == 'default' else source / 'oper'
+    raw = config_data(output_repo_base_dir=str(tmp_path / 'out'), workflow_repo_base_dir='base',
+                      observability={'enabled': enabled})
+    if origin != 'default':
+        raw['oper_root' if origin == 'canonical' else 'legacy_oper'] = 'oper'
+    arguments = {'source_dir': source}
+    if origin == 'override':
+        arguments['overrides'] = {'oper_root': 'replacement'}
+        expected = caller / 'replacement'
+
+    def observation(config):
+        calls.append(id(config))
+        assert config.oper_root == str(expected)
+        return (ResourceLayer('observation', Path(config.oper_root) / 'observability'),) if config.observability.enabled else ()
+
+    oper = (ResourceLayer('oper', tmp_path / 'package-oper', config_field='oper_root'),)
+    extensions = (ApplicationExtension('oper', resource_layers=oper),) if owner == 'extension' else ()
+    app = context_application(tmp_path, config_type=Config,
+        resource_layers=oper if owner == 'application' else (),
+        extensions=(*extensions, ApplicationExtension('observation', resource_layers=observation)))
+    path = source / 'input.yaml'
+    path.write_text(yaml.safe_dump(raw))
+    supplied = Config.model_validate(raw) if origin == 'model' else path
+    with app.prepare(supplied, **arguments) as context:
+        assert calls == [id(context.config)]
+        assert [(layer.name, layer.root) for layer in context.paths.resource_layers] == [
+            ('base', source / 'base'), ('oper', expected),
+            *([('observation', expected / 'observability')] if enabled else []),
+        ]
+    assert raw.get('legacy_oper') == ('oper' if origin in ('alias', 'override', 'model') else None)
+    if origin == 'model':
+        assert supplied.oper_root == 'oper'
+    assert not (tmp_path / 'out').exists()
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_selected_followup_layer_shares_final_sources_across_stages(tmp_path, resources, enabled):
+    class Config(BaseWorkflowConfig):
+        oper_root: str | None = None
+
+    oper = tmp_path / 'oper'
+    observation = oper / 'observation'
+    job = (resources / 'jobs/on/task.sh.j2').read_text()
+    for name, root in [('base', resources), ('oper', oper), *([('observation', observation)] if enabled else [])]:
+        put(root, 'scripts/on/task.sh', f'#!/bin/bash\necho {name}\n')
+        put(root, 'config/config.sh.j2', f'# config={name}\n')
+        put(root, 'config/extra.j2', f'# extra={name}\n')
+        put(root, 'fragments/shared.j2', f'# nested={name}\n')
+        put(root, 'jobs/on/task.sh.j2', f'# job={name}\n' + job)
+    put(resources, 'jobs/on/fallback.sh.j2', '#!/bin/bash\n{% include "fragments/shared.j2" %}\n')
+
+    def layers(config):
+        return (ResourceLayer('observation', Path(config.oper_root) / 'observation',
+                              required_inputs=('scripts/on/task.sh',)),) if config.observability.enabled else ()
+
+    app = application(resources, config_type=Config, outputs=(TemplateOutput('config/extra.j2', 'config/extra.sh'),),
+        extensions=(ApplicationExtension('oper', resource_layers=(ResourceLayer('oper', oper, config_field='oper_root'),)),
+                    ApplicationExtension('observation', resource_layers=layers)))
+    raw = data(tmp_path / 'out', observability={'enabled': enabled})
+    with app.prepare(raw) as context:
+        result = build(context)
+        assert result.complete
+        names = ['base', 'oper', *(['observation'] if enabled else [])]
+        assert [layer.name for layer in context.paths.resource_layers] == names
+        selected, name = (observation, 'observation') if enabled else (oper, 'oper')
+        for source, destination in [('scripts/on/task.sh', 'scripts/on/task.sh'),
+                                    ('config/config.sh.j2', 'config/config.h'),
+                                    ('config/extra.j2', 'config/extra.sh'),
+                                    ('jobs/on/task.sh.j2', 'jobs/on/task.ecf')]:
+            item = next(a for a in result.artifacts if a.path == str(context.paths.output_root / destination))
+            if source.startswith('scripts'):
+                assert [s['layer'] for s in item.sources] == names
+                assert item.sources[-1]['path'] == str(selected / source)
+            else:
+                assert item.sources == [{'template': str(selected / source)}]
+            assert name in (context.paths.output_root / destination).read_text()
+        # A base-only job resolves its nested include from the final layer too.
+        fallback = context.paths.jobs_dir / 'on/fallback.ecf'
+        assert fallback.read_text() == f'#!/bin/bash\n# nested={name}\n'
+        item = next(a for a in result.artifacts if a.path == str(fallback))
+        assert item.sources == [{'template': str(resources / 'jobs/on/fallback.sh.j2')}]
 
 
 def test_required_layer_input_paths_are_relative():
