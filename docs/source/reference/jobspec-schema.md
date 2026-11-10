@@ -8,7 +8,7 @@ Python 侧的应用（takflow 及其上层应用）和 Go 侧的 `orvix` 通过�
 | 项目 | 当前值 | 权威文件 |
 |---|---|---|
 | jobspec 契约版本 | `1.0.1` | `src/takflow/spec/jobspec/VERSION` |
-| orvix 来源 pin | `ab4916131c78c2d2e491d30de61968078c0353d4` | `src/takflow/spec/jobspec/ORVIX_VERSION` |
+| orvix 来源 pin | `59855f64e3c21e2b6e361ccee695e4ddd4d22dbf`（`v0.3.0`） | `src/takflow/spec/jobspec/ORVIX_VERSION` |
 
 本表是当前只读副本的可读展示，权威值始终以包内文件为准；执行 vendor 同步时必须同步核对本表。
 takflow 包版本不随这里的契约版本或 pin 机械变化，详见
