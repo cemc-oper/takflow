@@ -105,7 +105,8 @@ def test_native_orvix_resource_variables_and_application_default(tmp_path):
     env = Environment()
     env.globals["render_orvix_resource_block"] = _render_workflow_orvix_resource_block
     text = env.from_string(
-        '#!/bin/sh\n{{ render_orvix_resource_block(application="template-app") }}\n'
+        '#!/bin/sh\n{{ render_orvix_resource_block(job_type="parallel", nodes=2, '
+        'ntasks_per_node=4, walltime="6:00:00", application="template-app") }}\n'
     ).render(config=SimpleNamespace(workflow_mode="ecflow", workload=workload))
     (scripts / "smoke.ecf").write_text(text)
     definition = ecflow.Defs(str(output))
@@ -122,14 +123,23 @@ def test_native_orvix_resource_variables_and_application_default(tmp_path):
     assert "#ORVIX queue=serial" in before
     assert "#ORVIX project=project-value" in before
     assert "#ORVIX application=template-app" in before
+    assert "#ORVIX nodes=2" in before
+    assert "#ORVIX ntasks-per-node=4" in before
+    assert "#ORVIX time=6:00:00" in before
     task = definition.find_abs_node("/native_gate/smoke")
     task.add_variable("QUEUE", "custom-queue")
     task.add_variable("WCKEY", "custom-project")
     task.add_variable("APPLICATION", "custom-app")
+    task.add_variable("NODES", "3")
+    task.add_variable("TASKS_PER_NODE", "8")
+    task.add_variable("WALLTIME", "02:00:00")
     after = create_job("after")
     assert "#ORVIX queue=custom-queue" in after
     assert "#ORVIX project=custom-project" in after
     assert "#ORVIX application=custom-app" in after
+    assert "#ORVIX nodes=3" in after
+    assert "#ORVIX ntasks-per-node=8" in after
+    assert "#ORVIX time=02:00:00" in after
 
 
 def test_native_pipeline_retains_machine_updates_without_regenerating_ecf(tmp_path):

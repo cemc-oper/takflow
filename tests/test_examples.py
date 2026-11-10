@@ -72,8 +72,9 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
     assert forecast_ecf.exists()
     forecast_text = forecast_ecf.read_text()
     # TaskResource(parallel, nodes=2, ntasks_per_node=16) 编译为 #ORVIX 指令
-    assert "#ORVIX nodes=2" in forecast_text
-    assert "#ORVIX ntasks-per-node=16" in forecast_text
+    assert "#ORVIX nodes=%NODES:2%" in forecast_text
+    assert "#ORVIX ntasks-per-node=%TASKS_PER_NODE:16%" in forecast_text
+    assert "#ORVIX time=%WALLTIME:01:00:00%" in forecast_text
     assert "#ORVIX queue=%QUEUE%" in forecast_text
     assert "#ORVIX project=%WCKEY%" in forecast_text
     # hook 注入任务对应的作业模板也被渲染
@@ -87,6 +88,9 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
     assert "edit QUEUE 'serial'" in def_text
     assert "edit QUEUE 'normal'" in def_text
     assert "edit WCKEY 'toyflow'" in def_text
+    assert "edit NODES '2'" in def_text
+    assert "edit TASKS_PER_NODE '16'" in def_text
+    assert "edit WALLTIME '01:00:00'" in def_text
     for node_name in ("family obs", "task prepare", "family main", "task forecast",
                       "family post", "task plot"):
         assert node_name in def_text, f"{node_name} missing in toyflow.def"

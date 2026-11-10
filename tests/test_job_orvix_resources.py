@@ -52,6 +52,9 @@ def test_orvix_helper_uses_workflow_resource_policy(
             rendered = path.read_text()
 
     if mode == "ecflow":
+        assert "#ORVIX nodes=%NODES:2%" in rendered
+        assert "#ORVIX ntasks-per-node=%TASKS_PER_NODE:4%" in rendered
+        assert "#ORVIX time=%WALLTIME:00:30:00%" in rendered
         assert "#ORVIX queue=%QUEUE%" in rendered
         assert "#ORVIX project=%WCKEY%" in rendered
         if label is not None:
@@ -61,12 +64,33 @@ def test_orvix_helper_uses_workflow_resource_policy(
         else:
             assert "#ORVIX application=" not in rendered
     else:
+        assert "#ORVIX nodes=2" in rendered
+        assert "#ORVIX ntasks-per-node=4" in rendered
+        assert "#ORVIX time=00:30:00" in rendered
         assert "#ORVIX queue=parallel-value" in rendered
         assert "#ORVIX project=project-value" in rendered
         if label is not None or template_default:
             assert f"#ORVIX application={label or 'template-app'}" in rendered
         else:
             assert "#ORVIX application=" not in rendered
-    assert "#ORVIX nodes=2" in rendered
-    assert "#ORVIX ntasks-per-node=4" in rendered
-    assert "#ORVIX time=00:30:00" in rendered
+
+
+@pytest.mark.parametrize("job_type", ["serial", "parallel"])
+def test_ecflow_optional_layout_and_walltime_alias(job_type):
+    from takflow.toolkit.job import render_orvix_resource_block
+
+    omitted = render_orvix_resource_block(job_type=job_type, workflow_mode="ecflow")
+    assert "#ORVIX time=" not in omitted
+    assert "#ORVIX nodes=" not in omitted
+    assert "#ORVIX ntasks-per-node=" not in omitted
+    explicit = render_orvix_resource_block(
+        job_type=job_type, nodes=2, ntasks_per_node=8,
+        walltime="00:45:00", workflow_mode="ecflow",
+    )
+    assert "#ORVIX time=%WALLTIME:00:45:00%" in explicit
+    if job_type == "serial":
+        assert "#ORVIX nodes=" not in explicit
+        assert "#ORVIX ntasks-per-node=" not in explicit
+    else:
+        assert "#ORVIX nodes=%NODES:2%" in explicit
+        assert "#ORVIX ntasks-per-node=%TASKS_PER_NODE:8%" in explicit

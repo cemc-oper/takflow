@@ -15,6 +15,13 @@ if TYPE_CHECKING:
     from takflow.jobspec import TaskResource
 
 
+ECFLOW_TASK_RESOURCE_VARIABLES = {
+    "time": "WALLTIME",
+    "nodes": "NODES",
+    "ntasks_per_node": "TASKS_PER_NODE",
+}
+
+
 def _is_ecflow(engine: "WorkflowEngine") -> bool:
     return engine.backend_type == "ecflow"
 
@@ -49,9 +56,10 @@ def set_runtime(
 ):
     """Configure the orvix carrier on ``node``.
 
-    ecFlow scripts reference QUEUE, WCKEY and APPLICATION at preprocessing time.
+    ecFlow scripts reference resource variables at preprocessing time.
     Set global defaults when no task resource is supplied; resource-specific
-    nodes override only QUEUE so project and application remain inherited.
+    nodes override queue, time and parallel layout. Project and application
+    remain inherited; omitted task resources retain the script's defaults.
     """
     scheduler = workload_config.scheduler or "slurm"
     node.add_variables(orvix_job(engine, scheduler))
@@ -64,7 +72,13 @@ def set_runtime(
             if workload_config.application is not None:
                 node.add_variable("APPLICATION", workload_config.application)
         else:
-            node.add_variable("QUEUE", task_resource.compile(workload_config).queue)
+            spec = task_resource.compile(workload_config)
+            variables = {"QUEUE": spec.queue}
+            for field, variable in ECFLOW_TASK_RESOURCE_VARIABLES.items():
+                value = getattr(spec, field)
+                if value is not None:
+                    variables[variable] = value
+            node.add_variables(variables)
 
 
 __all__ = [

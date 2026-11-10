@@ -58,8 +58,12 @@ print("\n".join(to_orvix_directives(spec)))
 
 ## 在作业模板中使用
 
-Jinja2 作业模板中通过 `render_resource_block` 把资源块嵌入脚本头部，
-模板渲染时传入编译后的 `ResourceSpec`。示例见 `examples/toyflow` 的 `resources/jobs/` 模板。
+Jinja2 作业模板通过 `render_orvix_resource_block(...)` 传入资源参数并嵌入脚本头部。
+takflow 按 workflow_mode 自动生成 ecFlow 变量引用或 Shell/takler 的直接资源值，应用无需增加模式分支。
+ecFlow 的 time、nodes、ntasks-per-node 分别使用 `%WALLTIME:默认值%`、`%NODES:默认值%`、
+`%TASKS_PER_NODE:默认值%`；默认值来自模板传入参数的编译结果。任务级 `set_runtime(..., task_resource=tr)`
+设置已配置的对应变量；未配置时继承上级变量或使用模板默认值。串行任务不输出并行布局指令，未提供的字段仍省略。
+示例见 `examples/toyflow` 的 `resources/jobs/` 模板。
 
 ## 与 orvix 的契约关系
 

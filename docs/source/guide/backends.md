@@ -68,7 +68,7 @@ takler 的三个显式不支持路径在 `test_takler_current_contract.py` 中�
 from takflow.backends.runtime import set_runtime
 
 set_runtime(suite, config.workload, engine=engine)
-# slsubmit6 carrier 还需要任务级资源:set_runtime(node, workload, engine=engine, task_resource=tr)
+# 两种 carrier 均通过任务级资源设置覆盖值:set_runtime(node, workload, engine=engine, task_resource=tr)
 ```
 
 | Carrier | 生成内容 | 适用场景 |
@@ -83,6 +83,8 @@ set_runtime(suite, config.workload, engine=engine)
 - **`orvix` 载体**：ecFlow 下设 `ECF_JOB_CMD=orvix submit --scheduler %ORVIX_SCHEDULER% %ECF_JOB%`、
   `ECF_KILL_CMD=orvix kill %ECF_JOB%.info.yaml`（takler 下对应 `TAKLER_SHELL_JOB_CMD`/
   `TAKLER_SHELL_KILL_CMD`）；`ORVIX_SCHEDULER` 由 workload 的 `scheduler` 字段推导为 suite 变量。
+  ecFlow 任务资源还设置 `QUEUE`、`WALLTIME`、`NODES`、`TASKS_PER_NODE`，只写入已配置且适用于该任务类型的字段。
+  作业模板的公共 helper 自动生成变量引用；墙钟与布局使用带默认值的引用，保留模板资源值。
 - **`slsubmit6` 载体**：任务级 `set_runtime` 把 `TaskResource` 展开为 ecFlow 变量
   `%QUEUE%`/`%NODES%`/`%TASKS_PER_NODE%`/`%WCKEY%`，并设 `ECF_JOB_CMD=slsubmit6 ...`、
   `ECF_KILL_CMD=slcancel4 ...`；`#SBATCH` 的最终转译由作业 include 的 `workload.h` 完成。

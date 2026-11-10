@@ -18,6 +18,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFoun
 from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
 from takflow.build_info import _scoped_lines
+from takflow.backends.runtime.orvix import ECFLOW_TASK_RESOURCE_VARIABLES
 from takflow.checks import (
     GenerationCheckReport,
     GenerationCheckError,
@@ -75,12 +76,17 @@ def render_orvix_resource_block(
     application: Optional[str] = None,
     scheduler: str = "slurm",
     requeue: Optional[bool] = None,
+    workflow_mode: Optional[str] = None,
 ) -> str:
     """Render a ``#ORVIX`` directive block from template-friendly kwargs.
 
     ``partition`` is accepted as a legacy alias for ``queue``; ``walltime`` is a
     legacy alias for ``time``. ``project`` and ``wckey`` are synonyms (``wckey``
     wins if both given).
+
+    The workflow template helper supplies ``workflow_mode`` automatically.
+    In ecFlow mode, time and parallel layout reference variables with the
+    compiled values as defaults. Direct calls without a mode remain literal.
     """
     resolved_queue = queue or partition
     resolved_time = time or walltime
@@ -105,6 +111,11 @@ def render_orvix_resource_block(
         spec.output = output
     if error is not None:
         spec.error = error
+    if workflow_mode == "ecflow":
+        for field, variable in ECFLOW_TASK_RESOURCE_VARIABLES.items():
+            value = getattr(spec, field)
+            if value is not None:
+                setattr(spec, field, f"%{variable}:{value}%")
     return "\n".join(to_orvix_directives(spec))
 
 
@@ -112,6 +123,7 @@ def render_orvix_resource_block(
 def _render_workflow_orvix_resource_block(context, **resources) -> str:
     """Bind the template helper to the current workflow's resource policy."""
     config = context["config"]
+    resources["workflow_mode"] = config.workflow_mode
     if config.workflow_mode == "ecflow":
         resources["queue"] = "%QUEUE%"
         resources["wckey"] = "%WCKEY%"
