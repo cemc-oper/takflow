@@ -238,7 +238,7 @@ def copy_resources_to_output(
     additional_entries : tuple, optional
         Extra (source, destination, executable) directory mappings relative to
         the declared roots. Explicit mappings require their directories. They use this
-        helper's existing source-permission and *.sh executable-bit semantics.
+        helper's existing source-permission and ``*.sh`` executable-bit semantics.
     """
     report = check_report if check_report is not None else GenerationCheckReport()
     output_repo_base = Path(output_repo_base)
