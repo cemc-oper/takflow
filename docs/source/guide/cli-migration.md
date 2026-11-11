@@ -1,6 +1,6 @@
 # 标准 CLI 迁移与当前配套
 
-面向应用维护者和部署者。标准CLI在TC-12引入，TYM、MCV base/oper、GFS base/oper及RA2的默认入口现均委托公共管线。当前R2使用已验源码修订和明确未发布的配套候选；实际发布由维护者办理，不能把local candidate或SCM安装metadata当作正式tag或当前源码身份。
+面向应用维护者和部署者。标准CLI在TC-12引入，TYM、MCV base/oper、GFS base/oper及RA2的默认入口现均委托公共管线。当前准备 R3 配套候选，实际发行由维护者办理。候选版本、源码修订和发行状态各自登记。
 
 ## 调用迁移与有意变化
 
@@ -21,24 +21,23 @@ TYM 标准入口直接使用 cma_tym.application 的配置、组件、构图及�
 
 ## 最低版本与弃用/移除窗口
 
-标准CLI在R1以takflow 0.2.0为发布目标引入，公共库最低Python3.10。当前test-suite自身要求Python>=3.11；它的版本0.3.0.dev0不代表框架或各应用已正式发布。当前R2取消了尚未发布的依赖下限，实际元数据如下；宽松范围不证明任意旧版兼容，部署仍须使用同次验收的修订/wheel/lock配套，不用--no-deps掩盖冲突或手改_version.py。
+标准 CLI 在 R1 以 takflow 0.2.0 为发布目标引入。公共库最低为 Python 3.10、Pydantic 2.0、Click 8.0。test-suite `0.4.0.dev0` 自身要求 Python >=3.11。工作区内联动开发的包按名称声明依赖，实际来源由套件配置选择。部署使用同批已验 wheel 和环境锁。
 
-| 包 | 当前源码依赖声明 |
+| 包 | 工作区内部依赖 |
 |---|---|
-| MCV base | takflow不限制版本 |
-| MCV oper | takflow<0.4；mcv-workflow不限制版本 |
-| TYM / GFS base | takflow<0.4 |
-| GFS oper / RA2 | takflow<0.4；cma-gfs-post-workflow<0.3 |
+| MCV base、TYM、GFS base | `takflow` |
+| MCV oper | `takflow`、`mcv-workflow` |
+| GFS oper、RA2 | `takflow`、`cma-gfs-post-workflow` |
 
-旧验收中出现的>=0.2.0或>=0.3.0属于当时候选配套，不应恢复为当前安装门槛。现行依赖放宽不改变以下首弃用和移除目标：
+R2 验收使用当时冻结的依赖配套。下表登记各版本的首弃用与移除目标。
 
 | 仓库 | 首次弃用旧外围/命令的目标版本 | 保留/移除目标 | 标准框架配套 |
 | --- | --- | --- | --- |
 | takflow | 0.2.0（R1） | 0.3.0 保留公告桥接；0.4.0 移除 | 框架自身 |
-| TYM | 0.2.0（R1） | 0.3.0 保留桥接；0.4.0 移除 | 当前R2按上表及已验修订配套 |
-| MCV base/oper | 2026.4.0（R2） | 2026.5.0 移除 | 当前R2按上表及已验base/oper配套 |
-| GFS POST base/oper | 0.2.0（R2） | 0.3.0 移除 | 当前R2按上表及已验base/oper配套 |
-| RA2 oper | 0.2.0（R2） | 0.3.0 移除 | 当前R2按上表及已验GFS base配套 |
+| TYM | 0.2.0（R1） | 0.3.0 保留桥接；0.4.0 移除 | 0.4 系列 |
+| MCV base/oper | 2026.4.0（R2） | 2026.5.0 移除 | 0.4 系列及同批 MCV base |
+| GFS POST base/oper | 0.2.0（R2） | 0.3.0 移除 | 0.4 系列及同批 GFS base |
+| RA2 oper | 0.2.0（R2） | 0.3.0 移除 | 0.4 系列及同批 GFS base |
 | takflow-test-suite | 0.2.0（R1）/0.3.0（R2） | 0.4.0 退出旧调用测试，保留历史报告 | 发布 lock 与上述仓库 SHA 配套 |
 
 这些是具体发布目标，不是已经发生的软件发布或已在所有消费者生效的弃用。MCV/GFS/RA2 的命令迁移随各自 R2 接入验收，TC-12 不创建不可用的替代命令；各仓库必须在实际发布说明中重复窗口并给出本应用有效选项，不得只引用 R1/R3 名称。TC-12 公布共用接口和逐仓库期限；各仓库维护者负责实际弃用告警、锁定依赖与后续移除。变更期限须同步阶段计划和调整记录。
@@ -56,9 +55,9 @@ TYM 默认根入口现已切换为 create_cli；standard 仅作为 0.4.0 前的�
 当时TYM与suite按R1的takflow>=0.2.0,<0.3和0.2.0.dev0验收，并使用0.2.0+tc07.g<实际HEAD>候选验证。该记录只用于冻结R1复查；当前源码依赖及安装方式以上面的现行配套为准。原始SCM describe/HEAD/diff、旧wheel/lock与历史结果继续保留。
 
 
-## 当前R2源码与安装方式
+## R3 源码与冻结 R2 配套
 
-各应用的有效选项、限期旧Python返回适配和冻结回退见所属项目docs/standard-cli.md及installation说明。工作区用test-suite的scripts/r2_candidates.py在独立环境执行locked sync；候选目标为takflow/TYM 0.3.0、MCV base/oper 2026.4.0、GFS base/oper/RA2 0.2.0，并记录实际HEAD/dirty摘要。
+各应用的有效选项、限期旧 Python 返回适配和回退见所属项目迁移公告。工作区在 test-suite 中执行 `uv sync --locked --extra dev`，按本地路径安装框架和应用。需要验证 R3 目标版本时可使用 `scripts/r3_candidates.py` 标记本地候选。独立部署在新环境一并选定已验的框架、base 和所需 oper，由环境锁固定各层。MCV base 仓库的独立锁采用其公开索引策略，工作区开发使用套件锁。复查 R2 源码使用冻结工作树及当时的锁。
 
 2026-11-11 的 R2 联合验收使用 TC-11.8 的 takflow、TYM、GFS base/oper 和 RA2 wheel，配上 TC-13.6 含后处理模板校验的 MCV base/oper wheel。各 wheel 由对应 sdist 构建。版本、SHA-256、当前源码修订与候选来源的对应关系见工作区 `framework/doc/2026-11-06-takflow-capability-plan/tc13/step07/pairing.json`，同目录 `REPORT.md` 记录支持组合和现场入口。
 
