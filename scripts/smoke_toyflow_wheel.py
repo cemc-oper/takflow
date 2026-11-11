@@ -57,7 +57,8 @@ def main() -> None:
         assert "suite toyflow" in definition
         assert "task verify" in definition
         assert "/toyflow/obs/prepare == complete" in definition
-        assert "#ORVIX nodes=2" in forecast_path.read_text(encoding="utf-8")
+        assert "#ORVIX nodes=%NODES:2%" in forecast_path.read_text(encoding="utf-8")
+        assert "edit NODES '2'" in definition
 
     print("Installed toyflow ecFlow generation smoke passed")
 

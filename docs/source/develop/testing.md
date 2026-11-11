@@ -30,15 +30,19 @@ ORVIX_BIN=/path/to/orvix pytest tests/test_conformance.py
 
 | CI job | 固定来源与环境 | 必测内容及失败条件 |
 |---|---|---|
-| `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试；公共配置、jobspec、serializer、ecFlow 生成和缺 takler 行为，以及应用路径/注册恢复、完整与分步等价、复制失败保留和清单发布失败共10项必须通过 |
+| `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试；当前37个必测入口覆盖公共配置、jobspec、serializer、标准CLI/管线、有效配置/扩展组合、可选输入及失败恢复，参数化展开另计 |
 | `conformance` | `spec/jobspec/ORVIX_VERSION` 的完整 commit，使用该源码的 go.mod；Python 依赖消费框架 uv.lock | 原有18文件 vendor 对照与全部向量/golden 对拍；没有 binary、少 case、skip 或漂移均失败 |
 | `takler` | `spec/takler/TAKLER_VERSION` 的完整 commit、该修订自身 uv.lock、Python3.13；复用本次 conformance job 的已验证 orvix artifact | 核对 checkout HEAD/clean、实际模块原点与 Scheduler 导入；9函数12case覆盖完整管线、定义 export/parse/build/load、job render、orvix/direct/slsubmit6 的 submit/kill 命令合同；全数执行，零skip/xfail |
-| `native-ecflow` | ubuntu-24.04 的 `python3-ecflow=5.12.0-1build3`，系统 Python3.12 ABI；API5.12.0 | 真 `ecflow.Defs(file)` 和 `check_job_creation`、include/变量替换、缺 include 负例及标准管线的machine更新；4case全数执行；包缺失或版本变化直接失败 |
-| `build` | 从 sdist 构建 wheel，隔离环境安装 wheel 与 toyflow | 检查公共 API、schema/VERSION/两个 source pin、vector/golden 包数据与实际生成；必须来自当前 site-packages，拒绝 editable 或 PYTHONPATH 源码遮蔽 |
+| `native-ecflow` | ubuntu-24.04 的 `python3-ecflow=5.12.0-1build3`，系统 Python3.12 ABI；API5.12.0 | 真 `ecflow.Defs(file)` 和 `check_job_creation`、include/变量替换、缺 include 负例、orvix资源继承及标准管线的machine更新；5case全数执行；包缺失或版本变化直接失败 |
+| `build` | 从 sdist 构建 wheel，隔离环境安装 wheel 与 toyflow | 三个冒烟脚本检查公共API/包数据、标准CLI及toyflow生成；必须来自当前site-packages，拒绝editable或PYTHONPATH源码遮蔽 |
 
 orvix artifact 仅在 vendor 和严格对拍通过后上传；takler job 依赖其成功，下载后核对 pin、SHA-256 并恢复执行权限。没有改用当前 runtime 工作树或浮动 main。升级 pin 必须在权威仓库修复并验收合同，框架不增加一套模拟 runtime 来取得通过。
 
-本轮 takler pin 为 `3dd79bebe2cc854215bf1e45c1fc4860aefa1034`，orvix pin 为 `ab4916131c78c2d2e491d30de61968078c0353d4`。takler 的依赖按该修订权威 lock 安装，包含与其生成代码匹配的 grpcio1.83.0；不要只在已有环境中随意安装一个 takler 包，再忽略导入失败。
+当前 takler pin 为 `3dd79bebe2cc854215bf1e45c1fc4860aefa1034`，orvix pin 为 `59855f64e3c21e2b6e361ccee695e4ddd4d22dbf`。实际来源始终读取包内TAKLER_VERSION/ORVIX_VERSION；升级后重新核对vendor与对拍，不能沿用旧binary结果。takler的依赖按该修订权威lock安装，包含与其生成代码匹配的grpcio1.83.0；不要只在已有环境中随意安装一个takler包，再忽略导入失败。
+
+takler自身的lock不必包含框架独有依赖，例如Click。锁定安装takler后，正常解析并安装框架所需依赖，再运行uv pip check；不能用--no-deps留下缺失依赖。记录实际安装版本，并核对原takler锁定包未被无意升级。
+
+必测入口和专用线数量以`scripts/run_contract_tests.py`为准；当前orvix为16个向量/调度器case、takler为9个入口/12case。完整基础线的通过/可选跳过总数会随测试增长，验收应记录实际收集结果。基础环境不安装jsonschema时，其可选观测schema检查可以跳过；启用该能力的验收须另用声明的观测依赖实际运行，不能将跳过算作通过。
 
 ### 本地复查
 
@@ -55,7 +59,8 @@ ORVIX_BIN=/path/to/pinned-orvix python scripts/run_contract_tests.py orvix
 
 # 使用该 takler 修订自己的锁定环境；不修改共享 venv
 uv sync --project /path/to/pinned-takler --locked --no-default-groups --group test --python 3.13
-uv pip install --python /path/to/pinned-takler/.venv/bin/python --no-deps -e .
+uv pip install --python /path/to/pinned-takler/.venv/bin/python -e .
+uv pip check --python /path/to/pinned-takler/.venv/bin/python
 TAKLER_REPO=/path/to/pinned-takler ORVIX_BIN=/path/to/pinned-orvix /path/to/pinned-takler/.venv/bin/python scripts/run_contract_tests.py takler
 
 # 安装上述 Ubuntu native 包后，使用与其 ABI 一致的系统 Python
@@ -70,11 +75,12 @@ python -m venv /tmp/takflow-wheel-smoke
 /tmp/takflow-wheel-smoke/bin/python -m pip install dist/takflow-*.whl examples/toyflow
 ```
 
-两个安装冒烟脚本使用绝对路径并在源码树外运行；如当前仓库为 `/path/to/takflow`：
+三个安装冒烟脚本使用绝对路径并在源码树外运行；如当前仓库为 `/path/to/takflow`：
 
 ```bash
 cd /tmp
 /tmp/takflow-wheel-smoke/bin/python /path/to/takflow/scripts/smoke_wheel_resources.py
+/tmp/takflow-wheel-smoke/bin/python /path/to/takflow/scripts/smoke_cli_wheel.py
 /tmp/takflow-wheel-smoke/bin/python /path/to/takflow/scripts/smoke_toyflow_wheel.py
 ```
 

@@ -213,7 +213,7 @@ TYM 的 create_suite 接受显式 paths，并把同一 BuildPaths 传给原有 d
 
 `required_machine_fragments=("env/forecast_mpi.sh", ...)` 声明业务脚本将在原位置 source 的片段。资源阶段先检查本轮所选 machine 的有序来源，再复制并登记引用；输出目录中的陈旧文件不能代替缺少的来源。默认目录检查存在性与摘要，显式外部目录保持 unchecked、不作生成机探测。框架不执行或提前 source，不改变业务 cwd/作用域，不自动把片段正文嵌进父作业。片段内容、加载位置和库/MPI 参数继续由消费者维护。
 
-MCV base/oper 已作为真实消费者使用配置字段选择 oper 层、显式 Hook 初始化和 credential 判定；完整跨应用扩展验收仍由 TC-10 承接。`ApplicationExtension` 不新增整套 handler 接管口。
+MCV oper、GFS oper及独立RA2已使用同一资源层、显式初始化和公共构建服务。MCV通过配置声明上传必需输入，GFS oper另按实际任务的ECF引用检查最终模板；目录/领域规则留应用。`ApplicationExtension`不新增整套handler接管口。
 
 
 `required_resource_inputs` 为相对文件名元组或接收有效 config 的纯判定函数，用于声明选定业务能力的必需脚本/模板。资源阶段从同一有序来源验证输入，缺失即失败，输出目录里的旧 job 不作替代。MCV oper 只在上传启用时声明其上传 job 模板和脚本；稀疏 oper 不启用上传时仍可回落基础资源。
@@ -223,3 +223,17 @@ MCV base/oper 已作为真实消费者使用配置字段选择 oper 层、显式
 每次 prepare 先隔离公共 credential 注册表、Application.registries 与各 Extension.registries，再按 extensions 顺序初始化，最后加载/校验配置并构造上下文。同一个注册表重复出现在声明中时只进入一次作用域。初始化函数每次显式注册已有函数，导入缓存不会代替注册；非 credential 的领域注册表必须全部列入声明，credential 注册表由框架自动处理。
 
 作用域内从空注册表开始，调用者的外来注册不会参与本轮构建。正常退出或初始化、校验、上下文及构建失败时恢复原表，KeyboardInterrupt/SystemExit 也不遗留本轮注册。Python 调用保留原异常或公共 BuildError.original，CLI 使用既有受控错误和中断退出码；作用域恢复不回滚生成文件。MCV/GFS 的真实消费者回归位于 test-suite/tests/test_oper_initialization.py，框架必测还验证重复声明、部分初始化及基础异常。该保证适用于顺序调用，不承诺共享单例的并发隔离。
+
+## 已验证消费者与可选能力范围
+
+标准声明和Python/CLI共用一套机制，领域能力的支持范围分别声明：
+
+| 能力 | 已验证消费者及边界 |
+|---|---|
+| 完整组件选择 | TYM的model/data/graph/typhoon；Shell仍按原业务限制排除graph。MCV shadow资源筛选与GFS试点job筛选属于局部消费者 |
+| 配置变量通道 | MCV base/oper的有效覆盖、Shell字面值和ecFlow/takler引用；TYM Fortran参数、GFS flags/设置仍保留领域格式 |
+| 有序资源、context/outputs与初始化 | MCV/GFS oper及RA2的覆盖/回落、三层来源、完整/分步/CLI、冲突和中断恢复。显式initializer继续使用 |
+| 可选凭证 | MCV base→oper组合与RA2 CTS条件；0600和公开报告保护由公共阶段处理，字段/编码留应用，未统一迁移静态历史账户 |
+| 可选观测 | MCV base/oper仅ecFlow forecast及五个prepare/bckg wrapper的shadow；GFS base仅ecFlow+inline Execution data试点。GFS oper/RA2明确拒绝，不创建运行身份或统一状态机 |
+
+观测默认关闭，关闭不要求SDK或目标配置；启用只选择已声明输入，不授予运行资格。同目录启停按本轮结果和任务引用判定，旧文件可以保留，但不能替代当前必需源输入。RA2的CTS动作flag关闭仍保留上传任务族，不等同于整体上传关闭。生成、原生预处理、SDK夹具与现场业务证据应分别登记。

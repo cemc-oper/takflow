@@ -114,7 +114,8 @@ jobs:
       - name: Install takler with its authoritative lock
         run: |
           uv sync --project /tmp/takler --locked --no-default-groups --group test --python 3.13
-          uv pip install --python /tmp/takler/.venv/bin/python --no-deps -e .
+          uv pip install --python /tmp/takler/.venv/bin/python -e .
+          uv pip check --python /tmp/takler/.venv/bin/python
           sha256sum /tmp/takler/uv.lock
       - name: Require definition, rendering, submit and kill command contracts
         run: /tmp/takler/.venv/bin/python scripts/run_contract_tests.py takler
