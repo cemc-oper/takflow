@@ -6,6 +6,8 @@
 `toyflow` 是一个玩具天气预报系统的工作流生成器，角色相当于 `mcv-workflow` 的袖珍版：
 节点树只有 `obs → main → post` 三个任务，但 takflow 的每一层都真实用到。
 
+完整业务包的声明、资源与标准构建示例见 {ref}`MCV S1 真实应用参考 <mcv-s1-reference>`。
+
 ## 安装
 
 要求 Python >= 3.10。

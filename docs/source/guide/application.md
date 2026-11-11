@@ -237,3 +237,24 @@ MCV oper、GFS oper及独立RA2已使用同一资源层、显式初始化和公�
 | 可选观测 | MCV base/oper仅ecFlow forecast及五个prepare/bckg wrapper的shadow；GFS base仅ecFlow+inline Execution data试点。GFS oper/RA2明确拒绝，不创建运行身份或统一状态机 |
 
 观测默认关闭，关闭不要求SDK或目标配置；启用只选择已声明输入，不授予运行资格。同目录启停按本轮结果和任务引用判定，旧文件可以保留，但不能替代当前必需源输入。RA2的CTS动作flag关闭仍保留上传任务族，不等同于整体上传关闭。生成、原生预处理、SDK夹具与现场业务证据应分别登记。
+
+(mcv-s1-reference)=
+## MCV S1 真实应用参考
+
+MCV S1 将同一 GMF 冷启动场景用于 ecFlow 定义和 Shell runner。两份教程均使用
+`machine_name: hpc2023`，生成 24 小时预报的配置与作业，并给出标准 CLI、
+直接 `Application.prepare` / `build` 和成功清单检查。
+在工作区打开 `app/mcv/mcv-workflow` 的下列文件。应用源码与教程由 MCV 维护。
+[MCV 工作区仓库](http://e.mc.met.cma/codingcorp/mcv-gfs/mcv-workflow)。
+
+| 查阅内容 | MCV 仓库中的位置 |
+|---|---|
+| 配套安装、程序与站点准备 | `docs/source/getting_started/installation.rst` |
+| ecFlow 和 Shell 的 YAML、构建命令与目录树 | `docs/source/getting_started/s1_ecflow.rst` 和 `s1_shell.rst` |
+| 声明、派生上下文与业务组件边界 | `docs/source/develop/design/architecture.rst` |
+| 应用工厂与领域源码 | `src/mcv_workflow/application.py`、`src/mcv_workflow/config/`、`src/mcv_workflow/flow/` |
+| 模板、业务脚本与 machine 片段 | `src/mcv_workflow/resources/` |
+
+工作区的 `framework/takflow-test-suite/tests/mcv/base/coldstart/{ecflow,shell}/basic/`
+提供对应集成用例。两个教程的生成检查可在本地执行，现场加载、调度、资料和产品的验收条件
+在应用教程中给出。公共路径覆盖、分步和诊断语义见[标准构建](build.md)与[命令契约](cli.md)。
