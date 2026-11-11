@@ -60,4 +60,10 @@ TYM 默认根入口现已切换为 create_cli；standard 仅作为 0.4.0 前的�
 
 各应用的有效选项、限期旧Python返回适配和冻结回退见所属项目docs/standard-cli.md及installation说明。工作区用test-suite的scripts/r2_candidates.py在独立环境执行locked sync；候选目标为takflow/TYM 0.3.0、MCV base/oper 2026.4.0、GFS base/oper/RA2 0.2.0，并记录实际HEAD/dirty摘要。
 
-分发验收从每个当前sdist在新目录构建wheel，正常解析全部配套依赖后，在源码树外使用安装解释器的-I模式运行test-suite/scripts/check_oper_installation.py，核对七包site-packages来源、六应用默认资源/完整/分步/console/module/通用CLI与旧适配告警，并执行pip check。wheel检查不能只安装框架或用源码PYTHONPATH替代安装。MCV特殊字符凭证编码、可选观测范围和关闭/失败语义以现行应用公告及Application/build指南为准；现场运行与正式发布另行验收。
+2026-11-11 的 R2 联合验收使用 TC-11.8 的 takflow、TYM、GFS base/oper 和 RA2 wheel，配上 TC-13.6 含后处理模板校验的 MCV base/oper wheel。各 wheel 由对应 sdist 构建。版本、SHA-256、当前源码修订与候选来源的对应关系见工作区 `framework/doc/2026-11-06-takflow-capability-plan/tc13/step07/pairing.json`，同目录 `REPORT.md` 记录支持组合和现场入口。
+
+安装时正常解析七包及配套依赖，在源码树外使用安装解释器的 `-I` 模式运行 test-suite 的 `scripts/check_oper_installation.py`。检查包括 site-packages 来源、六应用默认资源、Python 完整构建与七个分步、console/module/通用 CLI、旧适配告警及 `pip check`。已验证 Python 3.13 当前库环境和 Python 3.10/Pydantic 2.0/Click 8.0 最低库环境。开发用 test-suite 自身需要 Python 3.11 或更新版本。
+
+接入时可按 [MCV S1 参考](application.md) 准备 YAML、machine 和输出根，先在新目录执行完整 `build`。Python 路径通过 `Application.prepare` 合并覆盖并校验，再调用 `build` 或显式按序调用 `run_stage`。缺少输入时按阶段诊断检查生效的配置、资源层来源和路径；例如 MCV 开启 `post_data` 后需要对应后处理模板。修复后重跑完整构建并核对 `generation_manifest.json`。返回码 0 表示该次命令成功，1 表示构建失败，2 表示用法错误，130 表示中断。单步成功和残留作业均不足以证明本次完整构建成功。
+
+源机报告里的 unchecked 项随清单交给目标站点。外部 machine 片段可在运行前由站点更新，已创建的原生作业需按引擎语义重新创建才能纳入变动。原生预处理和本地夹具演练已按报告所列范围验证；MPI、真实资料与产品、调度器及持续运行恢复进入后续现场验收。正式发布由各项目维护者办理。
