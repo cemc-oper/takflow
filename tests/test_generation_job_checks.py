@@ -239,10 +239,11 @@ def test_remote_reference_is_not_probed_or_copied_into_diagnostics(tmp_path):
 
 
 def test_late_dynamic_render_failure_retains_earlier_outputs_and_report(tmp_path):
-    root = jobs(tmp_path / "repo", {"first.sh.j2": "echo first", "last.sh.j2": '{% include config.workflow_name %}'})
+    first = jobs(tmp_path / "first", {"first.sh.j2": "echo first"})
+    last = jobs(tmp_path / "last", {"last.sh.j2": '{% include config.workflow_name %}'})
     output = tmp_path / "out"
     with pytest.raises(GenerationCheckError) as caught:
-        render(root, output, settings=config(workflow_name="missing-dynamic.j2"))
+        render([first, last], output, settings=config(workflow_name="missing-dynamic.j2"))
     assert caught.value.diagnostic.code == "GEN_JOB_RENDER"
     assert caught.value.diagnostic.stage == "job.render"
     assert (output / "jobs/first.sh").read_text() == "echo first"
@@ -310,10 +311,11 @@ def test_overridden_parent_block_does_not_require_unused_include(tmp_path):
     ('{% include "missing.j2" %}', "GEN_JOB_RENDER"),
 ])
 def test_executed_guarded_reference_fails_at_render_and_retains_earlier_jobs(tmp_path, reference, code):
-    root = jobs(tmp_path / "repo", {"first.sh.j2": "echo first", "last.sh.j2": "{% if true %}" + reference + "{% endif %}"})
+    first = jobs(tmp_path / "first", {"first.sh.j2": "echo first"})
+    last = jobs(tmp_path / "last", {"last.sh.j2": "{% if true %}" + reference + "{% endif %}"})
     output = tmp_path / "out"
     with pytest.raises(GenerationCheckError) as caught:
-        render(root, output)
+        render([first, last], output)
     assert caught.value.diagnostic.code == code
     assert caught.value.diagnostic.stage == "job.render"
     assert (output / "jobs/first.sh").read_text() == "echo first"
