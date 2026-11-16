@@ -255,6 +255,6 @@ MCV S1 将同一 GMF 冷启动场景用于 ecFlow 定义和 Shell runner。两�
 | 应用工厂与领域源码 | `src/mcv_workflow/application.py`、`src/mcv_workflow/config/`、`src/mcv_workflow/flow/` |
 | 模板、业务脚本与 machine 片段 | `src/mcv_workflow/resources/` |
 
-工作区的 `framework/takflow-test-suite/tests/mcv/base/coldstart/{ecflow,shell}/basic/`
+工作区的 `framework/takflow-test-suite/experiments/mcv/base/coldstart/{ecflow,shell}/basic/`
 提供对应集成用例。两个教程的生成检查可在本地执行，现场加载、调度、资料和产品的验收条件
 在应用教程中给出。公共路径覆盖、分步和诊断语义见[标准构建](build.md)与[命令契约](cli.md)。
