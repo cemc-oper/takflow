@@ -1,17 +1,22 @@
 """Resource declarations at a single workflow node, independently of its carrier."""
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from takflow.flow import NodeType
 from takflow.jobspec import TaskResource
+from takflow.jobspec.render import slurm_directive
 
 if TYPE_CHECKING:
     from takflow.config import SlurmWorkload
     from takflow.flow import Node
 
 RESOURCE_VARIABLES = {
+    "job_name": "JOB_NAME",
+    "output": "JOB_OUTPUT",
+    "error": "JOB_ERROR",
     "nodes": "NODES",
     "ntasks_per_node": "TASKS_PER_NODE",
     "time": "WALLTIME",
@@ -21,6 +26,14 @@ RESOURCE_VARIABLES = {
     "memory": "MEMORY",
     "requeue": "REQUEUE",
 }
+
+# Do not consume the next placeholder's opening percent in %A_%a or %j%j.
+_ECFLOW_LOG_TOKEN = re.compile(r"(%(?![aAbBJjNnstuXx]_*%)[A-Za-z_][A-Za-z0-9_]*(?::[^%]*)?%)|%")
+
+
+def ecflow_log_value(value: str) -> str:
+    """Keep named ecFlow references and pass Slurm filename patterns through job creation."""
+    return _ECFLOW_LOG_TOKEN.sub(lambda match: match[1] or "%%", value)
 
 
 def ecflow_resource_variables(
@@ -38,11 +51,19 @@ def ecflow_resource_variables(
         if field == "requeue":
             if isinstance(edits[variable], bool):
                 edits[variable] = str(edits[variable]).lower()
-        elif field != "queue":
+        else:
             key = field.replace("_", "-")
-            edits.setdefault(f"ORVIX_{variable}", f"#ORVIX {key}=%{variable}%")
-            if field == "memory":
-                edits.setdefault("SLURM_MEMORY", "#SBATCH --mem=%MEMORY%")
+            reference = f"%{variable}%"
+            if field in ("output", "error"):
+                if f"{variable}_PREFIX" not in variables:
+                    edits[variable] = ecflow_log_value(str(edits[variable]))
+                # A log fallback may itself contain %ECF_JOBOUT%. Keep it out
+                # of a nested %VAR:default% and comment it when an override exists.
+                edits[f"{variable}_PREFIX"] = "##"
+            if field in ("output", "error", "job_name"):
+                reference = f'"{reference}"'
+            edits.setdefault(f"ORVIX_{variable}", f"#ORVIX {key}={reference}")
+            edits.setdefault(f"SLURM_{variable}", slurm_directive(field, f"%{variable}%", engine_reference=True))
     return edits
 
 

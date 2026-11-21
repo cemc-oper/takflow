@@ -93,11 +93,10 @@ mapping 或文件，以保证覆盖先于派生。显式 definition `output` 仍
 
 `BuildContext.template_context()` 返回只读外层 mapping，包含 config、paths、brand、
 components、machine、variables、两个 build_info 行以及领域贡献。保留键还包括
-`include_raw`、`invoke_script`、`include_machine`、`render_orvix_resource_block`、stdout/stderr，
+`include_raw`、`invoke_script`、`include_machine`、`render_orvix_resource_block`、`render_slurm_resource_block`、stdout/stderr，
 领域贡献不可覆写。底层 config 及嵌套领域对象仍是 Python 模型，按只读契约消费。
 
-`render_orvix_resource_block(...)` 模板 helper 由 takflow 按 `config.workflow_mode`
-选择资源表达方式。ecFlow 与 takler 在原生 job 创建时解析节点引用，Shell 直接生成有效值。载体安装在选定的父节点，任务和 family 可以用 `set_resource_variables` 声明各自的覆盖。低层 Python 渲染函数未传 `workflow_mode` 时输出具体资源。字段、模板回退和公共 include 的使用见[作业资源](jobspec.md)。
+标准管线与分步构建在 config 和 job 模板中注册 `render_orvix_resource_block`、`render_slurm_resource_block`。前者支持三种 workflow 模式，后者服务于 ecFlow 和 Shell 的历史 Slurm 入口。低层 `render_jobs_from_directory` 注册相同的 helper，`render_single_job_file` 会在调用方的 Jinja 环境中补上缺失的注册。直接调用 Jinja 的应用可自行向 `env.globals` 注册 `takflow.toolkit.job.RESOURCE_TEMPLATE_HELPERS` 并提供 `config` 上下文，或从 Python 调用渲染函数。Python 函数省略 `workflow_mode` 时输出具体值。字段、节点覆盖和模板回退见[作业资源](jobspec.md)。
 
 `ApplicationExtension(name, initialize=None, registries=(), resource_layers=(),
 context=None, outputs=())` 只提供局部初始化、数据和规则。名称唯一；同一个构建各扩展

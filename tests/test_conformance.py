@@ -62,6 +62,30 @@ def test_rendered_script_matches_committed_vector(name):
 
 
 @orvix_required
+@pytest.mark.parametrize("requeue", [None, False, True])
+def test_public_slurm_header_matches_orvix_conversion(tmp_path, requeue):
+    from takflow.toolkit.job import render_orvix_resource_block, render_slurm_resource_block
+
+    fields = dict(job_type="parallel", queue="qc", nodes=3, ntasks_per_node=11, memory="48G",
+                  time="02:37:00", project="weather", application="forecast group", job_name="model check",
+                  output="/log path/%j.out", error="/log path/%j.err", exclusive=True, requeue=requeue)
+    src = tmp_path / "orvix.job"
+    src.write_text("#!/bin/bash\n" + render_orvix_resource_block(**fields) + "\nset -e\n")
+    native = tmp_path / "native.job"
+    native.write_text("#!/bin/bash\n" + render_slurm_resource_block(**fields) + "\nset -e\n")
+    submit = tmp_path / "converted.submit"
+    subprocess.run([_find_orvix(), "generate", "--scheduler", "slurm", "--output-script", submit, src],
+                   check=True, capture_output=True)
+    policies = [line for line in src.read_text().splitlines() if line.startswith("#ORVIX requeue=")]
+    assert policies == ([] if requeue is None else [f"#ORVIX requeue={str(requeue).lower()}"])
+    direct = [line for line in native.read_text().splitlines() if line.startswith("#SBATCH ")]
+    assert direct == [line for line in submit.read_text().splitlines() if line.startswith("#SBATCH ")]
+    assert len(direct) == len(set(direct)) == 11 + int(requeue is False)
+    assert direct.count("#SBATCH --no-requeue") == int(requeue is False)
+    assert "#SBATCH --requeue" not in direct
+
+
+@orvix_required
 @pytest.mark.parametrize("scheduler", SCHEDULERS)
 @pytest.mark.parametrize("name", CASE_NAMES)
 def test_orvix_generate_matches_golden(name, scheduler):

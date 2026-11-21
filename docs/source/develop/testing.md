@@ -31,7 +31,7 @@ ORVIX_BIN=/path/to/orvix pytest tests/test_conformance.py
 | CI job | 固定来源与环境 | 必测内容及失败条件 |
 |---|---|---|
 | `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试。必测入口覆盖公共配置、jobspec、serializer、标准 CLI／管线、有效配置／扩展组合、可选输入、失败恢复及 Bash 外部脚本的字面路径与参数 |
-| `conformance` | `spec/jobspec/ORVIX_VERSION` 的完整 commit，使用该源码的 go.mod；Python 依赖消费框架 uv.lock | 原有18文件 vendor 对照与全部向量/golden 对拍；没有 binary、少 case、skip 或漂移均失败 |
+| `conformance` | `spec/jobspec/ORVIX_VERSION` 的完整 commit，使用该源码的 go.mod；Python 依赖消费框架 uv.lock | 18 个契约文件的 vendor 对照，16 项向量与 golden 检查，3 项 ORVIX 转换与公共原生 Slurm 头的逐行对照。缺少 binary、用例、实际执行或发生漂移均失败 |
 | `takler` | `spec/takler/TAKLER_VERSION` 的完整 commit、该修订自身 uv.lock、Python 3.13 及 conformance job 的 orvix artifact | 17 项用例核对父级资源调整、标准构建、定义加载、原生 job 创建、inline／external 的 Bash 执行，以及 orvix／direct／slsubmit6 的提交和取消命令。公共头尾用例在每次回调核对当前 attempt 的身份和退出码 |
 | `native-ecflow` | Ubuntu 24.04 的 `python3-ecflow=5.12.0-1build3`、系统 Python 3.12 和 `ksh93u+m` | 13 项原生用例覆盖三态 requeue、定义读取、job 展开、缺 include、同目录撤下组件覆盖、ORVIX 资源继承、machine 更新、inline／external 的 Bash 调用，以及 Ksh93 前台调用和两处 wait 收到 SIGTERM 的处理 |
 | `build` | 从 sdist 构建 wheel，隔离环境安装 wheel 与 toyflow | 三个冒烟脚本检查公共API/包数据、标准CLI及toyflow生成；必须来自当前site-packages，拒绝editable或PYTHONPATH源码遮蔽 |

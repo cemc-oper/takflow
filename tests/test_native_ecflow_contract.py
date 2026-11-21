@@ -404,7 +404,7 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
     from takflow.backends.runtime import ecflow_resource_variables, set_resource_variables, set_runtime
     from takflow.config import SlurmWorkload
     from takflow.jobspec import TaskResource
-    from takflow.toolkit.job import render_orvix_resource_block
+    from takflow.toolkit.job import render_orvix_resource_block, render_slurm_resource_block
 
     engine = WorkflowEngine(EcflowBackend())
     suite = engine.Suite("suite")
@@ -425,11 +425,10 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
     engine.save_suite(suite, path)
     defs = ecflow.Defs(str(path))
     native_family = defs.find_abs_node("/suite/fcst")
-    slurm_include = ("%include <common/requeue.h>" if fallback is None else
-                     f"%include <common/requeue-%REQUEUE:{str(fallback).lower()}%.h>")
-    original = ("#!/bin/bash\n" + render_orvix_resource_block(
-        job_type="parallel", workflow_mode="ecflow", time="06:00:00", requeue=fallback,
-    ) + "\n" + slurm_include + "\ntrue\n")
+    fields = dict(job_type="parallel", workflow_mode="ecflow", time="06:00:00", requeue=fallback,
+                  job_name="trial forecast", output="%ECF_JOBOUT%.%A_%a.%04j.%j%j.out", error="/log path/%%.%j.err")
+    original = ("#!/bin/bash\n" + render_orvix_resource_block(**fields) + "\n"
+                + render_slurm_resource_block(**fields) + "\ntrue\n")
     source.write_text(original)
     previous = {}
     for attempt, state in enumerate((None, False, True)):
@@ -438,7 +437,9 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
             native_family.add_variable("NODES", str(4 + attempt))
             native_family.add_variable("TASKS_PER_NODE", str(32 + attempt))
             if attempt == 1:
-                native_family.add_variable(ecflow_resource_variables({"MEMORY": "9G"}))
+                native_family.add_variable(ecflow_resource_variables({
+                    "MEMORY": "9G", "JOB_OUTPUT": "/parent log/%A_%a.%j.out", "JOB_NAME": "new forecast",
+                }))
             else:
                 native_family.add_variable("MEMORY", "10G")
             native_family.add_variable("WALLTIME", f"0{attempt}:10:00")
@@ -467,6 +468,20 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
             for key, value in expect.items():
                 assert [line for line in lines if line.startswith(f"#ORVIX {key}=")] == (
                     [] if value is None else [f"#ORVIX {key}={value}"])
+            native = [shlex.split(line)[1] for line in lines if line.startswith("#SBATCH ")]
+            for key, option in (("nodes", "nodes"), ("ntasks-per-node", "ntasks-per-node"),
+                                ("queue", "partition"), ("memory", "mem"), ("time", "time"),
+                                ("project", "wckey"), ("application", "comment")):
+                actual = [arg for arg in native if arg.startswith(f"--{option}=")]
+                assert actual == ([] if expect[key] is None else [f"--{option}={expect[key]}"])
+            assert native.count("--job-name=" + ("new forecast" if attempt else "trial forecast")) == 1
+            assert native.count("--error=/log path/%%.%j.err") == 1
+            native_output, = [arg.removeprefix("--output=") for arg in native if arg.startswith("--output=")]
+            if attempt:
+                assert native_output == "/parent log/%A_%a.%j.out"
+            else:
+                assert native_output.endswith(".%A_%a.%04j.%j%j.out")
+            assert lines.count(f'#ORVIX output="{native_output}"') == 1
             previous[job] = job.read_bytes()
         assert source.read_text() == original
         assert all(job.read_bytes() == content for job, content in previous.items())

@@ -362,7 +362,7 @@ def test_shared_resource_header_follows_takler_parent_edits(tmp_path):
     source = tmp_path / "shared.sh"
     original = "#!/bin/sh\n" + render_orvix_resource_block(
         job_type="parallel", workflow_mode="takler", time="06:00:00",
-        queue="fallback", application="model-default",
+        queue="fallback", application="model-default", job_name="model", output="{{ TAKLER_JOBOUT }}",
     ) + "\ntrue\n"
     source.write_text(original)
     suite.add_variable("TAKLER_HOME", str(tmp_path / "jobs"))
@@ -388,7 +388,8 @@ def test_shared_resource_header_follows_takler_parent_edits(tmp_path):
         if state is not None:
             parent.add_parameter({"REQUEUE": state, "MEMORY": f"{8 + attempt}G", "NODES": 4 + attempt,
                                   "TASKS_PER_NODE": 32 + attempt, "WALLTIME": "01:10:00",
-                                  "QUEUE": "new-batch", "APPLICATION": "model-app"})
+                                  "QUEUE": "new-batch", "APPLICATION": "model-app", "JOB_NAME": "updated",
+                                  "JOB_OUTPUT": "{{ TAKLER_JOBOUT }}.rerun", "JOB_ERROR": "/log dir/%j.err"})
         for name in ("inherited", "fixed"):
             fixed = name == "fixed"
             task = flow.find_node(f"/suite/fcst/{name}")
@@ -404,10 +405,15 @@ def test_shared_resource_header_follows_takler_parent_edits(tmp_path):
                 "memory": f"{8 + attempt}G" if attempt else None, "project": "model",
                 "requeue": "true" if fixed else (str(state).lower() if state is not None else None),
                 "application": "model-app" if attempt else "model-default",
+                "job-name": '"updated"' if attempt else '"model"',
             }
             for key, value in expected.items():
                 assert [line for line in lines if line.startswith(f"#ORVIX {key}=")] == (
                     [] if value is None else [f"#ORVIX {key}={value}"])
+            logfile = str(task.jobout_path) + (".rerun" if attempt else "")
+            assert [line for line in lines if line.startswith("#ORVIX output=")] == [f'#ORVIX output="{logfile}"']
+            assert [line for line in lines if line.startswith("#ORVIX error=")] == (
+                ['#ORVIX error="/log dir/%j.err"'] if attempt else [])
             previous[job] = job.read_bytes()
         assert source.read_text() == original
         assert all(job.read_bytes() == content for job, content in previous.items())

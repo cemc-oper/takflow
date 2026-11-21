@@ -63,6 +63,7 @@ REQUIRED = {
     "orvix": tuple(f"tests/test_conformance.py::{name}" for name in (
         "test_rendered_script_matches_committed_vector",
         "test_orvix_generate_matches_golden",
+        "test_public_slurm_header_matches_orvix_conversion",
     )),
     "takler": ("tests/test_build_takler_contract.py::test_takler_pipeline_uses_real_native_json",) + tuple(f"tests/test_takler_current_contract.py::{name}" for name in (
         "test_backend_does_not_create_legacy_application_bunch",
@@ -208,7 +209,7 @@ def main():
     expected = None
     if args.suite == "orvix":
         from takflow.spec.jobspec.conformance import CASES, SCHEDULERS
-        expected = len(CASES) * (1 + len(SCHEDULERS))
+        expected = len(CASES) * (1 + len(SCHEDULERS)) + 3  # requeue policies in the native header comparison
     elif args.suite == "takler":
         expected = 17
     elif args.suite == "native":

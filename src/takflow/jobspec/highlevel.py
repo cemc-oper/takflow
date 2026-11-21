@@ -30,6 +30,9 @@ class TaskResource(BaseModel):
     ntasks_per_node: Optional[int] = None
     time: Optional[str] = None
     memory: Optional[str] = None
+    job_name: Optional[str] = None
+    output: Optional[str] = None
+    error: Optional[str] = None
     #: None leaves the requeue policy to an applicable default or parent.
     requeue: Optional[bool] = None
 
@@ -44,24 +47,24 @@ class TaskResource(BaseModel):
             )
         return value
 
-    def compile(self, workload: SlurmWorkload) -> ResourceSpec:
-        """Compile this high-level resource against a slurm workload.
+    def compile(self, workload: SlurmWorkload | None) -> ResourceSpec:
+        """Compile task inputs and applicable scheduling defaults.
 
         Resolves the queue from ``job_type`` defaults when not set explicitly,
         and threads the global project and application labels.
         """
-        if self.queue is not None:
-            queue = self.queue
-        elif self.job_type == "parallel":
-            queue = workload.default_parallel_queue
-        else:
-            queue = workload.default_serial_queue
+        queue = self.queue
+        if queue is None and workload is not None:
+            queue = workload.default_parallel_queue if self.job_type == "parallel" else workload.default_serial_queue
 
         spec = ResourceSpec(
-            scheduler="slurm",
+            scheduler="slurm" if workload is not None else "local",
             queue=queue,
-            project=workload.project,
-            application=workload.application,
+            project=workload.project if workload is not None else None,
+            application=workload.application if workload is not None else None,
+            job_name=self.job_name,
+            output=self.output,
+            error=self.error,
             time=self.time,
             memory=self.memory,
             requeue=self.requeue,

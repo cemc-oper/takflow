@@ -1,9 +1,4 @@
-"""Render a :class:`ResourceSpec` to ``#ORVIX`` directive lines.
-
-This is the single resource carrier: takflow writes ``#ORVIX key=value`` lines
-into job scripts, and orvix rewrites them to ``#SBATCH`` / ``#DSUB`` / etc. at
-submit time.
-"""
+"""Render ORVIX resource directives and the shared native Slurm option subset."""
 from __future__ import annotations
 
 from typing import List, Optional
@@ -11,6 +6,14 @@ from typing import List, Optional
 from takflow.jobspec.model import ResourceSpec
 
 MARKER = "#ORVIX"
+
+# Fields shared by the two historical Slurm submission paths.
+SLURM_OPTIONS = {
+    "job_name": "job-name", "output": "output", "error": "error",
+    "nodes": "nodes", "ntasks_per_node": "ntasks-per-node", "time": "time",
+    "queue": "partition", "project": "wckey", "application": "comment",
+    "memory": "mem",
+}
 
 
 def _hyphenate(key: str) -> str:
@@ -38,6 +41,28 @@ def _format(key: str, value) -> Optional[str]:
     return f"{hkey}={_quote(str(value))}"
 
 
+def orvix_directive(field: str, value, *, prefix: str = "#ORVIX ") -> Optional[str]:
+    fragment = _format(field, value)
+    return prefix + fragment if fragment is not None else None
+
+
+def slurm_directive(field: str, value, *, engine_reference: bool = False) -> Optional[str]:
+    """Render a supported Slurm option, including its flag-specific boolean rules."""
+    if value is None:
+        return None
+    if field == "requeue":
+        return "#SBATCH --no-requeue" if value is False else None
+    if field == "exclusive":
+        option = _format(field, value)
+        return f"#SBATCH --{option}" if option else None
+    option = SLURM_OPTIONS.get(field)
+    if option is None:
+        return None
+    dynamic_text = engine_reference and field in {"job_name", "queue", "application", "project", "output", "error"}
+    argument = f'"{value}"' if dynamic_text else _quote(str(value))
+    return f"#SBATCH --{option}={argument}"
+
+
 def to_orvix_directives(
     spec: ResourceSpec,
     *,
@@ -56,10 +81,9 @@ def to_orvix_directives(
     prefix = f"{MARKER} [scheduler={conditional_for}] " if conditional_for else f"{MARKER} "
     lines: List[str] = []
     for key, value in spec.iter_set_fields():
-        fragment = _format(key, value)
-        if fragment is None:
-            continue
-        lines.append(prefix + fragment)
+        line = orvix_directive(key, value, prefix=prefix)
+        if line is not None:
+            lines.append(line)
     return lines
 
 

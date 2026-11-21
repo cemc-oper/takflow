@@ -18,7 +18,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFoun
 from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
 from takflow.build_info import _scoped_lines
-from takflow.backends.runtime.resources import RESOURCE_VARIABLES
+from takflow.backends.runtime.resources import RESOURCE_VARIABLES, ecflow_log_value
 from takflow.checks import (
     GenerationCheckReport,
     GenerationCheckError,
@@ -31,7 +31,8 @@ from takflow.checks import (
 )
 from takflow.config import SlurmWorkload
 from takflow.config.workload import resolve_resource_alias
-from takflow.jobspec import ResourceSpec, TaskResource, to_orvix_directives
+from takflow.jobspec import CANONICAL_KEYS, ResourceSpec, TaskResource
+from takflow.jobspec.render import orvix_directive, slurm_directive
 
 if TYPE_CHECKING:
     from takflow.config import BaseWorkflowConfig
@@ -61,56 +62,34 @@ def _current_build_info_lines() -> Dict[str, str]:
     return _generic_build_info_lines(_generic_build_info("unknown"), "takflow")
 
 
-def _orvix_resource_spec(
-    job_type: str = "serial",
-    queue: Optional[str] = None,
-    partition: Optional[str] = None,
-    nodes: Optional[Union[int, str]] = None,
-    ntasks_per_node: Optional[Union[int, str]] = None,
-    time: Optional[str] = None,
-    walltime: Optional[str] = None,
-    memory: Optional[str] = None,
-    output: Optional[str] = None,
-    error: Optional[str] = None,
-    project: Optional[str] = None,
-    wckey: Optional[str] = None,
-    application: Optional[str] = None,
-    scheduler: str = "slurm",
-    requeue: Optional[bool] = None,
+def _job_resource_spec(
+    job_type="serial", *, queue=None, nodes=None, ntasks_per_node=None, time=None,
+    memory=None, requeue=None, job_name=None, output=None, error=None,
+    project=None, application=None, scheduler="slurm", exclusive=None,
 ) -> ResourceSpec:
-    task = TaskResource(
-        job_type=job_type,  # type: ignore[arg-type]
-        queue=resolve_resource_alias("queue", queue, "partition", partition, nonblank=True),
-        nodes=nodes,
-        ntasks_per_node=ntasks_per_node,
-        time=resolve_resource_alias("time", time, "walltime", walltime, nonblank=True),
-        memory=memory,
-        requeue=requeue,
-    )
-    project = resolve_resource_alias("project", project, "wckey", wckey)
-    workload = SlurmWorkload(project=project if project is not None else "", application=application)
-    spec = task.compile(workload)
-    if project is None:
-        spec.project = None
-    spec.scheduler = scheduler
-    if output is not None:
-        spec.output = output
-    if error is not None:
-        spec.error = error
-    return spec
+    task = TaskResource(job_type=job_type, queue=queue, nodes=nodes, ntasks_per_node=ntasks_per_node,
+                        time=time, memory=memory, requeue=requeue, job_name=job_name, output=output, error=error)
+    workload = None if scheduler == "local" else SlurmWorkload(project=project or "", application=application)
+    fields = task.compile(workload).model_dump()
+    fields.update(scheduler=scheduler, project=project, application=application, exclusive=exclusive)
+    return ResourceSpec(**fields)
 
 
-def _resource_directive(field: str, variable: str, fallback, mode: str) -> str:
+def _resource_directive(field: str, variable: str, fallback, mode: str, native_slurm: bool) -> str:
     key = field.replace("_", "-")
     prefix = f"#ORVIX {key}="
     if isinstance(fallback, bool):
         fallback = str(fallback).lower()
     if mode == "ecflow":
+        if field == "requeue" and (native_slurm or fallback is None):
+            fragment = "requeue" if native_slurm else "orvix-requeue"
+            return f"%include <common/{fragment}-%REQUEUE:{fallback or 'unset'}%.h>"
         if fallback is None:
-            if field == "requeue":
-                return "%include <common/orvix-requeue-%REQUEUE:unset%.h>"
-            return f"%ORVIX_{variable}:%"
+            carrier = "SLURM" if native_slurm else "ORVIX"
+            return f"%{carrier}_{variable}:%"
         ref = f"%{variable}:{fallback}%"
+        if native_slurm:
+            return slurm_directive(field, ref, engine_reference=True)
     else:
         expression = variable
         if fallback is not None:
@@ -119,24 +98,57 @@ def _resource_directive(field: str, variable: str, fallback, mode: str) -> str:
             expression += " | lower"
         ref = "{{ " + expression + " }}"
         if fallback is None:
+            if field == "job_name":
+                ref = '"' + ref + '"'
             return ("{% if " + variable + " is defined and " + variable + " is not none %}"
                     + prefix + ref + "{% endif %}")
-    if any(c.isspace() for c in str(fallback)):
+    if field == "job_name" or (fallback is not None and any(c.isspace() for c in str(fallback))):
         ref = '"' + ref + '"'
     return prefix + ref
 
 
-def _workflow_resource_block(spec: ResourceSpec, mode: str | None, job_type: str) -> str:
-    if mode not in ("ecflow", "takler"):
-        return "\n".join(to_orvix_directives(spec))
+def _engine_log_directive(field: str, fallback: str | None, mode: str, native_slurm: bool) -> str:
+    """Keep the engine's job log expression available until job creation."""
+    variable = RESOURCE_VARIABLES[field]
+    if mode == "ecflow":
+        carrier = "SLURM" if native_slurm else "ORVIX"
+        override = f"%{carrier}_{variable}:%"
+        if fallback is None:
+            return override
+        value = ecflow_log_value(fallback)
+        line = (slurm_directive(field, value, engine_reference=True) if native_slurm
+                else f'#ORVIX {field}="{value}"')
+        return f"%{variable}_PREFIX:#%{line[1:]}\n{override}"
+    path = variable + ' | replace("{{ TAKLER_JOBOUT }}", TAKLER_JOBOUT | default(""))'
+    line = f'#ORVIX {field}="{{{{ {path} }}}}"'
+    default = f'{{% else %}}#ORVIX {field}="{fallback}"' if fallback is not None else ""
+    return f"{{% if {variable} is defined and {variable} is not none %}}{line}{default}{{% endif %}}"
 
-    # Scheduler and log paths already carry their own engine-specific syntax.
-    literal = spec.model_copy(update=dict.fromkeys(RESOURCE_VARIABLES))
-    lines = to_orvix_directives(literal)
-    for field, variable in RESOURCE_VARIABLES.items():
-        if job_type == "serial" and field in ("nodes", "ntasks_per_node"):
+
+def _workflow_resource_block(spec: ResourceSpec, mode: str | None, job_type: str, *, native_slurm=False) -> str:
+    if native_slurm and mode == "takler":
+        raise ValueError("native Slurm resource headers support ecFlow and Shell")
+    engine = mode in ("ecflow", "takler")
+    lines = []
+    for field in CANONICAL_KEYS:
+        value = getattr(spec, field)
+        if engine and field in ("output", "error"):
+            lines.append(_engine_log_directive(field, value, mode, native_slurm))
             continue
-        lines.append(_resource_directive(field, variable, getattr(spec, field), mode))
+        if engine and field in RESOURCE_VARIABLES:
+            if job_type != "serial" or field not in ("nodes", "ntasks_per_node"):
+                lines.append(_resource_directive(field, RESOURCE_VARIABLES[field], value, mode, native_slurm))
+            continue
+        if value is None:
+            continue
+        if native_slurm:
+            line = slurm_directive(field, value, engine_reference=engine)
+        elif field == "scheduler":
+            line = f"#ORVIX scheduler={value}"
+        else:
+            line = orvix_directive(field, value)
+        if line:
+            lines.append(line)
     return "\n".join(lines)
 
 
@@ -157,17 +169,26 @@ def render_orvix_resource_block(
     scheduler: str = "slurm",
     requeue: Optional[bool] = None,
     workflow_mode: Optional[str] = None,
+    *, job_name: str | None = None, exclusive: bool | str | None = None,
 ) -> str:
-    """Render directives. Supply one spelling of each queue, time or project argument."""
-    spec = _orvix_resource_spec(job_type, queue, partition, nodes, ntasks_per_node,
-                                time, walltime, memory, output, error, project, wckey,
-                                application, scheduler, requeue)
+    """Render ORVIX directives with the existing optional input aliases."""
+    spec = _job_resource_spec(
+        job_type, queue=resolve_resource_alias("queue", queue, "partition", partition, nonblank=True),
+        time=resolve_resource_alias("time", time, "walltime", walltime, nonblank=True),
+        project=resolve_resource_alias("project", project, "wckey", wckey), nodes=nodes,
+        ntasks_per_node=ntasks_per_node, memory=memory, output=output, error=error,
+        application=application, scheduler=scheduler, requeue=requeue, job_name=job_name, exclusive=exclusive,
+    )
     return _workflow_resource_block(spec, workflow_mode, job_type)
 
 
-@pass_context
-def _render_workflow_orvix_resource_block(context, **resources) -> str:
-    """Bind the template helper to the current workflow's resource policy."""
+def render_slurm_resource_block(*, job_type="serial", workflow_mode=None, **resources) -> str:
+    """Render the supported native Slurm header fields using canonical input names."""
+    return _workflow_resource_block(_job_resource_spec(job_type, **resources), workflow_mode, job_type,
+                                    native_slurm=True)
+
+
+def _workflow_resource_defaults(context, resources):
     config = context["config"]
     workload = config.workload
     job_type = resources.get("job_type", "serial")
@@ -177,7 +198,28 @@ def _render_workflow_orvix_resource_block(context, **resources) -> str:
         resources["project"] = getattr(workload, "project", None)
     if resources.get("application") is None:
         resources["application"] = getattr(workload, "application", None)
-    return _workflow_resource_block(_orvix_resource_spec(**resources), config.workflow_mode, job_type)
+    resources.setdefault("scheduler", getattr(workload, "scheduler", "local"))
+    for field, name in (("output", "output_std_log_path"), ("error", "output_stderr_log_path")):
+        if resources.get(field) is None:
+            resources[field] = context.get(name)
+    resources["workflow_mode"] = config.workflow_mode
+    return resources
+
+
+@pass_context
+def _render_workflow_orvix_resource_block(context, **resources) -> str:
+    return render_orvix_resource_block(**_workflow_resource_defaults(context, resources))
+
+
+@pass_context
+def _render_workflow_slurm_resource_block(context, **resources) -> str:
+    return render_slurm_resource_block(**_workflow_resource_defaults(context, resources))
+
+
+RESOURCE_TEMPLATE_HELPERS = {
+    "render_orvix_resource_block": _render_workflow_orvix_resource_block,
+    "render_slurm_resource_block": _render_workflow_slurm_resource_block,
+}
 
 
 # --- rendering ---------------------------------------------------------------
@@ -534,7 +576,7 @@ def render_jobs_from_directory(
         )
         env.globals["include_raw"] = include_raw
         env.globals["invoke_script"] = invoke_script
-        env.globals["render_orvix_resource_block"] = _render_workflow_orvix_resource_block
+        env.globals.update(RESOURCE_TEMPLATE_HELPERS)
         return env
 
     if config.workflow_mode == "shell":
@@ -632,6 +674,8 @@ def render_single_job_file(
     check_output_path(destination, stage="job.preflight", report=report)
     inputs = set()
     _loader_inputs(env, inputs)
+    for name, helper in RESOURCE_TEMPLATE_HELPERS.items():
+        env.globals.setdefault(name, helper)
     _check_job_template(env, relative_path.as_posix(), config, output_repo_base, report, set(), inputs)
     _check_input_output_overlap([destination], inputs, report)
     _render_single_job_file(relative_path, output_repo_base, output_relative_path, config, env, report)
@@ -643,14 +687,14 @@ def _render_single_job_file(
     *, template_context: Mapping | None = None, file_mode: int | None = None,
 ) -> None:
     base_name = output_relative_path.stem
+    if file_mode is not None and config.workflow_mode == "shell":
+        from takflow._files import make_parents
+        make_parents(Path(output_repo_base) / "logs/.log", Path(output_repo_base))
     output_log_dict = generate_output_log_data(
         config=config,
         name=base_name,
         output_repo_base=output_repo_base,
     )
-    if file_mode is not None and config.workflow_mode == "shell" and config.workload.workload_type == "slurm":
-        from takflow._files import make_parents
-        make_parents(Path(output_repo_base) / "logs/.log", Path(output_repo_base))
 
     build_info_lines = _current_build_info_lines()
     data = {
@@ -702,28 +746,26 @@ def generate_output_log_data(
     config: "BaseWorkflowConfig", name: str, output_repo_base: str
 ) -> Dict[str, str]:
     """Compute stdout/stderr log path template data for a job by mode/workload."""
-    data: Dict[str, str] = {}
-    workflow_mode = config.workflow_mode
-    workload_type = config.workload.workload_type
-    if workload_type == "slurm":
-        if workflow_mode == "shell":
-            output_std_log_path = Path(output_repo_base, "logs", f"{name}.%j.out")
-            output_stderr_log_path = Path(output_repo_base, "logs", f"{name}.%j.err")
-            output_std_log_path.parent.mkdir(parents=True, exist_ok=True)
-            data["output_std_log_path"] = str(output_std_log_path)
-            data["output_stderr_log_path"] = str(output_stderr_log_path)
-        elif workflow_mode == "ecflow":
-            data["output_std_log_path"] = r"%ECF_JOBOUT%"
-            data["output_stderr_log_path"] = r"%ECF_JOBOUT%.err"
-        elif workflow_mode == "takler":
-            data["output_std_log_path"] = r"{{ TAKLER_JOBOUT }}"
-            data["output_stderr_log_path"] = r"{{ TAKLER_JOBOUT }}.err"
-    return data
+    if config.workflow_mode == "ecflow":
+        output = "%ECF_JOBOUT%"
+        error = "%ECF_JOBOUT%.err"
+    elif config.workflow_mode == "takler":
+        output = "{{ TAKLER_JOBOUT }}"
+        error = "{{ TAKLER_JOBOUT }}.err"
+    else:
+        logs = Path(output_repo_base, "logs")
+        logs.mkdir(parents=True, exist_ok=True)
+        suffix = ".%j" if config.workload.workload_type == "slurm" else ""
+        output = str(logs / f"{name}{suffix}.out")
+        error = str(logs / f"{name}{suffix}.err")
+    return {"output_std_log_path": output, "output_stderr_log_path": error}
 
 
 __all__ = [
     "render_jobs_from_directory",
     "render_single_job_file",
     "generate_output_log_data",
+    "render_orvix_resource_block",
+    "render_slurm_resource_block",
     "set_build_info_provider",
 ]

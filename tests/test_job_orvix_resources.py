@@ -1,16 +1,65 @@
 """Workflow-aware ORVIX rendering is a framework default, independent of apps."""
 
 import re
+from pathlib import Path
 
 import pytest
-from jinja2 import Environment
+from jinja2 import Environment, FileSystemLoader
 
 from takflow.build import BuildError, run_stage
 from takflow.config import BaseWorkflowConfig
-from takflow.toolkit.job import render_jobs_from_directory, render_orvix_resource_block
+from takflow.toolkit.job import (
+    render_jobs_from_directory, render_orvix_resource_block, render_single_job_file, render_slurm_resource_block,
+)
 
 from test_build import application, data, put
 from test_build import resources as resources
+
+
+def test_shared_slurm_fields_and_local_defaults():
+    fields = dict(job_type="parallel", queue="research", nodes=3, ntasks_per_node=11,
+                  time="01:23:00", memory="0", project="project one", application="model",
+                  job_name="trial forecast", output="/logs/trial %j.out", error="/logs/trial %j.err")
+    lines = render_slurm_resource_block(**fields, requeue=False, exclusive=True).splitlines()
+    assert lines == [
+        '#SBATCH --job-name="trial forecast"', '#SBATCH --output="/logs/trial %j.out"',
+        '#SBATCH --error="/logs/trial %j.err"', '#SBATCH --nodes=3', '#SBATCH --ntasks-per-node=11',
+        '#SBATCH --time=01:23:00', '#SBATCH --partition=research', '#SBATCH --wckey="project one"',
+        '#SBATCH --comment=model', '#SBATCH --exclusive', '#SBATCH --mem=0', '#SBATCH --no-requeue',
+    ]
+    for policy in (True, None):
+        lines = render_slurm_resource_block(**fields, requeue=policy, exclusive=False).splitlines()
+        assert not any("requeue" in line or "exclusive" in line for line in lines)
+    assert "#SBATCH --exclusive=user" in render_slurm_resource_block(exclusive="user").splitlines()
+    assert render_orvix_resource_block(scheduler="local", output="a.out").splitlines() == [
+        "#ORVIX scheduler=local", "#ORVIX output=a.out",
+    ]
+
+
+@pytest.mark.parametrize("entry", ["job", "config", "directory", "single"])
+def test_native_helper_at_template_entry_points(tmp_path, resources, entry):
+    relative = Path("config/config.sh.j2" if entry == "config" else "jobs/on/task.sh.j2")
+    put(resources, relative, '#!/bin/sh\n{{ render_slurm_resource_block(project="explicit", time="01:45:00") }}\ntrue\n')
+    out = tmp_path / "out"
+    raw = data(out, mode="shell", workload={"workload_type": "slurm", "project": "site-default"})
+    output = out / "jobs/on/task.sh"
+    if entry == "single":
+        env = Environment(loader=FileSystemLoader(resources))
+        render_single_job_file(relative, str(out), output.relative_to(out), BaseWorkflowConfig(**raw), env)
+    elif entry == "directory":
+        render_jobs_from_directory(BaseWorkflowConfig(**raw), str(resources), str(out),
+                                   template_filter=lambda path: path.parts[0] == "on")
+    else:
+        with application(resources).prepare(raw) as context:
+            run_stage(context, "resource")
+            run_stage(context, "config")
+            if entry == "job":
+                run_stage(context, "job")
+            else:
+                output = context.paths.config_file
+    lines = output.read_text().splitlines()
+    assert [line for line in lines if line.startswith("#SBATCH --wckey=")] == ["#SBATCH --wckey=explicit"]
+    assert lines.index("#SBATCH --time=01:45:00") < lines.index("true")
 
 
 @pytest.mark.parametrize("entry", ["directory", "job", "config"])
