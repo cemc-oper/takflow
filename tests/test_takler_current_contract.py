@@ -17,8 +17,8 @@ from takler.server.scheduler import Scheduler  # noqa: E402
 from takler.tasks.shell.shell_render import ShellRender  # noqa: E402
 from takler.tasks.shell.shell_script_task import ShellScriptTask  # noqa: E402
 
-from takflow.backends.runtime.orvix import orvix_job  # noqa: E402
 from takflow.backends.runtime import set_runtime  # noqa: E402
+from takflow.backends.runtime.slsubmit import slsubmit6_parallel_job, slsubmit6_serial_job  # noqa: E402
 from takflow.backends.takler.backend import TaklerBackend  # noqa: E402
 from takflow.config import ShellWorkload, SlurmWorkload  # noqa: E402
 from takflow.flow import WorkflowEngine  # noqa: E402
@@ -26,6 +26,7 @@ from takflow.jobspec import TaskResource  # noqa: E402
 from takflow.jobspec.model import ResourceSpec  # noqa: E402
 from takflow.jobspec.render import render_resource_block  # noqa: E402
 from test_job_execution import BUSINESS_SCRIPT, build_business_workflow, check_business_job  # noqa: E402
+from test_runtime_local_carrier import assert_command_argv  # noqa: E402
 
 
 def _golden(tmp_path: Path, *, scheduler="local"):
@@ -52,7 +53,9 @@ def _golden(tmp_path: Path, *, scheduler="local"):
         encoding="utf-8",
     )
     task.add_variables({"TAKLER_SCRIPT": str(source), "CONFIG": "alpha"})
-    task.add_variables(orvix_job(engine, scheduler))
+    workload = (ShellWorkload(submit_carrier="orvix") if scheduler == "local"
+                else SlurmWorkload(project="model", scheduler=scheduler))
+    set_runtime(suite, workload, engine)
     output = tmp_path / "suite.json"
     engine.save_suite(suite, output)
     return output, source
@@ -213,38 +216,32 @@ def test_rendered_orvix_commands_bind_attempt_and_quote_paths(tmp_path):
     flow = _load_flow(output)
     flow.begin()
     task = flow.find_node("/suite/run")
-    task.increment_try_no()
-    command = task.create_job_script()
-    assert task.attempt_id and task.job_password
-    assert task.job_path and "jobs $' with spaces" in task.job_path
-    assert task.jobout_path and "jobs $' with spaces" in task.jobout_path
-    assert task.orvix_info_path == task.job_path + ".info.yaml"
-    assert task._uses_orvix()
-    assert shlex.split(command) == [
-        "orvix", "submit", "--scheduler", "local", task.job_path,
-    ]
-    quoted_path = command.replace(
-        "orvix submit --scheduler local ", "printf '%s\\n' ", 1
-    )
-    assert subprocess.run(
-        ["/bin/sh", "-c", quoted_path], check=True, capture_output=True, text=True
-    ).stdout.strip() == task.job_path
-    kill = ShellRender(task).render_command(
-        task.find_parent_parameter("TAKLER_SHELL_KILL_CMD").value
-    )
-    assert shlex.split(kill) == ["orvix", "kill", task.orvix_info_path]
-    quoted_info = kill.replace("orvix kill ", "printf '%s\\n' ", 1)
-    assert subprocess.run(
-        ["/bin/sh", "-c", quoted_info], check=True, capture_output=True, text=True
-    ).stdout.strip() == task.orvix_info_path
-    rendered = Path(task.job_path).read_text(encoding="utf-8")
-    assert "{{" not in rendered and "}}" not in rendered
-    assert task.attempt_id in rendered and task.job_password in rendered
-    assert '#ORVIX job-name="suite task"' in rendered
-    assert f'#ORVIX output="{task.jobout_path}"' in rendered
-    assert f'#ORVIX error="{task.jobout_path}.err"' in rendered
-    assert not Path(task.orvix_info_path).exists()
-    assert not Path(task.jobout_path).exists()
+    jobs = set()
+    custom_job = str(tmp_path / "jobs $' with spaces" / "reruns" / "forecast.{attempt_id}.sh")
+    for scheduler in ("local", "donau"):
+        if scheduler == "donau":
+            flow.add_parameter("ORVIX_SCHEDULER", scheduler)
+            task.add_parameter("TAKLER_JOB", custom_job)
+        task.increment_try_no()
+        command = task.create_job_script()
+        assert task.attempt_id and task.job_password
+        assert task.job_path not in jobs and task.attempt_id in task.job_path
+        jobs.add(task.job_path)
+        if scheduler == "donau":
+            assert task.job_path == custom_job.format(attempt_id=task.attempt_id)
+        assert "jobs $' with spaces" in task.job_path and "jobs $' with spaces" in task.jobout_path
+        assert task._uses_orvix() and task.orvix_info_path == task.job_path + ".info.yaml"
+        assert_command_argv(command, "orvix", "submit", "--scheduler", scheduler, task.job_path)
+        kill = ShellRender(task).render_command(task.find_parent_parameter("TAKLER_SHELL_KILL_CMD").value)
+        assert_command_argv(kill, "orvix", "kill", task.orvix_info_path)
+        rendered = Path(task.job_path).read_text(encoding="utf-8")
+        assert "{{" not in rendered and "}}" not in rendered
+        assert task.attempt_id in rendered and task.job_password in rendered
+        assert '#ORVIX job-name="suite task"' in rendered
+        assert f'#ORVIX output="{task.jobout_path}"' in rendered
+        assert f'#ORVIX error="{task.jobout_path}.err"' in rendered
+        assert not Path(task.orvix_info_path).exists()
+        assert not Path(task.jobout_path).exists()
 
 
 def test_real_orvix_generate_accepts_rendered_job_without_submit(tmp_path):
@@ -289,24 +286,15 @@ def test_scheduler_orvix_commands_render_without_submission(tmp_path, scheduler)
     assert not Path(task.jobout_path).exists()
 
 
-@pytest.mark.parametrize("carrier", ["direct", "slsubmit6_serial", "slsubmit6_parallel"])
-def test_legacy_carrier_commands_render_without_submission(tmp_path, carrier):
+def test_direct_local_commands_run_current_job(tmp_path):
     engine = WorkflowEngine(TaklerBackend())
     suite = engine.Suite("suite")
-    suite.add_variable("TAKLER_HOME", str(tmp_path / "jobs"))
+    suite.add_variable("TAKLER_HOME", str(tmp_path / "model's local jobs"))
     task = suite.add_task("run")
     source = tmp_path / "source.takler"
     source.write_text("#!/bin/sh\nprintf '%s\\n' '{{ TAKLER_ATTEMPT_ID }}'\n", encoding="utf-8")
     task.add_variable("TAKLER_SCRIPT", str(source))
-    workload = (
-        ShellWorkload(submit_carrier="direct")
-        if carrier == "direct"
-        else SlurmWorkload(wckey="project", submit_carrier="slsubmit6")
-    )
-    resource = TaskResource(job_type="parallel", nodes=2, ntasks_per_node=4) if carrier.endswith("parallel") else None
-    set_runtime(suite, workload, engine)
-    if resource is not None:
-        set_runtime(task, workload, engine, resource)
+    set_runtime(suite, ShellWorkload(submit_carrier="direct"), engine)
     output = tmp_path / "suite.json"
     engine.save_suite(suite, output)
     flow = _load_flow(output)
@@ -314,24 +302,33 @@ def test_legacy_carrier_commands_render_without_submission(tmp_path, carrier):
     loaded = flow.find_node("/suite/run")
     loaded.increment_try_no()
     command = loaded.create_job_script()
-    # Render only: no shell command, scheduler or kill command is executed.
     loaded.add_parameter("TAKLER_RID", "12345")
     kill = ShellRender(loaded).render_command(
         loaded.find_parent_parameter("TAKLER_SHELL_KILL_CMD").value
     )
-    if carrier == "direct":
-        assert command == f"{loaded.job_path} 1> {loaded.jobout_path} 2>&1"
-        assert shlex.split(kill) == ["kill", "-15", "12345"]
-    else:
-        assert shlex.split(command) == ["sbatch", loaded.job_path]
-        assert shlex.split(kill) == ["scancel", "12345"]
-        assert "slsubmit6" not in command
-        assert "slcancel4" not in kill
+    assert shlex.split(kill) == ["kill", "-15", "12345"]
     assert not loaded._uses_orvix()
     assert loaded.orvix_info_path is None
     assert Path(loaded.job_path).is_file()
     assert loaded.attempt_id in Path(loaded.job_path).read_text(encoding="utf-8")
-    assert not Path(loaded.jobout_path).exists()
+    subprocess.run(["/bin/sh", "-ec", command], check=True, timeout=5)
+    assert Path(loaded.jobout_path).read_text().splitlines() == [loaded.attempt_id]
+
+
+@pytest.mark.parametrize("job_type", ["serial", "parallel"])
+def test_direct_slurm_is_rejected_before_setting_commands(job_type):
+    engine = WorkflowEngine(TaklerBackend())
+    task = engine.Suite("suite").add_task("run")
+    workload = SlurmWorkload(project="model", submit_carrier="slsubmit6")
+    with pytest.raises(ValueError, match="takler does not support slsubmit6"):
+        set_runtime(task, workload, engine, TaskResource(job_type=job_type))
+    assert task.raw.find_parent_parameter("TAKLER_SHELL_JOB_CMD") is None
+    assert task.raw.find_parent_parameter("TAKLER_SHELL_KILL_CMD") is None
+    with pytest.raises(ValueError, match="takler does not support slsubmit6"):
+        if job_type == "serial":
+            slsubmit6_serial_job(engine)
+        else:
+            slsubmit6_parallel_job(engine, 2, 4)
 
 
 def test_unsupported_attributes_fail_with_stable_errors():

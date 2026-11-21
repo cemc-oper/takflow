@@ -16,6 +16,7 @@ import pytest
 from takflow.backends.ecflow import EcflowBackend
 from takflow.checks import GenerationCheckReport, check_definition_output
 from takflow.flow import WorkflowEngine
+from test_runtime_local_carrier import assert_command_argv
 
 
 ecflow = pytest.importorskip("ecflow", reason="native ecFlow is not installed")
@@ -79,6 +80,54 @@ def test_native_ecflow_preprocesses_job_without_running_it(tmp_path):
     assert "%include" not in text
     assert "%MESSAGE%" not in text
     assert not marker.exists(), "native preprocessing must not run business commands"
+
+
+@pytest.mark.parametrize("carrier", ["orvix", "slsubmit6", "direct"])
+def test_native_ecflow_commands_use_current_try(tmp_path, carrier):
+    from takflow.backends.runtime import set_runtime
+    from takflow.config import ShellWorkload, SlurmWorkload
+
+    suite, output, _, _ = _save_suite(tmp_path)
+    workload = ShellWorkload() if carrier == "direct" else SlurmWorkload(project="model", submit_carrier=carrier)
+    set_runtime(suite, workload, suite.engine)
+    suite.add_variable("ECF_TRIES", 2)
+    suite.engine.save_suite(suite, output)
+    definition = ecflow.Defs(str(output))
+    server = {variable.name(): variable.value() for variable in definition.server_variables}
+    # Load each native try from a checkpoint. Job-creation checks alone always use try 0.
+    checkpoint = tmp_path / "checkpt"
+    definition.save_as_checkpt(str(checkpoint))
+    initial = checkpoint.read_text()
+    home = tmp_path / "operator's forecast jobs"
+    for attempt, scheduler in ((1, "slurm"), (2, "donau")):
+        checkpoint.write_text(initial.replace("task smoke\n", f"task smoke # try:{attempt}\n"))
+        definition.restore_from_checkpt(str(checkpoint))
+        parent = definition.find_abs_node("/native_gate")
+        parent.add_variable("ECF_HOME", str(home))
+        task = definition.find_abs_node("/native_gate/smoke")
+        assert task.get_int_try_no() == attempt
+        job = home / "native_gate" / f"smoke.job{attempt}"
+        if carrier == "orvix" and attempt == 2:
+            parent.add_variable("ORVIX_SCHEDULER", scheduler)
+            job = home / "reruns" / "smoke.job2"
+            task.add_variable("ECF_JOB", str(job))
+        task.add_variable("ECF_RID", str(100 + attempt))
+        submit = task.find_parent_variable_sub_value("ECF_JOB_CMD")
+        kill = task.find_parent_variable_sub_value("ECF_KILL_CMD")
+        if carrier == "orvix":
+            assert_command_argv(submit, "orvix", "submit", "--scheduler", scheduler, job)
+            assert_command_argv(kill, "orvix", "kill", str(job) + ".info.yaml")
+        elif carrier == "slsubmit6":
+            endpoint = (server["ECF_HOST"], server["ECF_PORT"])
+            assert_command_argv(submit, "slsubmit6", job, task.get_abs_node_path(), 2, attempt, *endpoint)
+            assert_command_argv(kill, "slcancel4", 100 + attempt, task.get_abs_node_path(), *endpoint)
+        else:
+            job.parent.mkdir(exist_ok=True, parents=True)
+            job.write_text('#!/bin/sh\nprintf "%s\\n" "$0"\n')
+            job.chmod(0o700)
+            subprocess.run(["/bin/sh", "-ec", submit], check=True, timeout=5)
+            assert (job.parent / f"smoke.{attempt}").read_text().splitlines() == [str(job)]
+            assert_command_argv(kill, "kill", "-15", 100 + attempt)
 
 
 def test_native_ecflow_rejects_missing_job_include(tmp_path):

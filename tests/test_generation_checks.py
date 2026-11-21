@@ -59,7 +59,6 @@ def assert_failure(error, code, stage):
     {"workload_type": "shell", "submit_carrier": "orvix"},
     {"workload_type": "slurm", "wckey": "project", "submit_carrier": "orvix", "scheduler": "slurm"},
     {"workload_type": "slurm", "wckey": "project", "submit_carrier": "orvix", "scheduler": "donau"},
-    {"workload_type": "slurm", "wckey": "project", "submit_carrier": "slsubmit6", "scheduler": "slurm"},
 ])
 def test_preflight_accepts_declared_combinations_without_claiming_runtime(tmp_path, mode, workload):
     settings = config(tmp_path, mode)
@@ -92,13 +91,24 @@ def test_mutated_unsupported_configuration_fails_before_builder_or_output(tmp_pa
     assert not (tmp_path / "out").exists()
 
 
-def test_slsubmit6_donau_combination_is_explicitly_rejected(tmp_path):
-    settings = config(tmp_path)
+@pytest.mark.parametrize("mode,scheduler", [
+    ("ecflow", "slurm"), ("shell", "slurm"), ("ecflow", "donau"), ("shell", "donau"),
+    ("takler", "slurm"), ("takler", "donau"),
+])
+def test_slsubmit6_generation_support_is_explicit(tmp_path, mode, scheduler):
+    settings = config(tmp_path, mode)
     settings.workload = BaseWorkflowConfig(project_base_dir="/program", run_base_dir="/run",
-        workload={"workload_type": "slurm", "wckey": "project", "scheduler": "donau", "submit_carrier": "slsubmit6"}).workload
+        workload={"workload_type": "slurm", "project": "project", "scheduler": scheduler, "submit_carrier": "slsubmit6"}).workload
+    if mode != "takler" and scheduler == "slurm":
+        assert has_check(preflight_generation(settings), "GEN_CAPABILITIES_VALID", "passed")
+        return
     with pytest.raises(GenerationCheckError) as caught:
-        preflight_generation(settings)
+        generate_workflow(settings, suite_builder=lambda *_: pytest.fail("builder ran before carrier validation"))
     assert_failure(caught.value, "GEN_COMBINATION_UNSUPPORTED", "generation.preflight")
+    if mode == "takler":
+        assert caught.value.diagnostic.object == "workload.submit_carrier"
+        assert "Use orvix" in caught.value.diagnostic.reason
+    assert not (tmp_path / "out").exists()
 
 
 def test_consumer_can_narrow_supported_modes_without_inheriting_shell_support(tmp_path):

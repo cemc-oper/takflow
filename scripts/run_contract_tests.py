@@ -59,6 +59,8 @@ REQUIRED = {
         "tests/test_config_validation.py::test_compatibility_ignores_extra_without_mutating_input",
         "tests/test_generation.py::test_definition_default_output_and_result[ecflow]",
         "tests/test_generation.py::test_missing_takler_dependency_is_not_wrapped",
+        "tests/test_generation_checks.py::test_slsubmit6_generation_support_is_explicit[takler-slurm]",
+        "tests/test_generation_checks.py::test_slsubmit6_generation_support_is_explicit[takler-donau]",
     ),
     "orvix": tuple(f"tests/test_conformance.py::{name}" for name in (
         "test_rendered_script_matches_committed_vector",
@@ -76,13 +78,19 @@ REQUIRED = {
         "test_public_takler_lifecycle_uses_current_attempt[inline]",
         "test_public_takler_lifecycle_uses_current_attempt[external]",
         "test_real_orvix_generate_accepts_rendered_job_without_submit",
-        "test_scheduler_orvix_commands_render_without_submission",
-        "test_legacy_carrier_commands_render_without_submission",
+        "test_scheduler_orvix_commands_render_without_submission[slurm]",
+        "test_scheduler_orvix_commands_render_without_submission[donau]",
+        "test_direct_local_commands_run_current_job",
+        "test_direct_slurm_is_rejected_before_setting_commands[serial]",
+        "test_direct_slurm_is_rejected_before_setting_commands[parallel]",
         "test_unsupported_attributes_fail_with_stable_errors",
     )),
     "native": tuple(f"tests/test_native_ecflow_contract.py::{name}" for name in (
         "test_native_ecflow_parses_takflow_definition",
         "test_native_ecflow_preprocesses_job_without_running_it",
+        "test_native_ecflow_commands_use_current_try[orvix]",
+        "test_native_ecflow_commands_use_current_try[slsubmit6]",
+        "test_native_ecflow_commands_use_current_try[direct]",
         "test_native_ecflow_rejects_missing_job_include",
         "test_native_ecflow_executes_business_invocation[inline]",
         "test_native_ecflow_executes_business_invocation[external]",
@@ -210,9 +218,7 @@ def main():
     if args.suite == "orvix":
         from takflow.spec.jobspec.conformance import CASES, SCHEDULERS
         expected = len(CASES) * (1 + len(SCHEDULERS)) + 3  # requeue policies in the native header comparison
-    elif args.suite == "takler":
-        expected = 17
-    elif args.suite == "native":
+    elif args.suite in ("takler", "native"):
         expected = len(required)
     targets = ["tests"] if args.suite == "base" else sorted({name.split("::", 1)[0] for name in required})
     gate = ContractGate(required, allow_optional_skips=args.suite == "base", expected_count=expected)

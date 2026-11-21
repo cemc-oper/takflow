@@ -1,5 +1,7 @@
 """set_runtime 本地任务(shell workload)按载体分派的测试。"""
-from pathlib import Path
+import subprocess
+
+import pytest
 
 from takflow.backends.ecflow.backend import EcflowBackend
 from takflow.backends.runtime import set_runtime
@@ -11,15 +13,23 @@ def _ecflow_engine() -> WorkflowEngine:
     return WorkflowEngine(EcflowBackend())
 
 
-def _render_task_def(workload) -> str:
+def _render_task_def(tmp_path, workload) -> str:
     """Build suite/task, apply set_runtime, and return the .def text."""
     engine = _ecflow_engine()
     suite = engine.Suite("s")
     task = suite.add_task("t")
     set_runtime(task, workload, engine=engine)
-    out = Path("/tmp/takflow_test_local_carrier.def")
+    out = tmp_path / "local.def"
     engine.save_suite(suite, out)
     return out.read_text()
+
+
+def assert_command_argv(command, program, *expected):
+    """Execute the engine command in sh with a recorder in place of the carrier."""
+    recorder = program + r"""() { printf '%s\0' "$@"; }"""
+    result = subprocess.run(["/bin/sh", "-ec", recorder + "\n" + command],
+                            env={"PATH": "/dev/null"}, capture_output=True, check=True, timeout=5)
+    assert result.stdout == b"".join(str(arg).encode() + b"\0" for arg in expected)
 
 
 class TestForSuite:
@@ -39,15 +49,20 @@ class TestForSuite:
 
 
 class TestLocalCarrierDispatch:
-    def test_orvix_carrier_uses_orvix_local(self):
-        defs = _render_task_def(ShellWorkload(submit_carrier="orvix"))
-        assert "orvix submit --scheduler %ORVIX_SCHEDULER% %ECF_JOB%" in defs
-        assert "orvix kill %ECF_JOB%.info.yaml" in defs
+    def test_orvix_carrier_uses_orvix_local(self, tmp_path):
+        defs = _render_task_def(tmp_path, ShellWorkload(submit_carrier="orvix"))
+        assert 'orvix submit --scheduler "%ORVIX_SCHEDULER%" "%ECF_JOB%"' in defs
+        assert 'orvix kill "%ECF_JOB%.info.yaml"' in defs
         assert "ORVIX_SCHEDULER 'local'" in defs
-        assert "%ECF_JOB% 1> %ECF_JOBOUT%" not in defs
+        assert "%ECF_JOBOUT%" not in defs
 
-    def test_direct_carrier_keeps_plain_commands(self):
-        defs = _render_task_def(ShellWorkload())
-        assert "%ECF_JOB% 1> %ECF_JOBOUT% 2>&1" in defs
+    def test_direct_carrier_keeps_plain_commands(self, tmp_path):
+        defs = _render_task_def(tmp_path, ShellWorkload())
+        assert '"%ECF_JOB%" 1> "%ECF_JOBOUT%" 2>&1' in defs
         assert "kill -15 %ECF_RID%" in defs
         assert "ORVIX" not in defs
+
+    def test_invalid_local_carrier_cannot_select_direct(self, tmp_path):
+        workload = ShellWorkload().model_copy(update={"submit_carrier": "slsubmit6"})
+        with pytest.raises(ValueError, match="shell workload.*slsubmit6"):
+            _render_task_def(tmp_path, workload)

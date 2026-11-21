@@ -11,31 +11,18 @@ if TYPE_CHECKING:
     from takflow.jobspec import TaskResource
 
 
-def _is_ecflow(engine: "WorkflowEngine") -> bool:
-    return engine.backend_type == "ecflow"
-
-
 def slsubmit6_serial_job(
     engine: "WorkflowEngine",
     class_name: Optional[str] = None,
     wckey: Optional[str] = None,
 ) -> Dict[str, str]:
     """Return slsubmit6 carrier serial job variables/commands."""
-    if _is_ecflow(engine):
-        params = {
-            "ECF_JOB_CMD": (
-                "slsubmit6 %ECF_JOB% %ECF_NAME% %ECF_TRIES% "
-                "%ECF_TRYNO% %ECF_HOST% %ECF_PORT%"
-            ),
-            "ECF_KILL_CMD": (
-                "slcancel4 %ECF_RID% %ECF_NAME% %ECF_HOST% %ECF_PORT%"
-            ),
-        }
-    else:
-        params = {
-            "TAKLER_SHELL_JOB_CMD": "sbatch {{ TAKLER_JOB }}",
-            "TAKLER_SHELL_KILL_CMD": "scancel {{ TAKLER_RID }}",
-        }
+    if engine.backend_type != "ecflow":
+        raise ValueError(f"{engine.backend_type} does not support slsubmit6. Use orvix for scheduled jobs.")
+    params = {
+        "ECF_JOB_CMD": 'slsubmit6 "%ECF_JOB%" "%ECF_NAME%" "%ECF_TRIES%" "%ECF_TRYNO%" "%ECF_HOST%" "%ECF_PORT%"',
+        "ECF_KILL_CMD": 'slcancel4 "%ECF_RID%" "%ECF_NAME%" "%ECF_HOST%" "%ECF_PORT%"',
+    }
     if class_name is not None:
         params["QUEUE"] = class_name
     if wckey is not None:
@@ -51,27 +38,9 @@ def slsubmit6_parallel_job(
     wckey: Optional[str] = None,
 ) -> Dict[str, str]:
     """Return slsubmit6 carrier parallel job variables/commands."""
-    if _is_ecflow(engine):
-        params = {
-            "ECF_JOB_CMD": (
-                "slsubmit6 %ECF_JOB% %ECF_NAME% %ECF_TRIES% "
-                "%ECF_TRYNO% %ECF_HOST% %ECF_PORT%"
-            ),
-            "ECF_KILL_CMD": (
-                "slcancel4 %ECF_RID% %ECF_NAME% %ECF_HOST% %ECF_PORT%"
-            ),
-        }
-    else:
-        params = {
-            "TAKLER_SHELL_JOB_CMD": "sbatch {{ TAKLER_JOB }}",
-            "TAKLER_SHELL_KILL_CMD": "scancel {{ TAKLER_RID }}",
-        }
+    params = slsubmit6_serial_job(engine, class_name, wckey)
     params["NODES"] = str(nodes)
     params["TASKS_PER_NODE"] = str(tasks_per_node)
-    if class_name is not None:
-        params["QUEUE"] = class_name
-    if wckey is not None:
-        params["WCKEY"] = wckey
     return params
 
 

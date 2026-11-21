@@ -172,8 +172,12 @@ def preflight_generation(
     if kind == "slurm":
         if workload.scheduler not in ("slurm", "donau"):
             report.fail("GEN_SCHEDULER_UNSUPPORTED", stage, "workload.scheduler", "scheduler is not supported")
-        if workload.submit_carrier == "slsubmit6" and workload.scheduler != "slurm":
-            report.fail("GEN_COMBINATION_UNSUPPORTED", stage, "workload", "slsubmit6/sbatch requires the slurm scheduler")
+        if workload.submit_carrier == "slsubmit6":
+            if mode == "takler":
+                report.fail("GEN_COMBINATION_UNSUPPORTED", stage, "workload.submit_carrier",
+                            "takler does not support slsubmit6. Use orvix for scheduled jobs.")
+            if workload.scheduler != "slurm":
+                report.fail("GEN_COMBINATION_UNSUPPORTED", stage, "workload", "slsubmit6/sbatch requires the slurm scheduler")
     if mode != "shell":
         from takflow.flow import WorkflowBackend
         if mode == "takler":

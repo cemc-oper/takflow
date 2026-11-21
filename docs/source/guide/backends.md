@@ -76,18 +76,10 @@ set_resource_variables(task, tr)
 | `orvix` | `#ORVIX key=value` 指令 + `orvix submit` | `mcv-workflow` 默认 |
 | `slsubmit6` | `%QUEUE%` / `%NODES%` / `%WCKEY%` 变量 + `slsubmit6` | `gfs-post` / `meso-post` 默认 |
 
-两种 carrier 使用相同的 `TaskResource` 输入，切换只需改 YAML 中的 `workload.submit_carrier`。
+ecFlow 的两种载体使用相同的 `TaskResource` 输入。takler 的调度任务使用 `orvix`，配置 `slsubmit6` 会在构建定义前报错。
 
-`set_runtime` 按 carrier 注入的提交/终止命令：
+- **ORVIX** 从节点继承 `ORVIX_SCHEDULER`。ecFlow 提交命令为 `orvix submit --scheduler "%ORVIX_SCHEDULER%" "%ECF_JOB%"`，取消命令为 `orvix kill "%ECF_JOB%.info.yaml"`。takler 在每次 attempt 展开 `TAKLER_JOB`、继承的 scheduler 和该 job 对应的 `.info.yaml`。当前 takler 提供取消命令变量，引擎发起作业取消仍待上游入口。
+- **ecFlow 历史 Slurm 载体**通过 `slsubmit6` 提交，使用 `slcancel4` 和本次作业的 `ECF_RID` 取消。
+- **本地任务**省略载体或选择 `direct` 时直接执行 job，选择 `orvix` 时通过 ORVIX 的 local 后端提交。
 
-- **`orvix` 载体**：ecFlow 下设 `ECF_JOB_CMD=orvix submit --scheduler %ORVIX_SCHEDULER% %ECF_JOB%`、
-  `ECF_KILL_CMD=orvix kill %ECF_JOB%.info.yaml`（takler 下对应 `TAKLER_SHELL_JOB_CMD`/
-  `TAKLER_SHELL_KILL_CMD`）；`ORVIX_SCHEDULER` 由 workload 的 `scheduler` 字段推导为 suite 变量。
-- **`slsubmit6` 载体**在选定的 ecFlow 节点设置 `ECF_JOB_CMD=slsubmit6 ...` 和 `ECF_KILL_CMD=slcancel4 ...`。
-
-两种载体的下级任务继承这些命令。配置任务资源时可以在 suite、family 或 task 声明队列、墙钟、内存、并行规模和 requeue。字段选择及模板回退见[作业资源](jobspec.md)。
-
-载体与后端的组合不表示提交语义完全等价：orvix 的 ecFlow/takler 命令分别由现有生成契约覆盖；
-`slsubmit6` 的 takler 分支当前使用 `TAKLER_SHELL_JOB_CMD=sbatch ...` 和
-`TAKLER_SHELL_KILL_CMD=scancel ...`，属于**语义不同**，不宣称与 ecFlow 的 slsubmit6/slcancel4
-链路等价。资源载体测试不替代真实调度器提交验证。
+下级任务可继承提交和取消命令。队列、时限、内存、并行规模及 requeue 可以声明在 suite、family 或 task 上。[资源字段与回退](jobspec.md)

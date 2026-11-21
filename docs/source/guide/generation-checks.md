@@ -49,7 +49,7 @@ else:
 
 `required_operations` 使用现有 WorkflowBackend 方法名，如 `add_label`。`WorkflowBackend.unsupported_operations` 与 TaklerBackend 的同名集合反映[后端矩阵](backends.md)中的明确限制；takler 的 add_label/add_late/add_repeat_day 会在声明时提前拒绝，原方法仍按原契约抛 NotImplementedError。没有领域声明的其他复杂需求仍由原构图/引擎检查，不为了预检重写领域图。
 
-共享组合检查区分 shell 顺序模式与 ecFlow/takler 后端，校验 workload 的实际 carrier；slsubmit6/sbatch 仅用于 slurm，不能与 donau scheduler 混用。takler 的 slsubmit6 分支仍是原有 sbatch/scancel，保留与 ecFlow slsubmit6/slcancel4 的语义差异；预检不将二者判为运行等价。应用自己的开关规则和 warning 保留，例如 TYM shell 忽略 graph/scheduling 而仍借 cycles 形成时长表。
+共享组合检查在生成前拒绝 takler 调度任务配置 `slsubmit6`，诊断为 `GEN_COMBINATION_UNSUPPORTED`，字段为 `workload.submit_carrier`。使用 `orvix` 可以选择 Slurm 或 Donau。ecFlow 与已有直接 Slurm runner 的历史配置 `slsubmit6` 仅适用于 Slurm。本地 workload 的配置模型只接受 `direct` 和 `orvix`。应用自己的开关规则和 warning 保留，例如 TYM shell 忽略 graph/scheduling 而仍借 cycles 形成时长表。
 
 ## 引用、模板和路径
 

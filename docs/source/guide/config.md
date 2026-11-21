@@ -131,7 +131,7 @@ workload:
 |---|---|---|
 | `project` | 必填 | 项目关键字，映射到 Slurm `--wckey`。旧配置仍可单独填写 `wckey`，配置模型按 `project` 导出 |
 | `scheduler` | `slurm` | orvix 目标调度器:`slurm` / `donau` |
-| `submit_carrier` | `orvix` | 资源载体:`orvix`(默认) / `slsubmit6` |
+| `submit_carrier` | `orvix` | takler 调度任务使用 ORVIX。ecFlow 和已有直接 Slurm runner 可显式选择历史值 `slsubmit6`，此时 scheduler 为 `slurm` |
 | `default_serial_queue` | `serial` | 串行任务默认队列 |
 | `default_parallel_queue` | `normal` | 并行任务默认队列 |
 | `application` | None | 应用标签(映射到 slurm `--comment`) |
@@ -143,7 +143,7 @@ workload:
   workload_type: shell
 ```
 
-无调度器，任务直接以 shell 脚本运行。
+省略 `submit_carrier` 或显式选择 `direct` 时直接在本地执行，选择 `orvix` 时使用 ORVIX 的 local 后端。
 
 ## 在应用中定义配置
 

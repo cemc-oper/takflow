@@ -102,16 +102,13 @@ def shell_job(engine: "WorkflowEngine") -> Dict[str, str]:
     """Return shell-mode job submission/kill commands."""
     if _is_ecflow(engine):
         return {
-            "ECF_JOB_CMD": "%ECF_JOB% 1> %ECF_JOBOUT% 2>&1",
+            "ECF_JOB_CMD": '"%ECF_JOB%" 1> "%ECF_JOBOUT%" 2>&1',
             "ECF_KILL_CMD": "kill -15 %ECF_RID%",
         }
-    from takler.tasks.shell.constant import (
-        DEFAULT_TAKLER_SHELL_JOB_CMD,
-        DEFAULT_TAKLER_SHELL_KILL_CMD,
-    )
+    from takler.tasks.shell.constant import DEFAULT_TAKLER_SHELL_KILL_CMD
 
     return {
-        "TAKLER_SHELL_JOB_CMD": DEFAULT_TAKLER_SHELL_JOB_CMD,
+        "TAKLER_SHELL_JOB_CMD": "{{ TAKLER_JOB | shquote }} 1> {{ TAKLER_JOBOUT | shquote }} 2>&1",
         "TAKLER_SHELL_KILL_CMD": DEFAULT_TAKLER_SHELL_KILL_CMD,
     }
 
@@ -135,10 +132,13 @@ def set_runtime(
         # Host-local task. Under the orvix carrier submit it through the
         # orvix local backend (orvix_job pins ORVIX_SCHEDULER=local on the
         # node); otherwise run it directly.
-        if getattr(workload_config, "submit_carrier", "direct") == "orvix":
+        carrier = getattr(workload_config, "submit_carrier", "direct")
+        if carrier == "orvix":
             node.add_variables(orvix_job(engine, "local"))
-        else:
+        elif carrier == "direct":
             node.add_variables(shell_job(engine))
+        else:
+            raise ValueError(f"shell workload does not support submit carrier: {carrier}")
         return
 
     if workload_config.workload_type != "slurm":

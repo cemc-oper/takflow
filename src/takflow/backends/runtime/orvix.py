@@ -29,15 +29,13 @@ def orvix_job(engine: "WorkflowEngine", scheduler: str) -> Dict[str, str]:
     """
     if _is_ecflow(engine):
         return {
-            "ECF_JOB_CMD": (
-                f"orvix submit --scheduler %ORVIX_SCHEDULER% %ECF_JOB%"
-            ),
-            "ECF_KILL_CMD": "orvix kill %ECF_JOB%.info.yaml",
+            "ECF_JOB_CMD": 'orvix submit --scheduler "%ORVIX_SCHEDULER%" "%ECF_JOB%"',
+            "ECF_KILL_CMD": 'orvix kill "%ECF_JOB%.info.yaml"',
             "ORVIX_SCHEDULER": scheduler,
         }
     # takler
     return {
-        "TAKLER_SHELL_JOB_CMD": f"orvix submit --scheduler {scheduler} {{{{ TAKLER_JOB | shquote }}}}",
+        "TAKLER_SHELL_JOB_CMD": "orvix submit --scheduler {{ ORVIX_SCHEDULER | shquote }} {{ TAKLER_JOB | shquote }}",
         "TAKLER_SHELL_KILL_CMD": 'orvix kill {{ (TAKLER_JOB ~ ".info.yaml") | shquote }}',
         "ORVIX_SCHEDULER": scheduler,
     }
