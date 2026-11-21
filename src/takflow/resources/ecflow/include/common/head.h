@@ -8,6 +8,12 @@ export ECF_PASS="%ECF_PASS%"
 export ECF_TRYNO="%ECF_TRYNO%"
 export ECF_JOBOUT="%ECF_JOBOUT%"
 export ECF_RID="${SLURM_JOB_ID:-$$}"
+if [ "$ECF_RID" = 0 ]; then
+    ECF_RID=$$
+fi
+if [ -n "${HOME:-}" ]; then
+    PATH="$PATH:$HOME/bin"
+fi
 
 ecf_phase=init
 ecf_signals='1 2 3 4 5 6 7 8 10 12 13 15'
