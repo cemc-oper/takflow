@@ -1,4 +1,4 @@
-"""Execute rendered invocations: exit codes must reach the ecFlow owner once."""
+"""Execute business invocations and verify the parent job receives the script status."""
 
 import os
 import shutil
@@ -123,14 +123,13 @@ def test_arguments_are_literal_and_do_not_change_parent(tmp_path, shell, mode):
 
 
 @pytest.mark.parametrize("workflow", ["shell", "takler"])
-@pytest.mark.parametrize("mode", ["inline", "external"])
-def test_other_backends_keep_existing_output(tmp_path, workflow, mode):
-    rendered, output = render(tmp_path, "exit 0", mode, workflow=workflow)
-    expected = (
-        (output / "scripts/business.sh").read_text() if mode == "inline"
-        else "${OUTPUT_REPO_BASE}/scripts/business.sh"
-    )
-    assert rendered.endswith(expected)
+def test_external_script_path_is_one_argument_in_legacy_renderer(tmp_path, workflow):
+    rendered, output = render(tmp_path, "echo business", "external", workflow=workflow,
+                              script_path='scripts/model "step".sh')
+    result = subprocess.run(["bash"], input=rendered, text=True, capture_output=True,
+                            env={**os.environ, "OUTPUT_REPO_BASE": str(output)}, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "business\n"
 
 
 def test_include_raw_keeps_same_shell_semantics(tmp_path, shell):
@@ -138,3 +137,101 @@ def test_include_raw_keeps_same_shell_semantics(tmp_path, shell):
     rendered, output = render(tmp_path, "loaded=yes", "inline", template=template)
     _, calls = execute(tmp_path, shell, rendered, output)
     assert calls == ["--init=test", "--complete"]
+
+
+BUSINESS_SCRIPT = "scripts/on/model's step.sh"
+BUSINESS_ARGUMENT = "two words ' $(printf expanded) {{ RUN_TAG }}"
+
+
+def build_business_workflow(tmp_path, workflow, mode):
+    from takflow.build import build
+    from test_build import application, data, put
+
+    source = tmp_path / "resources"
+    output = tmp_path / "workflow output"
+    put(source, BUSINESS_SCRIPT, """#!/bin/bash -f
+if [[ $BUSINESS_STATUS == recover ]]; then
+    [[ ! -o errexit && ! -o nounset && ! -o pipefail ]] || exit 8
+    false
+    BUSINESS_STATUS=0
+fi
+set -e
+files=(one two)
+if [[ -o noglob ]]; then echo shebang-flag; fi
+echo "$BUSINESS_INPUT | ${#files[@]} | {{ RUN_TAG }}"
+if (( $# )); then
+    [[ $# == 2 && -z $2 ]]
+    echo "$1"
+fi
+cd /
+export BUSINESS_INPUT=changed
+set -- changed
+set +u
+trap 'echo child-exit' EXIT
+if [[ $BUSINESS_STATUS == errexit ]]; then
+    (exit 9)
+fi
+exit "$BUSINESS_STATUS"
+""")
+    if workflow == "takler":
+        put(source, "takler/include/env.sh", 'export BUSINESS_INPUT="{{ RUN_TAG }}"\n')
+        setup = '{% include "env.sh" %}\n'
+    else:
+        setup = 'export BUSINESS_INPUT="$RUN_TAG"\n'
+    put(source, "scripts/on/setup.sh", setup)
+    put(source, "config/config.sh.j2", "# domain configuration\n")
+    put(source, "templates/runner.sh.j2", '#!/bin/bash\nexec "{{ paths.jobs_dir }}/on/task.sh"\n')
+    put(source, "jobs/on/task.sh.j2", f"""#!/bin/bash
+set -eu
+set +f
+trap 'echo parent-exit:$?' EXIT
+. "{{{{ paths.config_file }}}}"
+{{{{ include_raw('scripts/on/setup.sh') }}}}
+if [[ $BUSINESS_STATUS == recover ]]; then
+    set +eu
+    set +o pipefail
+fi
+parent_dir=$PWD
+parent_options=$-
+{{{{ invoke_script({BUSINESS_SCRIPT!r}) }}}}
+echo next-step
+set -- owner
+{{{{ invoke_script({BUSINESS_SCRIPT!r}, {BUSINESS_ARGUMENT!r}, '') }}}}
+[[ $PWD == "$parent_dir" && $- == "$parent_options" ]]
+[[ $BUSINESS_INPUT == "$RUN_TAG" && $# == 1 && $1 == owner ]]
+echo done
+""")
+
+    def suite_builder(config, engine):
+        suite = engine.Suite(config.workflow_name)
+        suite.add_variables({"TAKLER_HOME": str(output / "home"),
+                             "TAKLER_INCLUDE": str(output / "takler/include")})
+        suite.add_task("run").add_variable("TAKLER_SCRIPT", str(output / "jobs/on/task.sh"))
+        return suite
+
+    app = application(source, suite_builder=suite_builder, variables=lambda config: {"RUN_TAG": "from-suite"})
+    with app.prepare(data(output, workflow, mode, workflow_name="suite", machine_name=None)) as context:
+        return build(context).workflow_output
+
+
+def check_business_job(tmp_path, job, mode):
+    script = tmp_path / "workflow output" / BUSINESS_SCRIPT
+    line = "from-suite | 2 | {{ RUN_TAG }}"
+    called = (["shebang-flag"] if mode == "external" else []) + [line]
+    for status, rc in (("0", 0), ("7", 7), ("errexit", 9), ("recover", 0)):
+        env = {**os.environ, "BUSINESS_STATUS": status}
+        direct = subprocess.run([script], cwd=tmp_path, env={**env, "BUSINESS_INPUT": "from-suite"},
+                                text=True, capture_output=True, timeout=10)
+        assert direct.returncode == rc, direct.stderr
+        assert direct.stdout.splitlines() == ["shebang-flag", line, "child-exit"]
+
+        run = subprocess.run([job], cwd=tmp_path, env=env, text=True, capture_output=True, timeout=10)
+        assert run.returncode == rc, run.stderr
+        continued = ["next-step", *called, BUSINESS_ARGUMENT, "child-exit", "done"] if rc == 0 else []
+        assert run.stdout.splitlines() == [*called, "child-exit", *continued, f"parent-exit:{rc}"]
+
+
+@pytest.mark.parametrize("mode", ["inline", "external"])
+def test_shell_business_job(tmp_path, mode):
+    runner = build_business_workflow(tmp_path, "shell", mode)
+    check_business_job(tmp_path, runner, mode)

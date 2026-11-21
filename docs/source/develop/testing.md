@@ -32,7 +32,7 @@ ORVIX_BIN=/path/to/orvix pytest tests/test_conformance.py
 |---|---|---|
 | `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试。必测入口覆盖公共配置、jobspec、serializer、标准 CLI／管线、有效配置／扩展组合、可选输入、失败恢复及 Bash 外部脚本的字面路径与参数 |
 | `conformance` | `spec/jobspec/ORVIX_VERSION` 的完整 commit，使用该源码的 go.mod；Python 依赖消费框架 uv.lock | 原有18文件 vendor 对照与全部向量/golden 对拍；没有 binary、少 case、skip 或漂移均失败 |
-| `takler` | `spec/takler/TAKLER_VERSION` 的完整 commit、该修订自身 uv.lock、Python3.13；复用本次 conformance job 的已验证 orvix artifact | 核对 checkout HEAD/clean、实际模块原点与 Scheduler 导入；9函数12case覆盖完整管线、定义 export/parse/build/load、job render、orvix/direct/slsubmit6 的 submit/kill 命令合同；全数执行，零skip/xfail |
+| `takler` | `spec/takler/TAKLER_VERSION` 的完整 commit、该修订自身 uv.lock、Python3.13；复用本次 conformance job 的已验证 orvix artifact | 核对 checkout HEAD、工作区状态、模块来源和 Scheduler 导入。14 项用例覆盖标准构建、定义加载、原生 job 创建、inline／external 的本地 Bash 执行，以及 orvix／direct／slsubmit6 的提交和取消命令。必测用例全部执行 |
 | `native-ecflow` | ubuntu-24.04 的 `python3-ecflow=5.12.0-1build3`，系统 Python3.12 ABI、API 5.12.0 | 8 项原生用例覆盖定义读取、job 展开、缺 include、同目录撤下组件覆盖、ORVIX 资源继承、machine 更新，以及 inline／external 各自展开后的 Bash 调用。缺包或版本不符时门禁失败 |
 | `build` | 从 sdist 构建 wheel，隔离环境安装 wheel 与 toyflow | 三个冒烟脚本检查公共API/包数据、标准CLI及toyflow生成；必须来自当前site-packages，拒绝editable或PYTHONPATH源码遮蔽 |
 
@@ -42,7 +42,7 @@ orvix artifact 仅在 vendor 和严格对拍通过后上传；takler job 依赖�
 
 takler自身的lock不必包含框架独有依赖，例如Click。锁定安装takler后，正常解析并安装框架所需依赖，再运行uv pip check；不能用--no-deps留下缺失依赖。记录实际安装版本，并核对原takler锁定包未被无意升级。
 
-必测入口和专用线数量以`scripts/run_contract_tests.py`为准；当前orvix为16个向量/调度器case、takler为9个入口/12case。完整基础线的通过/可选跳过总数会随测试增长，验收应记录实际收集结果。基础环境不安装jsonschema时，其可选观测schema检查可以跳过；启用该能力的验收须另用声明的观测依赖实际运行，不能将跳过算作通过。
+必测入口和用例数量见 `scripts/run_contract_tests.py`。基础线从标准 Shell runner 执行业务，takler 专用线通过固定版本的 `create_job_script()` 创建最终脚本并在本地执行，两者共用业务输入和退出断言。完整基础线的通过和可选跳过总数随测试增长，验收应记录实际收集结果。启用可选的观测 schema 检查时，需安装声明的 jsonschema 依赖并实际运行。
 
 ### 本地复查
 

@@ -428,17 +428,24 @@ def render_jobs_from_directory(
     def invoke_script(script_path: str, *args: str) -> str:
         """Invoke a business script; arguments are literal strings, not shell code.
 
-        ecFlow callbacks belong to the parent job. Keep exits, shell options,
-        variables and directory changes inside the business subshell. Do not
+        Callbacks belong to the parent job. Keep exits, shell options,
+        variables and directory changes inside the business invocation. Do not
         put this command in an if/AND/OR list: that can disable errexit inside.
         Configuration fragments should use include_raw instead.
         """
         arguments = " ".join(shlex.quote(arg) for arg in args)
-        if config.workflow_mode == "ecflow":
+        workflow = config.workflow_mode
+        inline = config.script_invoke_mode == "inline"
+        if workflow == "ecflow":
             # ecFlow substitutes %NAME% even inside shell quotes. %% is a literal %.
             arguments = arguments.replace("%", "%%")
-        if config.script_invoke_mode == "inline":
+        elif workflow == "takler" and args:
+            # Pass the quoted shell words through takler's Jinja render as a string literal.
+            arguments = "{{ " + repr(arguments) + " }}"
+        if inline:
             invocation = include_raw(script_path)
+            if workflow == "takler":
+                invocation = "{% raw %}\n" + invocation + "\n{% endraw %}"
             if args:
                 invocation = f"set -- {arguments}\n{invocation}"
         else:
@@ -447,15 +454,14 @@ def render_jobs_from_directory(
             runtime_path = _runtime_reference(script_path)
             if script_input_check is not None and not runtime_path:
                 script_input_check(script_path)
-            invocation = f"${{OUTPUT_REPO_BASE}}/{script_path}"
-            if environment is not None or (config.workflow_mode == "ecflow" and not runtime_path):
-                invocation = '"${OUTPUT_REPO_BASE}"/' + shlex.quote(script_path)
-            elif config.workflow_mode == "ecflow":
+            if environment is None and runtime_path:
                 # The legacy renderer allows runtime references in the path.
-                invocation = f'"{invocation}"'
+                invocation = f'"${{OUTPUT_REPO_BASE}}/{script_path}"'
+            else:
+                invocation = '"${OUTPUT_REPO_BASE}"/' + shlex.quote(script_path)
             if args:
                 invocation += f" {arguments}"
-        if config.workflow_mode == "ecflow":
+        if inline or workflow == "ecflow":
             # A comment-only marker task still needs a command inside (...).
             return f"(\n:\n{invocation}\n)\n"
         return invocation

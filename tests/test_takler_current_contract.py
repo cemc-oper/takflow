@@ -25,6 +25,7 @@ from takflow.flow import WorkflowEngine  # noqa: E402
 from takflow.jobspec import TaskResource  # noqa: E402
 from takflow.jobspec.model import ResourceSpec  # noqa: E402
 from takflow.jobspec.render import render_resource_block  # noqa: E402
+from test_job_execution import BUSINESS_SCRIPT, build_business_workflow, check_business_job  # noqa: E402
 
 
 def _golden(tmp_path: Path, *, scheduler="local"):
@@ -61,6 +62,25 @@ def _load_flow(output: Path):
     bunch = Bunch()
     Scheduler(bunch).run_command_load(LoadCommand(flow_bytes=output.read_bytes()))
     return bunch.find_node("/suite")
+
+
+@pytest.mark.parametrize("mode", ["inline", "external"])
+def test_takler_preprocesses_and_runs_business_job(tmp_path, mode):
+    flow = _load_flow(build_business_workflow(tmp_path, "takler", mode))
+    flow.begin()
+    task = flow.find_node("/suite/run")
+    task.increment_try_no()
+    source = Path(task.script_path).read_text()
+    business = (tmp_path / "workflow output" / BUSINESS_SCRIPT).read_text()
+    assert '{% include "env.sh" %}' in source
+
+    task.create_job_script()
+    job = Path(task.job_path)
+    assert ("{% raw %}\n" + business + "\n{% endraw %}" in source) == (mode == "inline")
+    rendered = job.read_text()
+    assert (business in rendered) == (mode == "inline")
+    assert 'export BUSINESS_INPUT="from-suite"' in rendered
+    check_business_job(tmp_path, job, mode)
 
 
 def test_backend_does_not_create_legacy_application_bunch(monkeypatch):

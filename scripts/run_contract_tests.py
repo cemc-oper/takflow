@@ -42,6 +42,8 @@ REQUIRED = {
         "tests/test_build.py::test_context_suite_builder_receives_the_prepared_context",
         "tests/test_flow_core.py::test_ecflow_script_command_quotes_a_real_local_filename",
         "tests/test_job_execution.py::test_arguments_are_literal_and_do_not_change_parent[bash-external]",
+        "tests/test_job_execution.py::test_shell_business_job[inline]",
+        "tests/test_job_execution.py::test_shell_business_job[external]",
         "tests/test_cli.py::test_cli_and_python_full_build_are_equivalent[shell]",
         "tests/test_cli.py::test_controlled_failures_and_partial_results[partial]",
         "tests/test_cli.py::test_single_stages_share_preconditions_and_invalidate_manifest",
@@ -66,6 +68,8 @@ REQUIRED = {
         "test_suite_name_is_caller_supplied",
         "test_saved_suite_builds_and_loads_current_definition",
         "test_rendered_orvix_commands_bind_attempt_and_quote_paths",
+        "test_takler_preprocesses_and_runs_business_job[inline]",
+        "test_takler_preprocesses_and_runs_business_job[external]",
         "test_real_orvix_generate_accepts_rendered_job_without_submit",
         "test_scheduler_orvix_commands_render_without_submission",
         "test_legacy_carrier_commands_render_without_submission",
@@ -197,7 +201,7 @@ def main():
         from takflow.spec.jobspec.conformance import CASES, SCHEDULERS
         expected = len(CASES) * (1 + len(SCHEDULERS))
     elif args.suite == "takler":
-        expected = 12
+        expected = 14
     elif args.suite == "native":
         expected = len(required)
     targets = ["tests"] if args.suite == "base" else sorted({name.split("::", 1)[0] for name in required})

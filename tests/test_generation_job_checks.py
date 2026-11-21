@@ -74,7 +74,7 @@ def test_external_script_requires_execute_permission_but_inline_only_reads(tmp_p
     assert caught.value.diagnostic.stage == "job.preflight"
     assert not (output / "jobs").exists()
     assert render(root, output, settings=config(script_invoke_mode="inline")) is None
-    assert (output / "jobs/task.sh").read_text() == "echo business"
+    assert (output / "jobs/task.sh").read_text().splitlines() == ["(", ":", "echo business", ")"]
 
 
 @pytest.mark.parametrize("reference", ["../outside.sh", "/outside.sh", "../${DYNAMIC_SCRIPT}"])

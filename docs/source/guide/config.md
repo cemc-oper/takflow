@@ -89,6 +89,29 @@ shebang 选择解释器及其选项。两种模式生成的子 Shell 都以 `:` 
 传入字面参数。空字符串、空格、引号、`$(...)` 和 `%NAME%` 在原生 job 中
 保留原值和参数边界。参数写在 helper 调用内。
 
+### takler 和 Shell 的业务脚本调用
+
+这两种后端的 `invoke_script()` 也将 inline 业务放进独立的前台子 Shell。
+脚本 `exit 0` 后，父作业继续下一步。脚本返回非零时，调用保留原状态，
+父作业可用自己的 `set -e` 或错误处理收尾。external 直接执行输出目录中的脚本，
+使用它自己的 shebang。两种方式均可通过导出的环境变量接收业务输入。
+
+takler 会再用 Jinja 展开生成的 job 模板。helper 为 inline 正文保留一对
+`{% raw %}` 和 `{% endraw %}`，使 Bash 的 `${#files[@]}` 及作为数据的
+`{{ RUN_TAG }}` 在最终脚本中保持原文。显式传入的字面参数也会原样交给脚本。
+需要 takler 处理的变量和 include 放在业务调用外。这个例子将 `TAKLER_INCLUDE`
+设为工作流输出根目录。源模板保留环境头的 include，供 takler 在创建 job 时展开。
+
+```jinja2
+{% raw %}
+{% include "takler/include/env.sh" %}
+{% endraw %}
+{{ invoke_script("scripts/model/run.sh") }}
+```
+
+普通 `include_raw()` 片段在父 Shell 生效，其中保留的引擎表达式由 takler 展开。
+业务正文中含有 raw 结束标记时，可调整片段边界或采用 external。
+
 ## 负载配置
 
 ### `SlurmWorkload`
