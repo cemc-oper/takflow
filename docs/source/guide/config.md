@@ -71,20 +71,23 @@ post_resource:
 
 ### ecFlow 业务脚本执行边界
 
-ecFlow 下，`invoke_script()` 对 inline 和 external 都生成独立的 `( ... )`
-子 shell。业务 `exit 0` 返回父作业并继续执行 tail；非零退出由父作业的
-`set -e` 和退出 trap 上报 abort。head/tail 统一拥有 init/complete/abort，
-业务脚本不得重复发送终态通知。括号内开头的 `:` 让仅含注释的占位任务也能执行。
+普通 ecFlow 作业通过导出的环境变量向脚本提供业务输入。inline 将正文放在
+`%nopp` 和 `%end` 之间，由父作业的解释器在子 Shell 中执行。需要 ecFlow
+展开的变量和 include 放在保护区外。external 从输出目录执行脚本，由脚本的
+shebang 选择解释器及其选项。两种模式生成的子 Shell 都以 `:` 开头，
+因此只有注释的占位任务也能正常返回。需要在父作业中设置环境或定义函数的片段用
+`include_raw()` 或 `source` 导入。
 
-业务中的变量赋值、`cd` 和 shell 选项修改不会传回父作业；后台进程必须在
-业务内部等待并检查结果。不要把调用放入 `if`、`&&`、`||` 条件上下文，
-否则可能抑制 `set -e`。external 仍按脚本自身解释器和错误处理规则执行，
-不自动追加 `bash -e`。shell/takler 后端保持原有调用方式。
+两种模式都隔离业务的 `exit`、`cd`、变量、位置参数、Shell 选项和 trap。
+公共 head／tail 负责 init、complete 和 abort。业务返回 0 后继续执行下一步，
+业务返回 7 时父作业上报 abort 并以 7 退出。业务脚本自行处理可恢复的错误，
+也需要自行等待和检查后台任务。
+让 `invoke_script()` 作为独立的前台命令运行，将它放在 `if` 条件或
+`&&`、`||` 的条件位置可能抑制脚本所依赖的 `set -e`。
 
-模板可以用 `{{ invoke_script('scripts/check.sh', 'literal-argument') }}`
-传入字面量位置参数；参数由生成器引用，不进行 shell 表达式展开。
-不要在 `{{ invoke_script(...) }}` 后拼接参数。
-配置和函数库需要修改当前 shell 时，继续使用 `include_raw()` 或 `source`。
+已有模板可通过 `{{ invoke_script('scripts/check.sh', 'literal-argument') }}`
+传入字面参数。空字符串、空格、引号、`$(...)` 和 `%NAME%` 在原生 job 中
+保留原值和参数边界。参数写在 helper 调用内。
 
 ## 负载配置
 

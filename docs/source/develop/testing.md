@@ -30,10 +30,10 @@ ORVIX_BIN=/path/to/orvix pytest tests/test_conformance.py
 
 | CI job | 固定来源与环境 | 必测内容及失败条件 |
 |---|---|---|
-| `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试；当前37个必测入口覆盖公共配置、jobspec、serializer、标准CLI/管线、有效配置/扩展组合、可选输入及失败恢复，参数化展开另计 |
+| `test` | Python 3.10/3.11/3.12/3.13；消费本仓库 uv.lock 安装 takflow 与 dev 依赖，不安装 takler/ecFlow | 导入时确认两个可选引擎均不存在，运行完整测试。必测入口覆盖公共配置、jobspec、serializer、标准 CLI／管线、有效配置／扩展组合、可选输入、失败恢复及 Bash 外部脚本的字面路径与参数 |
 | `conformance` | `spec/jobspec/ORVIX_VERSION` 的完整 commit，使用该源码的 go.mod；Python 依赖消费框架 uv.lock | 原有18文件 vendor 对照与全部向量/golden 对拍；没有 binary、少 case、skip 或漂移均失败 |
 | `takler` | `spec/takler/TAKLER_VERSION` 的完整 commit、该修订自身 uv.lock、Python3.13；复用本次 conformance job 的已验证 orvix artifact | 核对 checkout HEAD/clean、实际模块原点与 Scheduler 导入；9函数12case覆盖完整管线、定义 export/parse/build/load、job render、orvix/direct/slsubmit6 的 submit/kill 命令合同；全数执行，零skip/xfail |
-| `native-ecflow` | ubuntu-24.04 的 `python3-ecflow=5.12.0-1build3`，系统 Python3.12 ABI、API 5.12.0 | 6 项原生用例覆盖定义读取、job 展开、缺 include、同目录撤下组件覆盖、ORVIX 资源继承和 machine 更新。缺包或版本不符时门禁失败 |
+| `native-ecflow` | ubuntu-24.04 的 `python3-ecflow=5.12.0-1build3`，系统 Python3.12 ABI、API 5.12.0 | 8 项原生用例覆盖定义读取、job 展开、缺 include、同目录撤下组件覆盖、ORVIX 资源继承、machine 更新，以及 inline／external 各自展开后的 Bash 调用。缺包或版本不符时门禁失败 |
 | `build` | 从 sdist 构建 wheel，隔离环境安装 wheel 与 toyflow | 三个冒烟脚本检查公共API/包数据、标准CLI及toyflow生成；必须来自当前site-packages，拒绝editable或PYTHONPATH源码遮蔽 |
 
 orvix artifact 仅在 vendor 和严格对拍通过后上传；takler job 依赖其成功，下载后核对 pin、SHA-256 并恢复执行权限。没有改用当前 runtime 工作树或浮动 main。升级 pin 必须在权威仓库修复并验收合同，框架不增加一套模拟 runtime 来取得通过。
@@ -84,7 +84,7 @@ cd /tmp
 /tmp/takflow-wheel-smoke/bin/python /path/to/takflow/scripts/smoke_toyflow_wheel.py
 ```
 
-native 包不能与另一 Python ABI 混用；安装不到精确 Ubuntu build 时应报告缺依赖并修复环境，不以 serializer 或 mock 填补 native 结果。CI 的 runner/包版本升级需要显式复验。原生 `.job0` 创建只证明测试夹具的预处理，既没有连接 ecFlow server，也不执行脚本或提交 scheduler。takler 的 submit/kill 字符串合同和 `orvix generate` 同样不代表真实提交；业务 modules/MPI、资料、程序与 C3/C4 资格仍由对应消费者及现场验收负责。
+native 包需要匹配的 Python ABI 和 Ubuntu build，CI 升级版本时需重新验证。原生门禁先通过 `check_job_creation()` 创建 `.job0`。两条业务调用用例随后在本地以 Bash 执行各自的 job，用替身客户端记录回调，断言后续步骤和进程退出码。真实服务回调、调度提交及业务 modules／MPI、资料和 C3／C4 资格由对应消费者及现场验收负责。takler 的 submit／kill 命令和 `orvix generate` 各自验证命令或转换结果。
 
 ## 同步 vendor 副本
 

@@ -324,18 +324,12 @@ class Clock:
 
 
 def _quote(value: str) -> str:
-    """
-    Quote a variable value in single quotes, matching the native ecflow output.
-
-    Values containing single quotes are wrapped in double quotes instead.
-    """
-    if "'" not in value:
+    """Format an edit value for the native definition or the legacy serializer."""
+    if _native_variable_quotes.get() or "'" not in value:
+        # Native ecFlow uses outer single quotes even when the value itself
+        # starts and ends with shell quotes that must reach the generated job.
         return f"'{value}'"
     if '"' not in value:
         return f'"{value}"'
-    if _native_variable_quotes.get():
-        # Native ecFlow delimits values with the first/last quote, preserving
-        # mixed internal quotes literally. Backslash-escaping changes the value.
-        return f"'{value}'"
     escaped = value.replace("'", "\\'")
     return f"'{escaped}'"

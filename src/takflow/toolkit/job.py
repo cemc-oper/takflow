@@ -434,6 +434,9 @@ def render_jobs_from_directory(
         Configuration fragments should use include_raw instead.
         """
         arguments = " ".join(shlex.quote(arg) for arg in args)
+        if config.workflow_mode == "ecflow":
+            # ecFlow substitutes %NAME% even inside shell quotes. %% is a literal %.
+            arguments = arguments.replace("%", "%%")
         if config.script_invoke_mode == "inline":
             invocation = include_raw(script_path)
             if args:
@@ -441,12 +444,14 @@ def render_jobs_from_directory(
         else:
             _check_script_reference(script_path, output_repo_base, config, report,
                                     helper="invoke_script", stage="job.render")
-            if script_input_check is not None and not _runtime_reference(script_path):
+            runtime_path = _runtime_reference(script_path)
+            if script_input_check is not None and not runtime_path:
                 script_input_check(script_path)
             invocation = f"${{OUTPUT_REPO_BASE}}/{script_path}"
-            if environment is not None:
+            if environment is not None or (config.workflow_mode == "ecflow" and not runtime_path):
                 invocation = '"${OUTPUT_REPO_BASE}"/' + shlex.quote(script_path)
             elif config.workflow_mode == "ecflow":
+                # The legacy renderer allows runtime references in the path.
                 invocation = f'"{invocation}"'
             if args:
                 invocation += f" {arguments}"

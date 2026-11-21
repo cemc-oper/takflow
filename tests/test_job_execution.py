@@ -10,16 +10,16 @@ from takflow.config import BaseWorkflowConfig
 from takflow.toolkit import render_jobs_from_directory
 
 
-def render(tmp_path, body, mode, *, workflow="ecflow", template=None):
+def render(tmp_path, body, mode, *, workflow="ecflow", template=None, script_path="scripts/business.sh"):
     repo = tmp_path / "repo"
     output = tmp_path / "output with spaces"
     (repo / "jobs").mkdir(parents=True)
-    (output / "scripts").mkdir(parents=True)
-    script = output / "scripts/business.sh"
+    script = output / script_path
+    script.parent.mkdir(parents=True)
     script.write_text("#!/usr/bin/env bash\n" + body + "\n")
     script.chmod(0o755)
     (repo / "jobs/task.sh.j2").write_text(
-        template or "{{ invoke_script('scripts/business.sh') }}"
+        template or f"{{{{ invoke_script({script_path!r}) }}}}"
     )
     config = BaseWorkflowConfig(
         project_base_dir=str(tmp_path), run_base_dir=str(tmp_path / "run"),
@@ -31,16 +31,16 @@ def render(tmp_path, body, mode, *, workflow="ecflow", template=None):
     return (output / f"jobs/task.{suffix}").read_text(), output
 
 
-def execute(tmp_path, shell, rendered, output):
+def execute(tmp_path, shell, rendered, output, *, expected_status=0):
     # These fixtures contain only nopp/end directives, not includes or variables.
     body = "\n".join(
         line for line in rendered.splitlines() if line not in ("%nopp", "%end")
     )
     wrapper = """set -eu
 ecflow_client() { printf '%s\n' "$*" >> "$CALLBACK_LOG"; }
-ERROR() { set +e; ecflow_client --abort=trap; trap - 0; exit 0; }
-ecflow_client --init=test
+ERROR() { rc=$?; trap - 0; set +e; ecflow_client --abort=trap; exit "$rc"; }
 trap ERROR 0
+ecflow_client --init=test
 parent_dir=$PWD
 parent_value=original
 set -- parent-argument
@@ -58,7 +58,7 @@ exit 0
         cwd=tmp_path,
         env={**os.environ, "OUTPUT_REPO_BASE": str(output), "CALLBACK_LOG": str(log)},
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == expected_status, result.stderr
     return result, log.read_text().splitlines()
 
 
@@ -71,38 +71,39 @@ def shell(request):
 
 
 @pytest.mark.parametrize("mode", ["inline", "external"])
-@pytest.mark.parametrize("body,success", [
-    ("exit 0", True),
-    ("exit 1", False),
-    ("exit 7", False),
-    ("echo business-done", True),
-    ("# Empty marker task", True),
-    ("set -e\nfalse\necho should-not-run", False),
-    ("set +e\nexit 7", False),
-    ("parent_value=changed\ncd /\nexit 0", True),
+@pytest.mark.parametrize("body,rc", [
+    ("exit 0", 0),
+    ("exit 1", 1),
+    ("exit 7", 7),
+    ("echo business-done", 0),
+    ("# Empty marker task", 0),
+    ("set -e\nfalse\necho should-not-run", 1),
+    ("set +e\nexit 7", 7),
+    ("set +e\nfalse\nexit 0", 0),
+    ("parent_value=changed\ncd /\nexit 0", 0),
 ])
-def test_ecflow_callbacks(tmp_path, shell, mode, body, success):
+def test_ecflow_callbacks(tmp_path, shell, mode, body, rc):
     rendered, output = render(tmp_path, body, mode)
-    result, calls = execute(tmp_path, shell, rendered, output)
-    assert calls == ["--init=test", "--complete" if success else "--abort=trap"]
+    result, calls = execute(tmp_path, shell, rendered, output, expected_status=rc)
+    assert calls == ["--init=test", "--complete" if rc == 0 else "--abort=trap"]
     assert "should-not-run" not in result.stdout
 
 
 def test_inline_inherits_errexit(tmp_path, shell):
     rendered, output = render(tmp_path, "false\necho should-not-run", "inline")
-    result, calls = execute(tmp_path, shell, rendered, output)
+    result, calls = execute(tmp_path, shell, rendered, output, expected_status=1)
     assert calls == ["--init=test", "--abort=trap"]
     assert "should-not-run" not in result.stdout
 
 
 @pytest.mark.parametrize("mode", ["inline", "external"])
-@pytest.mark.parametrize("rc", [0, 1])
+@pytest.mark.parametrize("rc", [0, 7])
 def test_multiple_calls_continue_only_after_success(tmp_path, shell, mode, rc):
     template = """{{ invoke_script('scripts/business.sh', 'first') }}
 {{ invoke_script('scripts/business.sh', 'second') }}"""
     body = f'echo "business:$1"\nexit {rc}'
     rendered, output = render(tmp_path, body, mode, template=template)
-    result, calls = execute(tmp_path, shell, rendered, output)
+    result, calls = execute(tmp_path, shell, rendered, output, expected_status=rc)
     assert result.stdout.splitlines() == (
         ["business:first", "business:second"] if rc == 0 else ["business:first"]
     )
@@ -111,9 +112,10 @@ def test_multiple_calls_continue_only_after_success(tmp_path, shell, mode, rc):
 
 @pytest.mark.parametrize("mode", ["inline", "external"])
 def test_arguments_are_literal_and_do_not_change_parent(tmp_path, shell, mode):
+    script = 'scripts/business "step".sh'
     argument = "space ' quote; $(touch UNEXPECTED)"
-    template = "{{ invoke_script('scripts/business.sh', " + repr(argument) + ") }}"
-    rendered, output = render(tmp_path, 'printf "%s\\n" "$1"', mode, template=template)
+    template = f"{{{{ invoke_script({script!r}, {argument!r}) }}}}"
+    rendered, output = render(tmp_path, 'printf "%s\\n" "$1"', mode, template=template, script_path=script)
     result, calls = execute(tmp_path, shell, rendered, output)
     assert result.stdout.strip() == argument
     assert not (tmp_path / "UNEXPECTED").exists()
