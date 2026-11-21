@@ -52,6 +52,7 @@ where = ["src"]
 takflow = [
     "resources/ecflow/include/common/*.h",
     "resources/takler/include/*.sh",
+    "resources/utils/*.sh",
     "spec/**/*.json",
     "spec/**/VERSION",
     "spec/**/ORVIX_VERSION",

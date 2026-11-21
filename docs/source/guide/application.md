@@ -166,7 +166,8 @@ cwd。显式 workflow_repo_base 仅替换 base，扩展仍按自己的有效字�
 产物的 template 指向选中的源文件；成功清单记录相同的层根，不记录模板正文。
 
 多模式应用可声明 `use_public_resources=lambda config: config.workflow_mode == "ecflow"`。
-公共文件包括 `ecflow/include/common/{head,tail}.h` 和 `takler/include/{head,tail}.sh`。沿用普通
+公共文件包括 `ecflow/include/common/{head,tail}.h`、`takler/include/{head,tail}.sh`
+和 `utils/{logger,orvix_functions,run_functions}.sh`。沿用普通
 `resource_entries` 和组件筛选选择要复制的文件。允许只映射其中一个文件。
 同一相对路径的优先级从低到高依次为 takflow、有效应用基础根、应用后续层、扩展层。
 `config.workflow_repo_base_dir` 始终指向有效应用基础根。job 通过工作流输出的 include
@@ -178,6 +179,12 @@ takler 应用启用该资源层后，可将 `TAKLER_INCLUDE` 指向输出的 `ta
 业务调用放在两个块之间。takler 创建 job 时展开这两处 include。公共 head 在 init 前导出任务名、
 本次 attempt UUID 及引擎提供的作业口令，init 的 `--task-id` 使用作业 PID。
 应用定制片段仍按同一路径逐文件覆盖。
+
+顺序执行的 Bash runner 从输出目录显式 source 日志、运行及所选的提交辅助。logger 需要 Bash 4+。
+`run local` 传递业务脚本退出码。`run orvix` 需要运行机 PATH 上的 `orvix` 和 `python3`，
+使用 Python 标准库解析 `orvix status <info.yaml> --format json`。Slurm 和 Donau 确认成功后继续。
+local 只报告进程消失时，runner 提示“无法确认业务结果”并以 6 停止。保留直接 Slurm 的应用须先
+导入自己的 `submit_and_monitor_slurm_job`。Ksh 头尾和各应用的业务顺序保持独立。
 
 选择结果固定在 BuildPaths.resource_layers、BuildContext.outputs 和
 BuildContext.required_machine_fragments；完整与单步构建读取同一结果。
