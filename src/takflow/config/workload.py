@@ -8,9 +8,30 @@ Phase 0; the full config base lands in a later phase.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
+
+
+def nonblank_resource_text(value: Optional[str]) -> Optional[str]:
+    if value is not None and not value.strip():
+        raise PydanticCustomError("resource_blank", "must contain a non-whitespace character")
+    return value
+
+
+def resolve_resource_alias(
+    name: str, value: Optional[str], alias: str, legacy: Optional[str], *, nonblank: bool = False,
+) -> Optional[str]:
+    """Resolve two spellings while both original inputs are still available."""
+    if value is not None and legacy is not None:
+        if nonblank:
+            for spelling, candidate in ((name, value), (alias, legacy)):
+                if isinstance(candidate, str) and not candidate.strip():
+                    raise ValueError(f"{spelling} must contain a non-whitespace character")
+        raise ValueError(f"use only one of {name} and {alias}")
+    return value if value is not None else legacy
 
 
 class BaseWorkload(BaseModel):
@@ -56,13 +77,33 @@ class SlurmWorkload(BaseWorkload):
     """
 
     workload_type: Literal["slurm"] = "slurm"
-    wckey: str
+    project: str
     scheduler: Literal["slurm", "donau"] = "slurm"
     submit_carrier: Literal["orvix", "slsubmit6"] = "orvix"
     default_serial_queue: str = "serial"
     default_parallel_queue: str = "normal"
     #: Optional application label (-> slurm --comment), e.g. "op_grapes_gfs".
     application: Optional[str] = None
+
+    _validate_queues = field_validator("default_serial_queue", "default_parallel_queue")(nonblank_resource_text)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_wckey(cls, data):
+        if isinstance(data, Mapping) and "wckey" in data:
+            values = dict(data)
+            values["project"] = resolve_resource_alias("project", values.get("project"), "wckey", values.pop("wckey"))
+            return values
+        return data
+
+    @property
+    def wckey(self) -> str:
+        """Compatibility spelling for the Slurm project label."""
+        return self.project
+
+    @wckey.setter
+    def wckey(self, value: str) -> None:
+        self.project = value
 
 
 WorkloadType = Annotated[
@@ -75,4 +116,5 @@ __all__ = [
     "ShellWorkload",
     "SlurmWorkload",
     "WorkloadType",
+    "resolve_resource_alias",
 ]

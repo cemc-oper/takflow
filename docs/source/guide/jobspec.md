@@ -9,7 +9,7 @@
 from takflow.config import SlurmWorkload
 from takflow.jobspec import TaskResource, to_orvix_directives
 
-workload = SlurmWorkload(wckey="toyflow")  # 其余字段取默认值
+workload = SlurmWorkload(project="toyflow")  # 其余字段取默认值
 
 tr = TaskResource(
     job_type="parallel",
@@ -39,7 +39,7 @@ print("\n".join(to_orvix_directives(spec)))
 
 - `queue` 缺省时按 `job_type` 取 `workload.default_serial_queue`（serial）或
   `default_parallel_queue`（parallel）；
-- `project` 取自 `workload.wckey`（→ slurm `--wckey`），`application` 取自
+- `project` 取自 `workload.project`（→ Slurm `--wckey`），`application` 取自
   `workload.application`（→ slurm `--comment`）；
 - `requeue=false` 时 slurm 后端发 `--no-requeue`（donau/local 各自映射或忽略）；
 - `nodes`/`ntasks_per_node` 等整数字段编译时转成字符串——指令层不做数值转换，与 orvix
@@ -47,6 +47,10 @@ print("\n".join(to_orvix_directives(spec)))
 
 `to_orvix_directives(spec, conditional_for="slurm")` 可生成条件指令
 `#ORVIX [scheduler=slurm] key=value`，只在指定调度器下生效。
+
+`queue`、`time`、`memory` 要求字符串至少含一个非空白字符。`time="0"`、`memory="0"` 和 `requeue=False` 均保留。模板辅助接受 `queue`/`partition`、`time`/`walltime`、`project`/`wckey`。每对名称最多提供一个非 None 值，同时提供两个值会报错，即使两者相同。
+
+应用可为某个任务的资源字段声明局部缺省。例如 `Annotated[TaskResource, task_resource_defaults(forecast_defaults)]` 中的工厂返回应用自己的 `TaskResource`。仅调整时间时会沿用任务原有的类型与规模。显式切换类型时，旧类型的队列和规模缺省随之退出。允许省略整个字段时，在该字段上配置同一 `default_factory`。这些值供资源编译使用，本级节点变量仍由应用声明。
 
 > **命名冲突（务必注意）：** `TaskResource.job_type`（serial/parallel）是 takflow 的
 > **高层选择器**，只用来决定取哪个默认 queue；它**不**对应 orvix 的 `job-type` 指令

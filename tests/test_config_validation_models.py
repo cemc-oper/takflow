@@ -107,6 +107,52 @@ def test_parallel_resource_accepts_smallest_positive_counts():
     assert spec.ntasks_per_node == "1"
 
 
+@pytest.mark.parametrize("model", [TaskResource, ResourceSpec])
+@pytest.mark.parametrize("field", ["queue", "time", "memory"])
+@pytest.mark.parametrize("value", ["", " \t"])
+def test_blank_resource_text_is_rejected_at_the_field(model, field, value):
+    with pytest.raises(ValidationError) as caught:
+        model(**{field: value})
+    assert caught.value.errors()[0]["loc"] == (field,)
+
+
+@pytest.mark.parametrize("field", ["default_serial_queue", "default_parallel_queue"])
+def test_blank_global_queue_is_rejected_even_if_unused(field):
+    with pytest.raises(ValidationError) as caught:
+        SlurmWorkload(wckey="p", **{field: " \t"})
+    assert caught.value.errors()[0]["loc"] == (field,)
+
+
+@pytest.mark.parametrize("values", [
+    {"project": "p"}, {"wckey": "p"}, {"project": None, "wckey": "p"},
+    {"project": "p", "wckey": None},
+])
+def test_workload_project_round_trip_and_legacy_access(values):
+    workload = SlurmWorkload(**values)
+    assert workload.project == workload.wckey == "p"
+    assert workload.model_dump(exclude_unset=True) == {"project": "p"}
+    assert SlurmWorkload(**workload.model_dump()) == workload
+    workload.wckey = "q"
+    spec = TaskResource(queue=None, time="0", memory="0", requeue=False).compile(workload)
+    assert (spec.project, spec.queue, spec.time, spec.memory, spec.requeue) == (
+        "q", "serial", "0", "0", False,
+    )
+
+
+@pytest.mark.parametrize("values", [
+    {}, {"wckey": None}, {"project": None}, {"project": None, "wckey": None},
+    {"project": "p", "wckey": "p"}, {"project": "p", "wckey": "q"},
+])
+def test_workload_requires_one_project_spelling(values):
+    with pytest.raises(ValidationError):
+        SlurmWorkload(**values)
+
+
+def test_flat_resource_keeps_runtime_expressions_and_metadata():
+    spec = ResourceSpec(queue="%QUEUE%", time="{{ TIME }}", memory="0", application="", project="")
+    assert (spec.queue, spec.time, spec.memory, spec.application, spec.project) == ("%QUEUE%", "{{ TIME }}", "0", "", "")
+
+
 def test_valid_serial_counts_remain_ignored_when_compiled():
     spec = TaskResource(job_type="serial", nodes=99, ntasks_per_node=64).compile(
         SlurmWorkload(wckey="project"),

@@ -51,6 +51,7 @@ _REASONS = {
     "config_date_invalid": ("CONFIG_DATE_INVALID", "must be a real calendar date in YYYYMMDD format"),
     "config_date_order": ("CONFIG_DATE_ORDER", "end_date must be on or after start_date"),
     "resource_positive": ("CONFIG_RESOURCE_POSITIVE", "must be a positive integer or None"),
+    "resource_blank": ("CONFIG_RESOURCE_BLANK", "must contain a non-whitespace character"),
     "extra_forbidden": ("CONFIG_UNKNOWN_FIELD", "unknown configuration field"),
     "missing": ("CONFIG_REQUIRED", "required configuration field is missing"),
     "literal_error": ("CONFIG_CHOICE", "value is not one of the declared choices"),

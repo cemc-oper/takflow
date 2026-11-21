@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from takflow.config.workload import nonblank_resource_text
 
 #: Render order for ``#ORVIX`` directives. Mirrors orvix's slurm generator order
 #: so rendered scripts are deterministic. ``scheduler`` is emitted first because
@@ -65,6 +67,8 @@ class ResourceSpec(BaseModel):
     memory: Optional[str] = None
     dependency: Optional[str] = None
     requeue: Optional[bool] = None
+
+    _validate_resource_text = field_validator("queue", "time", "memory")(nonblank_resource_text)
 
     def iter_set_fields(self):
         """Yield ``(key, value)`` for fields that are set, in canonical order.

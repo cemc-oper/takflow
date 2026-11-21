@@ -11,12 +11,13 @@ NAMING COLLISION (important): ``TaskResource.job_type`` is a takflow *selector*
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from typing import Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, WrapValidator, field_validator
 from pydantic_core import PydanticCustomError
 
-from takflow.config.workload import SlurmWorkload
+from takflow.config.workload import SlurmWorkload, nonblank_resource_text
 from takflow.jobspec.model import ResourceSpec
 
 
@@ -29,8 +30,10 @@ class TaskResource(BaseModel):
     ntasks_per_node: Optional[int] = None
     time: Optional[str] = None
     memory: Optional[str] = None
-    #: Whether the scheduler may auto-requeue. None = scheduler default.
+    #: None leaves the requeue policy to an applicable default or parent.
     requeue: Optional[bool] = None
+
+    _validate_resource_text = field_validator("queue", "time", "memory")(nonblank_resource_text)
 
     @field_validator("nodes", "ntasks_per_node")
     @classmethod
@@ -45,7 +48,7 @@ class TaskResource(BaseModel):
         """Compile this high-level resource against a slurm workload.
 
         Resolves the queue from ``job_type`` defaults when not set explicitly,
-        and threads global workload labels (``wckey`` -> project, application).
+        and threads the global project and application labels.
         """
         if self.queue is not None:
             queue = self.queue
@@ -57,7 +60,7 @@ class TaskResource(BaseModel):
         spec = ResourceSpec(
             scheduler="slurm",
             queue=queue,
-            project=workload.wckey,
+            project=workload.project,
             application=workload.application,
             time=self.time,
             memory=self.memory,
@@ -73,4 +76,26 @@ class TaskResource(BaseModel):
         return spec
 
 
-__all__ = ["TaskResource"]
+def task_resource_defaults(factory: Callable[[], TaskResource]) -> WrapValidator:
+    """Apply an application's defaults to a raw, partial task workload mapping."""
+    def resolve(raw, validate):
+        resource = validate(raw)
+        if not isinstance(raw, Mapping):
+            return resource
+
+        defaults = factory()
+        values = defaults.model_dump(exclude_none=True)
+        if raw.get("job_type", defaults.job_type) != defaults.job_type:
+            for field in ("queue", "nodes", "ntasks_per_node"):
+                values.pop(field, None)
+        updates = {field: value for field, value in values.items() if raw.get(field) is None}
+        if not updates:
+            return resource
+        effective = resource.model_copy(update=updates)
+        effective.model_fields_set.intersection_update(resource.model_fields_set)
+        return effective
+
+    return WrapValidator(resolve)
+
+
+__all__ = ["TaskResource", "task_resource_defaults"]

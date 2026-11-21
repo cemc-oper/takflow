@@ -18,7 +18,7 @@ script_invoke_mode: external                 # external / inline
 
 workload:
   workload_type: slurm
-  wckey: toyflow
+  project: toyflow
   scheduler: slurm                           # slurm / donau
   submit_carrier: orvix                      # orvix / slsubmit6
   default_serial_queue: serial
@@ -119,7 +119,7 @@ takler 会再用 Jinja 展开生成的 job 模板。helper 为 inline 正文保�
 ```yaml
 workload:
   workload_type: slurm
-  wckey: myproject
+  project: myproject
   scheduler: slurm
   submit_carrier: orvix
   default_serial_queue: serial
@@ -129,7 +129,7 @@ workload:
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
-| `wckey` | 必填 | 项目/计费关键字(映射到 slurm `--wckey`) |
+| `project` | 必填 | 项目关键字，映射到 Slurm `--wckey`。旧配置仍可单独填写 `wckey`，配置模型按 `project` 导出 |
 | `scheduler` | `slurm` | orvix 目标调度器:`slurm` / `donau` |
 | `submit_carrier` | `orvix` | 资源载体:`orvix`(默认) / `slsubmit6` |
 | `default_serial_queue` | `serial` | 串行任务默认队列 |

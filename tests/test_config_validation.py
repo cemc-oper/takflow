@@ -221,6 +221,8 @@ def test_domain_message_and_exception_chain_do_not_expose_credentials():
 @pytest.mark.parametrize("updates,code,path", [
     ({"resource": {"slots": SECRET}}, "CONFIG_TYPE", ("resource", "slots")),
     ({"workload": {"workload_type": SECRET}}, "CONFIG_CHOICE", ("workload",)),
+    ({"workload": {"workload_type": "slurm", "wckey": "p", "default_serial_queue": "  "}},
+     "CONFIG_RESOURCE_BLANK", ("workload", "slurm", "default_serial_queue")),
 ])
 def test_builtin_diagnostics_are_safe_and_located(updates, code, path):
     with pytest.raises(ConfigValidationError) as caught:

@@ -1,10 +1,12 @@
 """Workflow-aware ORVIX rendering is a framework default, independent of apps."""
 
+import re
+
 import pytest
 
-from takflow.build import run_stage
+from takflow.build import BuildError, run_stage
 from takflow.config import BaseWorkflowConfig
-from takflow.toolkit.job import render_jobs_from_directory
+from takflow.toolkit.job import render_jobs_from_directory, render_orvix_resource_block
 
 from test_build import application, data, put
 from test_build import resources as resources
@@ -77,8 +79,6 @@ def test_orvix_helper_uses_workflow_resource_policy(
 
 @pytest.mark.parametrize("job_type", ["serial", "parallel"])
 def test_ecflow_optional_layout_and_walltime_alias(job_type):
-    from takflow.toolkit.job import render_orvix_resource_block
-
     omitted = render_orvix_resource_block(job_type=job_type, workflow_mode="ecflow")
     assert "#ORVIX time=" not in omitted
     assert "#ORVIX nodes=" not in omitted
@@ -94,3 +94,58 @@ def test_ecflow_optional_layout_and_walltime_alias(job_type):
     else:
         assert "#ORVIX nodes=%NODES:2%" in explicit
         assert "#ORVIX ntasks-per-node=%TASKS_PER_NODE:8%" in explicit
+
+
+@pytest.mark.parametrize(("name", "alias"), [
+    ("queue", "partition"), ("time", "walltime"), ("project", "wckey"),
+])
+def test_resource_helper_resolves_one_name_per_pair(name, alias):
+    canonical = render_orvix_resource_block(**{name: "one", alias: None})
+    assert f"#ORVIX {name}=one" in canonical.splitlines()
+    assert render_orvix_resource_block(**{name: None, alias: "one"}) == canonical
+    for other in ("one", "two"):
+        with pytest.raises(ValueError, match=f"{name}.*{alias}"):
+            render_orvix_resource_block(**{name: "one", alias: other})
+
+
+@pytest.mark.parametrize(("name", "alias"), [("queue", "partition"), ("time", "walltime")])
+def test_resource_helper_reports_blank_spelling_before_fallback(name, alias):
+    for blank, other in ((name, alias), (alias, name)):
+        with pytest.raises(ValueError, match=blank):
+            render_orvix_resource_block(**{blank: "  ", other: "valid"})
+
+
+def test_optional_resource_values_reach_directives():
+    lines = render_orvix_resource_block(time="0", memory="0", requeue=False).splitlines()
+    assert {"#ORVIX time=0", "#ORVIX memory=0", "#ORVIX requeue=false"} <= set(lines)
+    assert not any(line.startswith("#ORVIX project=") for line in lines)
+    assert "#ORVIX project=" in render_orvix_resource_block(project="").splitlines()
+    with pytest.raises(ValueError, match="memory"):
+        render_orvix_resource_block(memory=" ")
+    with pytest.raises(ValueError):
+        render_orvix_resource_block(nodes=1.5)
+
+
+@pytest.mark.parametrize(("arguments", "error"), [
+    ('queue="q", partition="q"', "queue.*partition"),
+    ('time="a", walltime="b"', "time.*walltime"),
+    ('project="p", wckey="p"', "project.*wckey"),
+    ('queue=" "', "queue"), ('partition=""', "partition|queue"),
+    ('project="p", partition="q"', None),
+])
+def test_ecflow_template_validates_inputs_before_binding_node_variables(tmp_path, resources, arguments, error):
+    put(resources, "jobs/on/task.sh.j2", "#!/bin/sh\n{{ render_orvix_resource_block(" + arguments + ") }}\n")
+    output = tmp_path / "out"
+    raw = data(output, mode="ecflow", workload={"workload_type": "slurm", "wckey": "p"})
+    with application(resources).prepare(raw) as context:
+        run_stage(context, "resource")
+        run_stage(context, "config")
+        if error:
+            with pytest.raises(BuildError) as caught:
+                run_stage(context, "job")
+            assert isinstance(caught.value.original, ValueError)
+            assert re.search(error, str(caught.value.original))
+        else:
+            run_stage(context, "job")
+            lines = (output / "jobs/on/task.ecf").read_text().splitlines()
+            assert lines.count("#ORVIX project=%WCKEY%") == lines.count("#ORVIX queue=%QUEUE%") == 1

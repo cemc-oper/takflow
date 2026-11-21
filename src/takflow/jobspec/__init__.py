@@ -5,7 +5,7 @@
 - :func:`to_orvix_directives` — render ``#ORVIX`` directive lines.
 """
 from takflow.jobspec.model import CANONICAL_KEYS, ResourceSpec
-from takflow.jobspec.highlevel import TaskResource
+from takflow.jobspec.highlevel import TaskResource, task_resource_defaults
 from takflow.jobspec.render import (
     MARKER,
     render_resource_block,
@@ -16,6 +16,7 @@ __all__ = [
     "ResourceSpec",
     "CANONICAL_KEYS",
     "TaskResource",
+    "task_resource_defaults",
     "to_orvix_directives",
     "render_resource_block",
     "MARKER",

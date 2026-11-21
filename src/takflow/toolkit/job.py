@@ -30,7 +30,8 @@ from takflow.checks import (
     preflight_generation,
 )
 from takflow.config import SlurmWorkload
-from takflow.jobspec import TaskResource, to_orvix_directives
+from takflow.config.workload import resolve_resource_alias
+from takflow.jobspec import ResourceSpec, TaskResource, to_orvix_directives
 
 if TYPE_CHECKING:
     from takflow.config import BaseWorkflowConfig
@@ -60,6 +61,51 @@ def _current_build_info_lines() -> Dict[str, str]:
     return _generic_build_info_lines(_generic_build_info("unknown"), "takflow")
 
 
+def _orvix_resource_spec(
+    job_type: str = "serial",
+    queue: Optional[str] = None,
+    partition: Optional[str] = None,
+    nodes: Optional[Union[int, str]] = None,
+    ntasks_per_node: Optional[Union[int, str]] = None,
+    time: Optional[str] = None,
+    walltime: Optional[str] = None,
+    memory: Optional[str] = None,
+    output: Optional[str] = None,
+    error: Optional[str] = None,
+    project: Optional[str] = None,
+    wckey: Optional[str] = None,
+    application: Optional[str] = None,
+    scheduler: str = "slurm",
+    requeue: Optional[bool] = None,
+    workflow_mode: Optional[str] = None,
+) -> ResourceSpec:
+    task = TaskResource(
+        job_type=job_type,  # type: ignore[arg-type]
+        queue=resolve_resource_alias("queue", queue, "partition", partition, nonblank=True),
+        nodes=nodes,
+        ntasks_per_node=ntasks_per_node,
+        time=resolve_resource_alias("time", time, "walltime", walltime, nonblank=True),
+        memory=memory,
+        requeue=requeue,
+    )
+    project = resolve_resource_alias("project", project, "wckey", wckey)
+    workload = SlurmWorkload(project=project if project is not None else "", application=application)
+    spec = task.compile(workload)
+    if project is None:
+        spec.project = None
+    spec.scheduler = scheduler
+    if output is not None:
+        spec.output = output
+    if error is not None:
+        spec.error = error
+    if workflow_mode == "ecflow":
+        for field, variable in ECFLOW_TASK_RESOURCE_VARIABLES.items():
+            value = getattr(spec, field)
+            if value is not None:
+                setattr(spec, field, f"%{variable}:{value}%")
+    return spec
+
+
 def render_orvix_resource_block(
     job_type: str = "serial",
     queue: Optional[str] = None,
@@ -78,44 +124,10 @@ def render_orvix_resource_block(
     requeue: Optional[bool] = None,
     workflow_mode: Optional[str] = None,
 ) -> str:
-    """Render a ``#ORVIX`` directive block from template-friendly kwargs.
-
-    ``partition`` is accepted as a legacy alias for ``queue``; ``walltime`` is a
-    legacy alias for ``time``. ``project`` and ``wckey`` are synonyms (``wckey``
-    wins if both given).
-
-    The workflow template helper supplies ``workflow_mode`` automatically.
-    In ecFlow mode, time and parallel layout reference variables with the
-    compiled values as defaults. Direct calls without a mode remain literal.
-    """
-    resolved_queue = queue or partition
-    resolved_time = time or walltime
-    resolved_project = wckey or project
-
-    task = TaskResource(
-        job_type=job_type,  # type: ignore[arg-type]
-        queue=resolved_queue,
-        nodes=int(nodes) if nodes is not None else None,
-        ntasks_per_node=int(ntasks_per_node) if ntasks_per_node is not None else None,
-        time=resolved_time,
-        memory=memory,
-        requeue=requeue,
-    )
-    workload = SlurmWorkload(
-        wckey=resolved_project or "",
-        application=application,
-    )
-    spec = task.compile(workload)
-    spec.scheduler = scheduler
-    if output is not None:
-        spec.output = output
-    if error is not None:
-        spec.error = error
-    if workflow_mode == "ecflow":
-        for field, variable in ECFLOW_TASK_RESOURCE_VARIABLES.items():
-            value = getattr(spec, field)
-            if value is not None:
-                setattr(spec, field, f"%{variable}:{value}%")
+    """Render directives. Supply one spelling of each queue, time or project argument."""
+    spec = _orvix_resource_spec(job_type, queue, partition, nodes, ntasks_per_node,
+                                time, walltime, memory, output, error, project, wckey,
+                                application, scheduler, requeue, workflow_mode)
     return "\n".join(to_orvix_directives(spec))
 
 
@@ -124,18 +136,18 @@ def _render_workflow_orvix_resource_block(context, **resources) -> str:
     """Bind the template helper to the current workflow's resource policy."""
     config = context["config"]
     resources["workflow_mode"] = config.workflow_mode
+    spec = _orvix_resource_spec(**resources)
     if config.workflow_mode == "ecflow":
-        resources["queue"] = "%QUEUE%"
-        resources["wckey"] = "%WCKEY%"
-        application = resources.get("application")
-        if application is not None:
+        spec.queue = "%QUEUE%"
+        spec.project = "%WCKEY%"
+        if spec.application is not None:
             # Keep an app's template default usable when the optional workload
             # label is unset. ecFlow can still override it through APPLICATION.
-            resources["application"] = (
+            spec.application = (
                 "%APPLICATION%" if config.workload.application is not None
-                else f"%APPLICATION:{application}%"
+                else f"%APPLICATION:{spec.application}%"
             )
-    return render_orvix_resource_block(**resources)
+    return "\n".join(to_orvix_directives(spec))
 
 
 # --- rendering ---------------------------------------------------------------
