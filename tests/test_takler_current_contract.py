@@ -83,6 +83,89 @@ def test_takler_preprocesses_and_runs_business_job(tmp_path, mode):
     check_business_job(tmp_path, job, mode)
 
 
+@pytest.mark.parametrize("mode", ["inline", "external"])
+def test_public_takler_lifecycle_uses_current_attempt(tmp_path, mode):
+    from takflow.build import build
+    from test_build import application, data, put
+
+    source = tmp_path / "source"
+    output = tmp_path / "workflow output"
+    put(source, "config/config.sh.j2", "# domain config\n")
+    put(source, "scripts/on/model.sh", '#!/bin/sh\necho business\nexit "$BUSINESS_RC"\n')
+    put(source, "jobs/on/run.sh.j2", """#!/bin/bash
+{% raw %}
+{% include "head.sh" %}
+{% endraw %}
+. "{{ paths.config_file }}"
+{{ invoke_script("scripts/on/model.sh") }}
+echo after-business
+{% raw %}
+{% include "tail.sh" %}
+{% endraw %}
+""")
+    task_name = "model's-run"
+
+    def suite_builder(config, engine):
+        suite = engine.Suite("suite")
+        suite.add_variables({"TAKLER_HOME": str(output / "home"),
+                             "TAKLER_INCLUDE": str(output / "takler/include")})
+        suite.add_task(task_name).add_variable("TAKLER_SCRIPT", str(output / "jobs/on/run.sh"))
+        return suite
+
+    app = application(source, suite_builder=suite_builder, use_public_resources=True)
+    with app.prepare(data(output, "takler", mode, workflow_name="suite", machine_name=None)) as ctx:
+        flow = _load_flow(build(ctx).workflow_output)
+    flow.begin()
+    task = flow.find_node(f"/suite/{task_name}")
+    client = put(tmp_path, "bin/takler_client", """#!/bin/sh
+set -eu
+[ "$TAKLER_HOST" = localhost ] && [ "$TAKLER_PORT" = 33083 ] || exit 79
+[ "$TAKLER_NAME" = "$EXPECTED_NAME" ] && [ "$TAKLER_ATTEMPT_ID" = "$EXPECTED_ATTEMPT" ] || exit 80
+[ "${TAKLER_PASS-absent}" = "$EXPECTED_PASS" ] && [ "$TAKLER_RID" = "$PPID" ] || exit 81
+echo "$1"
+case "$1" in
+    init) [ "$#" = 3 ] && [ "$2" = --task-id ] && [ "$3" = "$TAKLER_RID" ] || exit 82
+          exit "$INIT_RC" ;;
+    complete) [ "$#" = 1 ] || exit 83; exit "$COMPLETE_RC" ;;
+    abort) [ "$#" = 3 ] && [ "$2" = --reason ] && [ "$3" = trap ] || exit 84; exit "$ABORT_RC" ;;
+    *) exit 85 ;;
+esac
+""", 0o755)
+    previous_attempt, previous_password = "inherited-attempt", "inherited-password"
+    success = ["init", "business", "after-business", "complete"]
+    failed = ["init", "business", "abort"]
+    cases = [
+        ("success", {}, 0, success),
+        ("business", {"BUSINESS_RC": "7"}, 7, failed),
+        ("abort", {"BUSINESS_RC": "7", "ABORT_RC": "23"}, 7, failed),
+        ("init", {"INIT_RC": "17"}, 17, ["init"]),
+        ("complete", {"COMPLETE_RC": "31"}, 31, success),
+        ("no credential supplied", {}, 0, success),
+    ]
+    for case, overrides, expected, events in cases:
+        task.increment_try_no()
+        if not task.job_password or task.job_password == previous_password:
+            pytest.fail("takler did not issue a fresh job credential")
+        assert task.attempt_id and task.attempt_id != previous_attempt
+        if case == "no credential supplied":
+            task.job_password = None
+        task.create_job_script()
+        env = {**os.environ, "PATH": f"{client.parent}:{os.environ['PATH']}",
+               "TAKLER_NAME": "/old/task", "TAKLER_ATTEMPT_ID": previous_attempt,
+               "TAKLER_PASS": previous_password, "EXPECTED_NAME": task.node_path,
+               "EXPECTED_ATTEMPT": task.attempt_id, "EXPECTED_PASS": task.job_password or "absent",
+               "BUSINESS_RC": "0", "INIT_RC": "0", "COMPLETE_RC": "0", "ABORT_RC": "0", **overrides}
+        run = subprocess.run(["bash", "-vx", task.job_path], cwd=tmp_path, env=env,
+                             text=True, capture_output=True, timeout=10)
+        if any(value and value in run.stdout + run.stderr for value in (task.job_password, previous_password)):
+            pytest.fail("a job credential appeared in the job output")
+        assert run.returncode == expected, case
+        assert run.stdout.splitlines() == events, case
+        if case == "abort":
+            assert "takler abort failed: status=23" in run.stderr.splitlines()
+        previous_attempt, previous_password = task.attempt_id, task.job_password
+
+
 def test_backend_does_not_create_legacy_application_bunch(monkeypatch):
     def fail_if_created(*args, **kwargs):
         raise AssertionError("TaklerBackend must not create a legacy application Bunch")

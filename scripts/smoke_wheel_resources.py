@@ -132,6 +132,10 @@ def main() -> None:
                 packaged = files("takflow").joinpath("resources", relative).read_bytes()
                 assert packaged and (context.paths.output_root / relative).read_bytes() == packaged
                 assert f"%include <common/{name}>" in job
+            for name in ("head.sh", "tail.sh"):
+                relative = f"takler/include/{name}"
+                packaged = files("takflow").joinpath("resources", relative).read_bytes()
+                assert packaged and (context.paths.output_root / relative).read_bytes() == packaged
             partial = run_stage(context, "config")
             assert not partial.complete and not result.manifest_path.exists()
 

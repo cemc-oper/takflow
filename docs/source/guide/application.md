@@ -176,12 +176,18 @@ cwd。显式 workflow_repo_base 仅替换 base，扩展仍按自己的有效字�
 产物的 template 指向选中的源文件；成功清单记录相同的层根，不记录模板正文。
 
 多模式应用可声明 `use_public_resources=lambda config: config.workflow_mode == "ecflow"`。
-当前公共文件为 `ecflow/include/common/head.h` 和 `tail.h`。沿用普通
+公共文件包括 `ecflow/include/common/{head,tail}.h` 和 `takler/include/{head,tail}.sh`。沿用普通
 `resource_entries` 和组件筛选选择要复制的文件。允许只映射其中一个文件。
 同一相对路径的优先级从低到高依次为 takflow、有效应用基础根、应用后续层、扩展层。
 `config.workflow_repo_base_dir` 始终指向有效应用基础根。job 通过工作流输出的 include
 目录引用头尾，例如在 `ECF_INCLUDE` 中加入输出的 `ecflow/include` 后使用
 `%include <common/head.h>` 和 `%include <common/tail.h>`。
+
+takler 应用启用该资源层后，可将 `TAKLER_INCLUDE` 指向输出的 `takler/include`。
+在 job 模板的 Jinja raw 块中写入 `{% include "head.sh" %}` 和 `{% include "tail.sh" %}`，
+业务调用放在两个块之间。takler 创建 job 时展开这两处 include。公共 head 在 init 前导出任务名、
+本次 attempt UUID 及引擎提供的作业口令，init 的 `--task-id` 使用作业 PID。
+应用定制片段仍按同一路径逐文件覆盖。
 
 选择结果固定在 BuildPaths.resource_layers、BuildContext.outputs 和
 BuildContext.required_machine_fragments；完整与单步构建读取同一结果。

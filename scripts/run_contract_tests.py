@@ -70,6 +70,8 @@ REQUIRED = {
         "test_rendered_orvix_commands_bind_attempt_and_quote_paths",
         "test_takler_preprocesses_and_runs_business_job[inline]",
         "test_takler_preprocesses_and_runs_business_job[external]",
+        "test_public_takler_lifecycle_uses_current_attempt[inline]",
+        "test_public_takler_lifecycle_uses_current_attempt[external]",
         "test_real_orvix_generate_accepts_rendered_job_without_submit",
         "test_scheduler_orvix_commands_render_without_submission",
         "test_legacy_carrier_commands_render_without_submission",
@@ -81,6 +83,8 @@ REQUIRED = {
         "test_native_ecflow_rejects_missing_job_include",
         "test_native_ecflow_executes_business_invocation[inline]",
         "test_native_ecflow_executes_business_invocation[external]",
+        "test_native_ksh93_delivers_signals_during_invocation_and_wait[inline]",
+        "test_native_ksh93_delivers_signals_during_invocation_and_wait[external]",
         "test_native_rebuild_reads_public_head_after_component_override_is_removed",
         "test_native_orvix_resource_variables_and_application_default",
         "test_native_pipeline_retains_machine_updates_without_regenerating_ecf",
@@ -201,7 +205,7 @@ def main():
         from takflow.spec.jobspec.conformance import CASES, SCHEDULERS
         expected = len(CASES) * (1 + len(SCHEDULERS))
     elif args.suite == "takler":
-        expected = 14
+        expected = 16
     elif args.suite == "native":
         expected = len(required)
     targets = ["tests"] if args.suite == "base" else sorted({name.split("::", 1)[0] for name in required})

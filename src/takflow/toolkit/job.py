@@ -462,6 +462,14 @@ def render_jobs_from_directory(
             if args:
                 invocation += f" {arguments}"
         if inline or workflow == "ecflow":
+            if workflow in ("ecflow", "takler"):
+                invocation = (
+                    "# Give ksh93 a real subshell so the parent can handle signals.\n"
+                    "case ${KSH_VERSION:-} in\n"
+                    "    *93*) trap : 0; trap - 0 ;;\n"
+                    "esac\n"
+                    + invocation
+                )
             # A comment-only marker task still needs a command inside (...).
             return f"(\n:\n{invocation}\n)\n"
         return invocation

@@ -133,7 +133,7 @@ jobs:
       - name: Install the native Python package for the system Python ABI
         run: |
           sudo apt-get update
-          sudo apt-get install -y "python3-ecflow=$ECFLOW_APT_VERSION" python3-venv
+          sudo apt-get install -y "python3-ecflow=$ECFLOW_APT_VERSION" python3-venv ksh93u+m
           test "$(dpkg-query -W -f='${Version}' python3-ecflow)" = "$ECFLOW_APT_VERSION"
           uv venv --python /usr/bin/python3 --system-site-packages /tmp/native-ecflow
           uv pip install --python /tmp/native-ecflow/bin/python -e . pytest

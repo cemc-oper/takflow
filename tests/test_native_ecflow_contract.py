@@ -1,4 +1,4 @@
-"""Native ecFlow parsing, job preprocessing and local execution of a Bash fixture.
+"""Native ecFlow parsing, job preprocessing and local Bash and Ksh93 execution.
 
 The dedicated native contract gate must provide ecFlow and reject all skips.
 Ordinary source tests may run without this optional system dependency.
@@ -6,7 +6,10 @@ Ordinary source tests may run without this optional system dependency.
 import os
 from pathlib import Path
 import shlex
+import shutil
+import signal
 import subprocess
+import time
 
 import pytest
 
@@ -175,6 +178,88 @@ set -- owner
         assert run.returncode == rc, run.stderr
         after = ["next-step", *second, "--complete"] if rc == 0 else ["--abort"]
         assert run.stdout.splitlines() == ["--init", *first, *after]
+
+
+@pytest.mark.parametrize("mode", ["inline", "external"])
+def test_native_ksh93_delivers_signals_during_invocation_and_wait(tmp_path, mode):
+    from takflow.build import build
+    from test_build import application, data, put
+
+    ksh = shutil.which("ksh93")
+    if not ksh or not Path("/proc/self/wchan").is_file():
+        pytest.skip("requires ksh93 and Linux procfs to signal a job blocked in wait")
+    version = subprocess.check_output([ksh, "-c", 'echo "$KSH_VERSION"'], text=True)
+    assert " 93" in version, f"expected ksh93, found {version.strip()}"
+    source, output = tmp_path / "source", tmp_path / "workflow output"
+    put(source, "config/config.sh.j2", "# domain config\n")
+    put(source, "scripts/on/model.sh", """#!/bin/sh
+if [ "$POSITION" = foreground ]; then hold_step; fi
+if [ "$POSITION" = error ]; then exit 7; fi
+""")
+    put(source, "jobs/on/run.sh.j2", """#!/usr/bin/env ksh93
+%include <common/head.h>
+%include <config.h>
+if [ "$POSITION" = error ]; then hold_step & fi
+{{ invoke_script("scripts/on/model.sh") }}
+echo after-business
+if [ "$POSITION" = tail ]; then hold_step & fi
+%include <common/tail.h>
+""")
+
+    def suite_builder(config, engine):
+        suite = engine.Suite(config.workflow_name)
+        suite.add_variables({"ECF_FILES": str(output / "jobs/on"),
+                             "ECF_INCLUDE": f"{output}/ecflow/include:{output}/config"})
+        suite.add_task("run")
+        return suite
+
+    app = application(source, suite_builder=suite_builder, use_public_resources=True)
+    with app.prepare(data(output, invoke=mode, machine_name=None)) as ctx:
+        definition = build(ctx).workflow_output
+    control = ecflow.JobCreationCtrl()
+    control.set_dir_for_job_creation(str(tmp_path / "jobs"))
+    ecflow.Defs(str(definition)).check_job_creation(control)
+    assert not control.get_error_msg(), control.get_error_msg()
+    job, = (tmp_path / "jobs").rglob("*.job0")
+    client = put(tmp_path, "bin/ecflow_client", '#!/bin/sh\necho "${1%%=*}"\n', 0o755)
+    put(tmp_path, "bin/hold_step", """#!/bin/sh
+echo holding
+while [ ! -f "$RELEASE" ]; do sleep 0.02; done
+""", 0o755)
+    for position in ("foreground", "tail", "error"):
+        log, release = tmp_path / f"{position}.log", tmp_path / f"{position}.release"
+        env = {**os.environ, "PATH": f"{client.parent}:{os.environ['PATH']}",
+               "POSITION": position, "RELEASE": str(release)}
+        with log.open("w") as stream, subprocess.Popen(
+            [ksh, job], env=env, stdout=stream, stderr=subprocess.STDOUT,
+        ) as process:
+            try:
+                # For each wait, observe the sleeping parent after it entered the relevant path.
+                checkpoint = {"foreground": "holding", "tail": "after-business",
+                              "error": "job failed: phase=running status=7"}[position]
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    events = log.read_text().splitlines()
+                    assert process.poll() is None, events
+                    if checkpoint in events and "holding" in events:
+                        kernel_wait = Path(f"/proc/{process.pid}/wchan").read_text()
+                        if position == "foreground" or "wait" in kernel_wait or "sigsuspend" in kernel_wait:
+                            break
+                    time.sleep(0.01)
+                else:
+                    pytest.fail(f"ksh93 did not reach {position}")
+                process.send_signal(signal.SIGTERM)
+                release.touch()
+                assert process.wait(timeout=10) == (7 if position == "error" else 143)
+            finally:
+                release.touch()
+                if process.poll() is None:
+                    process.kill()
+        events = log.read_text().splitlines()
+        assert [event for event in events if event.startswith("--")] == ["--init", "--abort"]
+        assert ("after-business" in events) == (position == "tail")
+        reason = "received signal 15" + (" during error handling" if position == "error" else "")
+        assert events.count(reason) == 1
 
 
 def test_native_rebuild_reads_public_head_after_component_override_is_removed(tmp_path):
