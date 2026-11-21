@@ -33,7 +33,7 @@ from takflow.generation import GenerationContext, GenerationResult, generate_wor
 from takflow.spec.jobspec import contract_version
 from takflow.toolkit.credential import CredentialHookPoint, get_credential_registry, render_credential
 from takflow.toolkit.job import render_jobs_from_directory, _render_workflow_orvix_resource_block
-from takflow.toolkit.resource import copy_resource_entries
+from takflow.toolkit.resource import _copy_resource_layers
 
 
 STAGES = ("resource", "config", "credential", "job", "workflow", "check", "report")
@@ -122,7 +122,7 @@ class _ResourceLoader(FileSystemLoader):
     def get_source(self, environment, template):
         for root in reversed(self.roots):
             candidate = root / template
-            if candidate.is_file():
+            if os.path.lexists(candidate):
                 check_relative_path(root, template, stage="template.input", report=self.report)
                 check_input_file(candidate, stage="template.input", report=self.report)
                 break
@@ -291,13 +291,14 @@ class _Pipeline:
                 if not any((layer.root / "machine" / machine.name / fragment).is_file()
                            for layer in self.context.paths.resource_layers):
                     self.fail("BUILD_MACHINE_FRAGMENT_REQUIRED", fragment, "required machine fragment is absent from all source layers")
+        layers = []
         for layer in self.context.paths.resource_layers:
             mappings = [(entry.source, entry.destination, entry.executable) for entry in entries
-                        if (layer.root / entry.source).exists() and self.context.components.keep_resource(entry.source)]
-            copy_resource_entries(self.root, layer.root, mappings, keep=self.context.components.keep_resource,
-                                  check_report=self.report, check_target=lambda path: self.reserve(path, "resource"),
-                                  source_layer=layer.name)
-            self.collect()
+                        if os.path.lexists(layer.root / entry.source)]
+            layers.append((layer.name, layer.root, mappings))
+        _copy_resource_layers(self.root, layers, keep=self.context.components.keep_resource,
+                              check_report=self.report, check_target=lambda path: self.reserve(path, "resource"),
+                              after_layer=self.collect)
 
         for fragment in self.context.required_machine_fragments:
             # Business scripts can source a fragment later in their own cwd

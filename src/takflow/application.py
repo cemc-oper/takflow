@@ -278,6 +278,7 @@ class Application(Generic[ConfigT]):
     context_suite_builder: Callable[[BuildContext[ConfigT], WorkflowEngine], Node] | None = None
     required_machine_fragments: tuple[str, ...] | Callable[[ConfigT], tuple[str, ...]] = ()
     required_resource_inputs: tuple[str, ...] | Callable[[ConfigT], tuple[str, ...]] = ()
+    use_public_resources: bool | Callable[[ConfigT], bool] = False
 
     def __post_init__(self):
         if not isinstance(self.config_type, type) or not issubclass(self.config_type, BaseWorkflowConfig):
@@ -394,7 +395,13 @@ class Application(Generic[ConfigT]):
             base_resources = base_resources() if callable(base_resources) else base_resources
             base_resources = _local_path(base_resources, cwd, "resource_layers")
             config.workflow_repo_base_dir = str(base_resources)
+
             def declared_layers():
+                use_public = self.use_public_resources
+                if callable(use_public):
+                    use_public = use_public(config)
+                if use_public:
+                    yield ResourceLayer("takflow", Path(__file__).parent / "resources")
                 yield ResourceLayer("base", base_resources)
                 # Resolve each contribution before asking the next selector.
                 # Later extensions can derive roots from earlier config fields.
@@ -424,7 +431,7 @@ class Application(Generic[ConfigT]):
                 if layer.config_field is not None:
                     setattr(config, layer.config_field, str(root))
                 layers.append(ResolvedResourceLayer(layer.name, root, layer.required_inputs))
-            config.workflow_repo_base_dir = str(layers[0].root)
+            config.workflow_repo_base_dir = str(base_resources)
             config.output_repo_base_dir = str(output_root)
             report = preflight_generation(
                 config, supported_modes=self.supported_modes,

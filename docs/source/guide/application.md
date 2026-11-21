@@ -83,6 +83,7 @@ mapping 或文件，以保证覆盖先于派生。显式 definition `output` 仍
 |---|---|
 | `ResourceLayer(name, root, config_field=None, required_inputs=())` | base 后按声明顺序覆盖，扩展层在后；名称唯一；配置目录字段的非空值优先于 root，配置相对路径基于 source_dir、canonical overrides 基于调用 cwd；required_inputs 是本层必须提供的相对文件，不能由其他层或旧输出满足；静态与模板共用层序及来源记录 |
 | `ResourceEntry(source, destination, executable=False, required=False)` | 声明静态目录/文件映射，路径相对且不逃逸；默认 scripts、ecflow/include、takler/include、utils；迁移映射由应用给出，不新增应用名 profile |
+| `use_public_resources` | 默认 False。传 True 或接受有效 config 的布尔函数，可在 base 之前加入随 takflow 安装的公共资源层 |
 | `TemplateOutput(template, output, required=True, mode=0o644)` | 声明额外模板产物，mode 仅 0644/0755/0600；TC-06 检查实际模板、目标碰撞、编码、权限及写出 |
 | `select_components(config)` | 只计算一次，返回 `ComponentSelection`；enabled 与两个路径分类器供资源/作业共用，不读禁用文件 |
 | `variables(config)` | 返回名称为变量标识符、值为 str 的映射；值由领域计算，编码和实际导出由 TC-06 负责 |
@@ -173,6 +174,14 @@ cwd。显式 workflow_repo_base 仅替换 base，扩展仍按自己的有效字�
 静态 ResourceEntry、config/job、TemplateOutput 与嵌套 Jinja include 均使用最终层序，
 同名项后层覆盖、缺失项向前回落。公共结果中静态文件保留有序 layer/path 来源，渲染
 产物的 template 指向选中的源文件；成功清单记录相同的层根，不记录模板正文。
+
+多模式应用可声明 `use_public_resources=lambda config: config.workflow_mode == "ecflow"`。
+当前公共文件为 `ecflow/include/common/head.h` 和 `tail.h`。沿用普通
+`resource_entries` 和组件筛选选择要复制的文件。允许只映射其中一个文件。
+同一相对路径的优先级从低到高依次为 takflow、有效应用基础根、应用后续层、扩展层。
+`config.workflow_repo_base_dir` 始终指向有效应用基础根。job 通过工作流输出的 include
+目录引用头尾，例如在 `ECF_INCLUDE` 中加入输出的 `ecflow/include` 后使用
+`%include <common/head.h>` 和 `%include <common/tail.h>`。
 
 选择结果固定在 BuildPaths.resource_layers、BuildContext.outputs 和
 BuildContext.required_machine_fragments；完整与单步构建读取同一结果。

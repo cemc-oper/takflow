@@ -24,6 +24,8 @@ from takflow.checks import (
     check_relative_path,
 )
 
+_CopyFile = tuple[Path, Path, str, int]
+
 
 def _check_directory(path: Path, report: GenerationCheckReport, *, source: bool) -> None:
     stage = "resource.preflight"
@@ -65,7 +67,8 @@ def _copy_plan(
     keep: Callable[[Path], bool] | None = None,
     standard: bool = False,
     directories: list[Path] | None = None,
-) -> list[list[tuple[Path, Path, str, int]]]:
+    destinations: set[Path] | None = None,
+) -> list[list[_CopyFile]]:
     """Check every selected source/target before the first output mutation.
 
     copytree follows source links, so follow them here too, rejecting directory
@@ -78,7 +81,8 @@ def _copy_plan(
     for _, dst, _ in trees:
         check_relative_path(output, dst.relative_to(output), stage=stage,
                             report=report, object=str(dst))
-    destinations = [dst.resolve() for _, dst, _ in trees]
+    if destinations is None:
+        destinations = {dst.resolve() for _, dst, _ in trees}
     planned_targets: set[Path] = set()
 
     def walk(src: Path, dst: Path, executable: bool, ancestors: set[Path], files):
@@ -134,33 +138,47 @@ def _copy_plan(
 
     plans = []
     for src, dst, executable in trees:
-        files: list[tuple[Path, Path, str, int]] = []
+        files: list[_CopyFile] = []
         walk(src, dst, executable, set(), files)
         plans.append(files)
-    # Resolved names do not reveal hard links. Check existing file identities
-    # across the whole plan so an earlier write cannot alter a later source.
-    source_ids = set()
-    for files in plans:
-        for source, _, _, _ in files:
-            metadata = source.stat()
-            source_ids.add((metadata.st_dev, metadata.st_ino))
-    target_ids = set()
-    for files in plans:
-        for _, target, _, _ in files:
-            if not target.exists():
-                continue
-            metadata = target.stat()
-            identity = (metadata.st_dev, metadata.st_ino)
-            if identity in source_ids:
-                report.fail("RESOURCE_COPY_OVERLAP", stage, str(target),
-                            "an existing output is hard-linked to a resource source")
-            if identity in target_ids:
-                report.fail("RESOURCE_OUTPUT_COLLISION", stage, str(target),
-                            "multiple outputs are hard-linked to the same existing file")
-            target_ids.add(identity)
     report.passed("RESOURCE_PREFLIGHT", stage, str(src_base),
                   "selected resource sources and output paths checked before copying")
     return plans
+
+
+def _check_copy_targets(plans: list[list[_CopyFile]], report: GenerationCheckReport,
+                        directories: tuple[Path, ...] = ()) -> None:
+    # Resolved names do not reveal hard links. Check existing file identities
+    # across the whole plan so an earlier write cannot alter a later source.
+    stage = "resource.preflight"
+    source_ids = set()
+    targets = set()
+    for files in plans:
+        for source, target, _, _ in files:
+            metadata = source.stat()
+            source_ids.add((metadata.st_dev, metadata.st_ino))
+            targets.add(target)  # successive layers can write the same named target
+    file_paths = {target.resolve() for target in targets}
+    for directory in directories:
+        if directory.resolve() in file_paths:
+            report.fail("RESOURCE_OUTPUT_COLLISION", stage, str(directory),
+                        "resource layers map a file and a directory to the same output")
+    target_ids = set()
+    for target in sorted(targets):
+        if any(parent in file_paths for parent in target.resolve().parents):
+            report.fail("RESOURCE_OUTPUT_COLLISION", stage, str(target),
+                        "a resource output needs a directory occupied by another selected file")
+        if not target.exists():
+            continue
+        metadata = target.stat()
+        identity = (metadata.st_dev, metadata.st_ino)
+        if identity in source_ids:
+            report.fail("RESOURCE_COPY_OVERLAP", stage, str(target),
+                        "an existing output is hard-linked to a resource source")
+        if identity in target_ids:
+            report.fail("RESOURCE_OUTPUT_COLLISION", stage, str(target),
+                        "multiple outputs are hard-linked to the same existing file")
+        target_ids.add(identity)
 
 
 def _check_copied_files(
@@ -261,6 +279,7 @@ def copy_resources_to_output(
         dst = check_relative_path(output_repo_base, destination, stage="resource.preflight", report=report)
         trees.append((src, dst, executable))
     plans = _copy_plan(src_base, output_repo_base, trees, report)
+    _check_copy_targets(plans, report)
     output_repo_base.mkdir(parents=True, exist_ok=True)
     for (src, dst, executable), files in zip(trees, plans):
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -299,19 +318,50 @@ def copy_resource_entries(
     caller resolves optional/required entries across layers. Original copy
     exceptions and partial invocation artifacts survive failures.
     """
-    from takflow._files import file_state, make_parents
+    _copy_resource_layers(output_repo_base, [(source_layer, src_base, entries)], keep=keep,
+                          check_report=check_report, check_target=check_target)
 
-    trees = []
-    for source, destination, executable in entries:
-        src = check_relative_path(src_base, source, stage="resource.preflight", report=check_report)
-        dst = check_relative_path(output_repo_base, destination, stage="resource.preflight", report=check_report)
-        trees.append((src, dst, executable))
-    directories = []
-    plans = _copy_plan(src_base, output_repo_base, trees, check_report, keep=keep, standard=True, directories=directories)
+
+def _copy_resource_layers(
+    output_repo_base: Path, layers: list[tuple[str | None, Path, list[tuple[str, str, bool]]]], *,
+    keep: Callable[[Path], bool], check_report: GenerationCheckReport,
+    check_target: Callable[[Path], None] | None = None,
+    after_layer: Callable[[], None] | None = None,
+) -> None:
+    """Plan every selected layer before writing any of its override targets."""
+    layer_trees = []
+    destinations = set()
+    for name, root, entries in layers:
+        trees = []
+        for source, destination, executable in entries:
+            src = check_relative_path(root, source, stage="resource.preflight", report=check_report)
+            dst = check_relative_path(output_repo_base, destination, stage="resource.preflight", report=check_report)
+            trees.append((src, dst, executable))
+            destinations.add(dst.resolve())
+        layer_trees.append((name, root, trees))
+
+    layer_plans = []
+    for name, root, trees in layer_trees:
+        directories = []
+        groups = _copy_plan(root, output_repo_base, trees, check_report, keep=keep, standard=True,
+                            directories=directories, destinations=destinations)
+        layer_plans.append((name, directories, groups))
+    all_groups = [files for _, _, groups in layer_plans for files in groups]
+    _check_copy_targets(all_groups, check_report, tuple(path for _, dirs, _ in layer_plans for path in dirs))
     if check_target is not None:
-        for files in plans:
+        for files in all_groups:
             for _, target, _, _ in files:
                 check_target(target)
+    for name, directories, groups in layer_plans:
+        _copy_entry_plan(output_repo_base, directories, groups, check_report, name)
+        if after_layer is not None:
+            after_layer()
+
+
+def _copy_entry_plan(output_repo_base: Path, directories: list[Path], plans: list[list[_CopyFile]],
+                     check_report: GenerationCheckReport, source_layer: str | None) -> None:
+    from takflow._files import file_state, make_parents
+
     for directory in directories:
         make_parents(directory / ".directory", output_repo_base)
     for files in plans:

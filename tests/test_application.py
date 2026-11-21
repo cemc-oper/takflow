@@ -135,6 +135,21 @@ def test_layers_preserve_extension_order_and_explicit_base_replacement(tmp_path)
         assert context.outputs == (extra,)
 
 
+def test_public_layer_is_selected_by_mode_and_keeps_the_effective_base(tmp_path):
+    app = application(tmp_path, supported_modes=("ecflow", "shell"), shell_template="run.j2",
+                      use_public_resources=lambda config: config.workflow_mode == "ecflow",
+                      resource_layers=(ResourceLayer("oper", tmp_path / "oper"),))
+    replacement = tmp_path / "replacement"
+    with app.prepare(config_data(), workflow_repo_base=replacement) as context:
+        public, base, oper = context.paths.resource_layers
+        assert [public.name, base.name, oper.name] == ["takflow", "base", "oper"]
+        assert (public.root / "ecflow/include/common/head.h").is_file()
+        assert base.root == replacement
+        assert context.config.workflow_repo_base_dir == str(replacement)
+    with app.prepare(config_data(workflow_mode="shell")) as context:
+        assert [layer.name for layer in context.paths.resource_layers] == ["base", "oper"]
+
+
 def test_component_selection_once_and_context_contributions(tmp_path):
     calls = []
 

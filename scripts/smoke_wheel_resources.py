@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke-test jobspec resources from an installed takflow wheel."""
+"""Smoke-test packaged resources and generation from an installed takflow wheel."""
 from __future__ import annotations
 
 import importlib.util
@@ -85,6 +85,9 @@ def main() -> None:
 
         def build_suite(settings, engine):
             suite = engine.Suite(settings.workflow_name)
+            output = Path(settings.output_repo_base_dir)
+            suite.add_variables({"ECF_FILES": str(output / "jobs"),
+                                 "ECF_INCLUDE": str(output / "ecflow/include")})
             suite.add_task("run")
             return suite
 
@@ -110,18 +113,25 @@ def main() -> None:
         resources = Path(temporary) / "resources"
         for relative, text in {
             "config/config.sh.j2": "# installed config\n",
-            "jobs/run.sh.j2": "#!/bin/sh\n{{ include_machine('env/runtime.sh') }}\n",
+            "jobs/run.sh.j2": ("#!/bin/sh\n%include <common/head.h>\n"
+                               "{{ include_machine('env/runtime.sh') }}\n%include <common/tail.h>\n"),
             "machine/site/env/runtime.sh": "SITE=installed\n",
         }.items():
             path = resources / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
-        application = Application(config_type=BaseWorkflowConfig, resources=resources,
+        application = Application(config_type=BaseWorkflowConfig, resources=resources, use_public_resources=True,
                                   suite_builder=build_suite, brand=ApplicationBrand("wheel-pipeline", "candidate"))
         with application.prepare(raw, output_repo_base=Path(temporary) / "pipeline", overrides={"machine_name": "site"}) as context:
             result = build(context)
             assert result.complete and result.manifest_path.is_file()
             assert result.generation.output_path == context.paths.workflow_output
+            job = (context.paths.jobs_dir / "run.ecf").read_text()
+            for name in ("head.h", "tail.h"):
+                relative = f"ecflow/include/common/{name}"
+                packaged = files("takflow").joinpath("resources", relative).read_bytes()
+                assert packaged and (context.paths.output_root / relative).read_bytes() == packaged
+                assert f"%include <common/{name}>" in job
             partial = run_stage(context, "config")
             assert not partial.complete and not result.manifest_path.exists()
 

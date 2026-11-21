@@ -31,6 +31,8 @@ REQUIRED = {
         "tests/test_generation_resource_checks.py::test_additional_directory_mappings_preserve_legacy_copy_contract",
         "tests/test_generation_resource_checks.py::test_additional_directory_mappings_reject_invalid_sources_before_copying",
         "tests/test_build.py::test_full_build_cannot_reuse_a_script_removed_from_sources",
+        "tests/test_build.py::test_rebuild_falls_back_to_packaged_files_one_at_a_time",
+        "tests/test_build.py::test_broken_public_file_override_fails_instead_of_using_default",
         "tests/test_build.py::test_full_build_can_include_a_script_generated_by_config",
         "tests/test_build.py::test_required_resource_input_checks_current_layers_before_writing",
         "tests/test_application.py::test_configured_extension_root_uses_source_and_override_bases",
@@ -72,6 +74,7 @@ REQUIRED = {
         "test_native_ecflow_parses_takflow_definition",
         "test_native_ecflow_preprocesses_job_without_running_it",
         "test_native_ecflow_rejects_missing_job_include",
+        "test_native_rebuild_reads_public_head_after_component_override_is_removed",
         "test_native_orvix_resource_variables_and_application_default",
         "test_native_pipeline_retains_machine_updates_without_regenerating_ecf",
     )),
@@ -193,7 +196,7 @@ def main():
     elif args.suite == "takler":
         expected = 12
     elif args.suite == "native":
-        expected = 5
+        expected = len(required)
     targets = ["tests"] if args.suite == "base" else sorted({name.split("::", 1)[0] for name in required})
     gate = ContractGate(required, allow_optional_skips=args.suite == "base", expected_count=expected)
     return int(pytest.main([*targets, "-v", "-ra"], plugins=[gate]))

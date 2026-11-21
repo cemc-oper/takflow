@@ -1,5 +1,6 @@
 """Public full/step generation, artifact ownership and failure semantics."""
 import hashlib
+from importlib.resources import files
 import json
 import os
 from pathlib import Path
@@ -226,6 +227,114 @@ def test_layered_resources_and_templates_share_final_precedence(tmp_path, resour
     assert "selected final layer" in (tmp_path / "out/jobs/on/task.ecf").read_text()
     artifact = next(item for item in result.artifacts if item.path.endswith("scripts/on/task.sh"))
     assert [source["layer"] for source in artifact.sources] == ["base", "oper"]
+
+
+@pytest.mark.parametrize("invoke", ["inline", "external"])
+def test_rebuild_falls_back_to_packaged_files_one_at_a_time(tmp_path, resources, invoke):
+    head = "ecflow/include/common/head.h"
+    tail = "ecflow/include/common/tail.h"
+    defaults = files("takflow").joinpath("resources")
+    public_head = defaults.joinpath(head).read_text()
+    public_tail = defaults.joinpath(tail).read_text()
+
+    # An explicit workflow root replaces the application's packaged business inputs.
+    original = tmp_path / "app-package"
+    put(original, head, "# unselected app-package head\n")
+    put(original, "scripts/on/unselected.sh", "exit 1\n")
+    base_head = put(resources, head, "# component head\n")
+    extension = tmp_path / "extension"
+    extension_head = put(extension, head, "# extension head\n")
+    script = "scripts/on/task.sh"
+    put(extension, script, "#!/bin/sh\necho retained-extension-script\n")
+    put(resources, "jobs/on/task.sh.j2", f"""#!/bin/bash
+{{% include '{head}' %}}
+{{{{ invoke_script('{script}') }}}}
+{{% include '{tail}' %}}
+""")
+    app = application(original, use_public_resources=True, extensions=(
+        ApplicationExtension("component", resource_layers=(ResourceLayer("component", extension),)),
+    ))
+    output = tmp_path / "out"
+    user_file = put(output, "ecflow/include/common/site-local.h", "# user file\n")
+
+    def check_build(expected_head, selected_layer):
+        with app.prepare(data(output, invoke=invoke), workflow_repo_base=resources) as context:
+            result = build(context)
+        assert result.complete
+        assert (output / head).read_text() == expected_head
+        assert (output / tail).read_text() == public_tail
+        job = (output / "jobs/on/task.ecf").read_text()
+        assert expected_head.strip() in job and public_tail.strip() in job
+        assert "unselected app-package" not in job
+        assert not (output / "scripts/on/unselected.sh").exists()
+        assert (output / script).read_bytes() == (extension / script).read_bytes()
+        if invoke == "inline":
+            assert "echo retained-extension-script" in job
+        else:
+            assert '"${OUTPUT_REPO_BASE}"/scripts/on/task.sh' in job
+            assert subprocess.check_output([output / script], text=True) == "retained-extension-script\n"
+        copied = {item.path: item.sources[-1]["layer"] for item in result.artifacts if item.kind == "copied"}
+        assert copied[str(output / head)] == selected_layer
+        assert copied[str(output / tail)] == "takflow"
+        assert copied[str(output / script)] == "component"
+        assert user_file.read_text() == "# user file\n" and str(user_file) not in copied
+
+    check_build(extension_head.read_text(), "component")
+    extension_head.unlink()
+    check_build(base_head.read_text(), "base")
+    base_head.unlink()
+    check_build(public_head, "takflow")
+
+
+def test_broken_public_file_override_fails_instead_of_using_default(tmp_path, resources):
+    head = "ecflow/include/common/head.h"
+    override = resources / head
+    override.parent.mkdir(parents=True)
+    override.symlink_to("missing-head.h")
+    app = application(resources, use_public_resources=True,
+                      resource_entries=(ResourceEntry(head, head, required=True),))
+    with app.prepare(data(tmp_path / "out")) as context, pytest.raises(BuildError) as caught:
+        run_stage(context, "resource")
+    assert statuses(caught.value.result)["resource"] == "failed"
+    assert str(override) in str(caught.value.original)
+    override.unlink()
+    with app.prepare(data(tmp_path / "out")) as context:
+        run_stage(context, "resource")
+    assert (tmp_path / "out" / head).is_file()
+    assert not (tmp_path / "out/ecflow/include/common/tail.h").exists()
+
+
+@pytest.mark.parametrize("broken", ["invalid-template", "dangling-link"])
+def test_selected_template_override_does_not_fall_back_on_error(tmp_path, resources, broken):
+    head = "ecflow/include/common/head.h"
+    override = resources / head
+    override.parent.mkdir(parents=True)
+    if broken == "dangling-link":
+        override.symlink_to("missing-head.h")
+    else:
+        override.write_text("{{ invalid(\n")
+    app = application(resources, use_public_resources=True,
+                      outputs=(TemplateOutput(head, "config/selected-head.h"),))
+    with app.prepare(data(tmp_path / "out")) as context, pytest.raises(BuildError) as caught:
+        run_stage(context, "config")
+    assert statuses(caught.value.result)["config"] == "failed"
+    assert not (tmp_path / "out/config/selected-head.h").exists()
+
+
+@pytest.mark.parametrize("overlap", ["source-directory", "hardlink"])
+def test_public_layer_cannot_overwrite_an_override_source(tmp_path, resources, overlap):
+    head = "ecflow/include/common/head.h"
+    original = "# application override\n"
+    source = put(resources, head, original)
+    output = resources if overlap == "source-directory" else tmp_path / "out"
+    if overlap == "hardlink":
+        target = output / head
+        target.parent.mkdir(parents=True)
+        os.link(source, target)
+    app = application(resources, use_public_resources=True)
+    with app.prepare(data(output)) as context, pytest.raises(BuildError):
+        run_stage(context, "resource")
+    assert source.read_text() == original
 
 
 @pytest.mark.parametrize("missing", ["config/config.sh.j2", "scripts/on/task.sh", "machine/site/env/runtime.sh"])

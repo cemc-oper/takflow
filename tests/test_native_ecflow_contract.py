@@ -89,6 +89,50 @@ def test_native_ecflow_rejects_missing_job_include(tmp_path):
     assert "missing.h" in errors
 
 
+def test_native_rebuild_reads_public_head_after_component_override_is_removed(tmp_path):
+    from takflow.application import ResourceEntry
+    from takflow.build import build
+    from test_build import application, data, put
+
+    source = tmp_path / "source"
+    output = tmp_path / "out"
+    put(source, "config/config.sh.j2", "# config\n")
+    put(source, "jobs/on/task.sh.j2", "#!/bin/bash\n%include <head.h>\n:\n%include <tail.h>\n")
+    override = put(source, "ecflow/include/data/head.h", "echo component-head\n")
+
+    def suite_builder(config, engine):
+        suite = engine.Suite(config.workflow_name)
+        includes = output / "ecflow/include"
+        suite.add_variables({"ECF_FILES": str(output / "jobs/on"),
+                             "ECF_INCLUDE": f"{includes}/data:{includes}/common"})
+        suite.add_task("task")
+        return suite
+
+    # Both sources map to the path searched by this component's native job.
+    app = application(source, suite_builder=suite_builder, use_public_resources=True, resource_entries=(
+        ResourceEntry("ecflow/include/common", "ecflow/include/common"),
+        ResourceEntry("ecflow/include/common/head.h", "ecflow/include/data/head.h"),
+        ResourceEntry("ecflow/include/data", "ecflow/include/data"),
+    ))
+
+    def build_and_expand(destination):
+        with app.prepare(data(output, machine_name=None)) as context:
+            result = build(context)
+        control = ecflow.JobCreationCtrl()
+        control.set_dir_for_job_creation(str(destination))
+        ecflow.Defs(str(result.workflow_output)).check_job_creation(control)
+        assert not control.get_error_msg(), control.get_error_msg()
+        return next(destination.rglob("*.job0")).read_text()
+
+    first = build_and_expand(tmp_path / "first-jobs")
+    assert "echo component-head" in first and "ecflow_client --complete" in first
+    assert not (output / "ecflow/include/data/tail.h").exists()
+    override.unlink()
+    second = build_and_expand(tmp_path / "second-jobs")
+    assert "echo component-head" not in second
+    assert "ecflow_client --init" in second and "ecflow_client --complete" in second
+
+
 def test_native_orvix_resource_variables_and_application_default(tmp_path):
     from types import SimpleNamespace
 
