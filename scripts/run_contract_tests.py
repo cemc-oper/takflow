@@ -55,6 +55,7 @@ REQUIRED = {
         "tests/test_application.py::test_registry_ownership_deduplicates_scopes_and_restores_base_exceptions",
         "tests/test_serialize_ecflow.py::test_suite_family_task_round_trip",
         "tests/test_jobspec.py::test_pydantic_fields_match_schema",
+        "tests/test_runtime_orvix_variables.py::test_carrier_scope_and_explicit_local_declarations",
         "tests/test_config_validation.py::test_compatibility_ignores_extra_without_mutating_input",
         "tests/test_generation.py::test_definition_default_output_and_result[ecflow]",
         "tests/test_generation.py::test_missing_takler_dependency_is_not_wrapped",
@@ -67,6 +68,7 @@ REQUIRED = {
         "test_backend_does_not_create_legacy_application_bunch",
         "test_suite_name_is_caller_supplied",
         "test_saved_suite_builds_and_loads_current_definition",
+        "test_shared_resource_header_follows_takler_parent_edits",
         "test_rendered_orvix_commands_bind_attempt_and_quote_paths",
         "test_takler_preprocesses_and_runs_business_job[inline]",
         "test_takler_preprocesses_and_runs_business_job[external]",
@@ -87,6 +89,9 @@ REQUIRED = {
         "test_native_ksh93_delivers_signals_during_invocation_and_wait[external]",
         "test_native_rebuild_reads_public_head_after_component_override_is_removed",
         "test_native_orvix_resource_variables_and_application_default",
+        "test_native_shared_resource_header_follows_parent_edits[None]",
+        "test_native_shared_resource_header_follows_parent_edits[False]",
+        "test_native_shared_resource_header_follows_parent_edits[True]",
         "test_native_pipeline_retains_machine_updates_without_regenerating_ecf",
     )),
 }
@@ -205,7 +210,7 @@ def main():
         from takflow.spec.jobspec.conformance import CASES, SCHEDULERS
         expected = len(CASES) * (1 + len(SCHEDULERS))
     elif args.suite == "takler":
-        expected = 16
+        expected = 17
     elif args.suite == "native":
         expected = len(required)
     targets = ["tests"] if args.suite == "base" else sorted({name.split("::", 1)[0] for name in required})

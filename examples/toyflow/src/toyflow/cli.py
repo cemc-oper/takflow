@@ -9,6 +9,7 @@
     toyflow credential generate --config-file config/toyflow.yaml \
         --credential-file config/credential.yaml
 """
+from importlib.resources import files
 from pathlib import Path
 
 import click
@@ -60,6 +61,12 @@ def resource_copy(config_file: str, output_repo_base: str, workflow_repo_base: s
     output_repo_base = get_output_repo_base_dir(config, output_repo_base)
     workflow_repo_base = get_workflow_repo_base_dir(config, workflow_repo_base)
 
+    if config.workflow_mode == "ecflow":
+        copy_resources_to_output(
+            output_repo_base=Path(output_repo_base),
+            src_base=Path(str(files("takflow").joinpath("resources"))),
+            include_scripts=False, include_utils=False, include_takler=False,
+        )
     copy_resources_to_output(
         output_repo_base=Path(output_repo_base),
         src_base=Path(workflow_repo_base),

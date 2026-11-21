@@ -3,6 +3,7 @@
 import re
 
 import pytest
+from jinja2 import Environment
 
 from takflow.build import BuildError, run_stage
 from takflow.config import BaseWorkflowConfig
@@ -57,15 +58,18 @@ def test_orvix_helper_uses_workflow_resource_policy(
         assert "#ORVIX nodes=%NODES:2%" in rendered
         assert "#ORVIX ntasks-per-node=%TASKS_PER_NODE:4%" in rendered
         assert "#ORVIX time=%WALLTIME:00:30:00%" in rendered
-        assert "#ORVIX queue=%QUEUE%" in rendered
-        assert "#ORVIX project=%WCKEY%" in rendered
+        assert "#ORVIX queue=%QUEUE:parallel-value%" in rendered
+        assert "#ORVIX project=%WCKEY:project-value%" in rendered
         if label is not None:
-            assert "#ORVIX application=%APPLICATION%" in rendered
+            assert "#ORVIX application=%APPLICATION:configured-app%" in rendered
         elif template_default:
             assert "#ORVIX application=%APPLICATION:template-app%" in rendered
         else:
             assert "#ORVIX application=" not in rendered
     else:
+        if mode == "takler":
+            assert "{{ NODES" in rendered
+            rendered = Environment().from_string(rendered).render()
         assert "#ORVIX nodes=2" in rendered
         assert "#ORVIX ntasks-per-node=4" in rendered
         assert "#ORVIX time=00:30:00" in rendered
@@ -148,4 +152,4 @@ def test_ecflow_template_validates_inputs_before_binding_node_variables(tmp_path
         else:
             run_stage(context, "job")
             lines = (output / "jobs/on/task.ecf").read_text().splitlines()
-            assert lines.count("#ORVIX project=%WCKEY%") == lines.count("#ORVIX queue=%QUEUE%") == 1
+            assert lines.count("#ORVIX project=%WCKEY:p%") == lines.count("#ORVIX queue=%QUEUE:q%") == 1

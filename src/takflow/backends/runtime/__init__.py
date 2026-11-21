@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Dict
 
 from takflow.backends.runtime.orvix import orvix_job
 from takflow.backends.runtime.orvix import set_runtime as set_orvix_runtime
+from takflow.backends.runtime.resources import ecflow_resource_variables, set_resource_variables
 from takflow.backends.runtime.slsubmit import set_runtime as set_slsubmit_runtime
 
 if TYPE_CHECKING:
@@ -123,6 +124,10 @@ def set_runtime(
 ):
     """Configure runtime/submission variables on ``node``.
 
+    With no task_resource, install the carrier at this scope (including an
+    intentional carrier switch). A Slurm task_resource selects job resources
+    under that carrier. Use set_resource_variables for local declarations
+    that also inherit the parent queue, including in a parallel family.
     Dispatches to the carrier-specific implementation based on
     ``workload_config.submit_carrier``.
     """
@@ -151,8 +156,10 @@ def set_runtime(
 
 __all__ = [
     "common_setting",
+    "ecflow_resource_variables",
     "script_cmd_var_name",
     "script_cmd_value",
+    "set_resource_variables",
     "set_runtime",
     "set_scheduling",
     "shell_job",

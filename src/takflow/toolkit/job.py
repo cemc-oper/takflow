@@ -18,7 +18,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFoun
 from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
 from takflow.build_info import _scoped_lines
-from takflow.backends.runtime.orvix import ECFLOW_TASK_RESOURCE_VARIABLES
+from takflow.backends.runtime.resources import RESOURCE_VARIABLES
 from takflow.checks import (
     GenerationCheckReport,
     GenerationCheckError,
@@ -77,7 +77,6 @@ def _orvix_resource_spec(
     application: Optional[str] = None,
     scheduler: str = "slurm",
     requeue: Optional[bool] = None,
-    workflow_mode: Optional[str] = None,
 ) -> ResourceSpec:
     task = TaskResource(
         job_type=job_type,  # type: ignore[arg-type]
@@ -98,12 +97,47 @@ def _orvix_resource_spec(
         spec.output = output
     if error is not None:
         spec.error = error
-    if workflow_mode == "ecflow":
-        for field, variable in ECFLOW_TASK_RESOURCE_VARIABLES.items():
-            value = getattr(spec, field)
-            if value is not None:
-                setattr(spec, field, f"%{variable}:{value}%")
     return spec
+
+
+def _resource_directive(field: str, variable: str, fallback, mode: str) -> str:
+    key = field.replace("_", "-")
+    prefix = f"#ORVIX {key}="
+    if isinstance(fallback, bool):
+        fallback = str(fallback).lower()
+    if mode == "ecflow":
+        if fallback is None:
+            if field == "requeue":
+                return "%include <common/orvix-requeue-%REQUEUE:unset%.h>"
+            return f"%ORVIX_{variable}:%"
+        ref = f"%{variable}:{fallback}%"
+    else:
+        expression = variable
+        if fallback is not None:
+            expression += f" | default({str(fallback)!r})"
+        if field == "requeue":
+            expression += " | lower"
+        ref = "{{ " + expression + " }}"
+        if fallback is None:
+            return ("{% if " + variable + " is defined and " + variable + " is not none %}"
+                    + prefix + ref + "{% endif %}")
+    if any(c.isspace() for c in str(fallback)):
+        ref = '"' + ref + '"'
+    return prefix + ref
+
+
+def _workflow_resource_block(spec: ResourceSpec, mode: str | None, job_type: str) -> str:
+    if mode not in ("ecflow", "takler"):
+        return "\n".join(to_orvix_directives(spec))
+
+    # Scheduler and log paths already carry their own engine-specific syntax.
+    literal = spec.model_copy(update=dict.fromkeys(RESOURCE_VARIABLES))
+    lines = to_orvix_directives(literal)
+    for field, variable in RESOURCE_VARIABLES.items():
+        if job_type == "serial" and field in ("nodes", "ntasks_per_node"):
+            continue
+        lines.append(_resource_directive(field, variable, getattr(spec, field), mode))
+    return "\n".join(lines)
 
 
 def render_orvix_resource_block(
@@ -127,27 +161,23 @@ def render_orvix_resource_block(
     """Render directives. Supply one spelling of each queue, time or project argument."""
     spec = _orvix_resource_spec(job_type, queue, partition, nodes, ntasks_per_node,
                                 time, walltime, memory, output, error, project, wckey,
-                                application, scheduler, requeue, workflow_mode)
-    return "\n".join(to_orvix_directives(spec))
+                                application, scheduler, requeue)
+    return _workflow_resource_block(spec, workflow_mode, job_type)
 
 
 @pass_context
 def _render_workflow_orvix_resource_block(context, **resources) -> str:
     """Bind the template helper to the current workflow's resource policy."""
     config = context["config"]
-    resources["workflow_mode"] = config.workflow_mode
-    spec = _orvix_resource_spec(**resources)
-    if config.workflow_mode == "ecflow":
-        spec.queue = "%QUEUE%"
-        spec.project = "%WCKEY%"
-        if spec.application is not None:
-            # Keep an app's template default usable when the optional workload
-            # label is unset. ecFlow can still override it through APPLICATION.
-            spec.application = (
-                "%APPLICATION%" if config.workload.application is not None
-                else f"%APPLICATION:{spec.application}%"
-            )
-    return "\n".join(to_orvix_directives(spec))
+    workload = config.workload
+    job_type = resources.get("job_type", "serial")
+    if resources.get("queue") is None and resources.get("partition") is None:
+        resources["queue"] = getattr(workload, f"default_{job_type}_queue", None)
+    if resources.get("project") is None and resources.get("wckey") is None:
+        resources["project"] = getattr(workload, "project", None)
+    if resources.get("application") is None:
+        resources["application"] = getattr(workload, "application", None)
+    return _workflow_resource_block(_orvix_resource_spec(**resources), config.workflow_mode, job_type)
 
 
 # --- rendering ---------------------------------------------------------------

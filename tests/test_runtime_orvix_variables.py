@@ -12,7 +12,7 @@ from takflow.jobspec import TaskResource
 @pytest.mark.parametrize("scheduler", ["slurm", "donau"])
 @pytest.mark.parametrize("application", [None, "GRAPES"])
 @pytest.mark.parametrize(("job_type", "queue", "expected_queue"), [
-    ("serial", None, "serial_queue"),
+    ("serial", None, None),
     ("parallel", None, "parallel_queue"),
     ("serial", "custom", "custom"),
     ("parallel", "largemem", "largemem"),
@@ -37,8 +37,13 @@ def test_ecflow_resource_defaults_and_task_overrides(
     defaults, task_definition = output.read_text().split("task t\n", 1)
     assert "edit QUEUE 'serial_queue'" in defaults
     assert "edit WCKEY '105-00-01'" in defaults
-    assert f"edit QUEUE '{expected_queue}'" in task_definition
-    assert f"edit ORVIX_SCHEDULER '{scheduler}'" in task_definition
+    if expected_queue is None:
+        assert "edit QUEUE " not in task_definition
+    else:
+        assert f"edit QUEUE '{expected_queue}'" in task_definition
+    assert f"edit ORVIX_SCHEDULER '{scheduler}'" in defaults
+    assert "edit ORVIX_SCHEDULER " not in task_definition
+    assert "edit ECF_JOB_CMD " not in task_definition
     assert "edit WALLTIME '01:00:00'" in task_definition
     if job_type == "parallel":
         assert "edit NODES '2'" in task_definition
@@ -61,5 +66,38 @@ def test_unset_task_resources_preserve_inherited_or_script_defaults(tmp_path):
     output = tmp_path / "s.def"
     engine.save_suite(suite, output)
     text = output.read_text()
+    assert "edit ECF_JOB_CMD " in text
+    assert "edit WCKEY 'project'" in text
     for variable in ("WALLTIME", "NODES", "TASKS_PER_NODE"):
         assert f"edit {variable} " not in text
+
+
+@pytest.mark.parametrize("carrier", ["orvix", "slsubmit6"])
+def test_carrier_scope_and_explicit_local_declarations(tmp_path, carrier):
+    from takflow.backends.runtime import set_resource_variables
+
+    engine = WorkflowEngine(EcflowBackend())
+    suite = engine.Suite("suite")
+    set_runtime(suite, SlurmWorkload(project="forecast", submit_carrier=carrier), engine)
+    family = suite.add_family("model")
+    set_resource_variables(family, TaskResource(
+        job_type="parallel", queue="batch", nodes=4, ntasks_per_node=32,
+        time="02:00:00", memory="8G",
+    ))
+    set_resource_variables(family.add_task("inherited"), TaskResource(time="00:40:00", memory=None))
+    set_resource_variables(family.add_task("fixed"), TaskResource(
+        job_type="parallel", queue="batch", nodes=4, requeue=True,
+    ))
+    path = tmp_path / "suite.def"
+    engine.save_suite(suite, path)
+    parents, children = path.read_text().split("task inherited\n")
+    inherited, fixed = children.split("task fixed\n")
+    assert "edit ECF_JOB_CMD " in parents and "edit WCKEY 'forecast'" in parents
+    assert "edit QUEUE 'batch'" in parents and "edit MEMORY '8G'" in parents
+    assert "edit WALLTIME '00:40:00'" in inherited
+    assert "edit QUEUE 'batch'" in fixed and "edit NODES '4'" in fixed
+    assert "edit REQUEUE 'true'" in fixed and "edit REQUEUE " not in inherited
+    for key in ("QUEUE", "MEMORY", "NODES", "TASKS_PER_NODE"):
+        assert f"edit {key} " not in inherited
+    for key in ("ECF_JOB_CMD", "ECF_KILL_CMD", "WCKEY", "ORVIX_SCHEDULER"):
+        assert f"edit {key} " not in children

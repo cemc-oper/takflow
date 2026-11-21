@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Union
 
 from takflow.flow import Node, NodeType, WorkflowBackend
+from takflow.backends.runtime.resources import ecflow_resource_variables
 from takflow.backends.ecflow.serializer import (
     Clock,
     DState,
@@ -50,14 +51,15 @@ class EcflowBackend(WorkflowBackend):
         name: str,
         value: Union[str, int, float, bool],
     ) -> None:
-        node.raw.add_variable(name, str(value))
+        self.add_variables(node, {name: value})
 
     def add_variables(
         self,
         node: Node,
         variables: Dict[str, Union[str, int, float, bool]],
     ) -> None:
-        node.raw.add_variable({k: str(v) for k, v in variables.items()})
+        edits = ecflow_resource_variables(variables)
+        node.raw.add_variable({k: str(v) for k, v in edits.items()})
 
     def add_trigger(self, node: Node, expression: str) -> None:
         node.raw.add_trigger(expression)

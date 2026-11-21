@@ -315,7 +315,8 @@ def test_native_orvix_resource_variables_and_application_default(tmp_path):
     from takflow.config import SlurmWorkload
     from takflow.toolkit.job import _render_workflow_orvix_resource_block
 
-    suite, output, scripts, _ = _save_suite(tmp_path)
+    suite, output, scripts, includes = _save_suite(tmp_path)
+    shutil.copytree(Path(__file__).parents[1] / "src/takflow/resources/ecflow/include", includes, dirs_exist_ok=True)
     workload = SlurmWorkload(wckey="project-value")
     set_runtime(suite, workload, suite.engine)
     suite.engine.save_suite(suite, output)
@@ -396,3 +397,76 @@ def test_native_pipeline_retains_machine_updates_without_regenerating_ecf(tmp_pa
     assert (tmp_path / "out/jobs/on/task.ecf").read_bytes() == original_ecf
     # Public validation also works after the standard serializer scope exits.
     check_definition_output(result.generation.suite, result.workflow_output)
+
+
+@pytest.mark.parametrize("fallback", [None, False, True])
+def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
+    from takflow.backends.runtime import ecflow_resource_variables, set_resource_variables, set_runtime
+    from takflow.config import SlurmWorkload
+    from takflow.jobspec import TaskResource
+    from takflow.toolkit.job import render_orvix_resource_block
+
+    engine = WorkflowEngine(EcflowBackend())
+    suite = engine.Suite("suite")
+    includes = Path(__file__).parents[1] / "src/takflow/resources/ecflow/include"
+    source = tmp_path / "shared.ecf"
+    suite.add_variables({"ECF_HOME": str(tmp_path), "ECF_INCLUDE": str(includes),
+                         "ECF_SCRIPT_CMD": "cat " + shlex.quote(str(source))})
+    set_runtime(suite, SlurmWorkload(project="model"), engine)
+    family = suite.add_family("fcst")
+    set_resource_variables(family, TaskResource(
+        job_type="parallel", queue="batch", nodes=4, ntasks_per_node=32,
+    ))
+    set_resource_variables(family.add_task("inherited"), TaskResource(time="00:40:00", memory=None))
+    set_resource_variables(family.add_task("fixed"), TaskResource(
+        job_type="parallel", queue="batch", nodes=4, memory="8G", requeue=True,
+    ))
+    path = tmp_path / "suite.def"
+    engine.save_suite(suite, path)
+    defs = ecflow.Defs(str(path))
+    native_family = defs.find_abs_node("/suite/fcst")
+    slurm_include = ("%include <common/requeue.h>" if fallback is None else
+                     f"%include <common/requeue-%REQUEUE:{str(fallback).lower()}%.h>")
+    original = ("#!/bin/bash\n" + render_orvix_resource_block(
+        job_type="parallel", workflow_mode="ecflow", time="06:00:00", requeue=fallback,
+    ) + "\n" + slurm_include + "\ntrue\n")
+    source.write_text(original)
+    previous = {}
+    for attempt, state in enumerate((None, False, True)):
+        if state is not None:
+            native_family.add_variable("REQUEUE", str(state).lower())
+            native_family.add_variable("NODES", str(4 + attempt))
+            native_family.add_variable("TASKS_PER_NODE", str(32 + attempt))
+            if attempt == 1:
+                native_family.add_variable(ecflow_resource_variables({"MEMORY": "9G"}))
+            else:
+                native_family.add_variable("MEMORY", "10G")
+            native_family.add_variable("WALLTIME", f"0{attempt}:10:00")
+            native_family.add_variable("QUEUE", f"batch-{attempt}")
+        jobs = tmp_path / f"attempt-{attempt}"
+        control = ecflow.JobCreationCtrl()
+        control.set_dir_for_job_creation(str(jobs))
+        defs.check_job_creation(control)
+        assert not control.get_error_msg(), control.get_error_msg()
+        paths = sorted(jobs.rglob("*.job0"))
+        assert len(paths) == 2
+        for job in paths:
+            fixed = job.name == "fixed.job0"
+            policy = True if fixed else (fallback if state is None else state)
+            lines = job.read_text().splitlines()
+            assert lines.count("#SBATCH --no-requeue") == int(policy is False)
+            assert "#SBATCH --requeue" not in lines
+            expect = {
+                "queue": "batch" if fixed or not attempt else f"batch-{attempt}",
+                "nodes": 4 if fixed else 4 + attempt,
+                "ntasks-per-node": 32 + attempt, "memory": "8G" if fixed else (f"{8 + attempt}G" if attempt else None),
+                "time": ("06:00:00" if not attempt else f"0{attempt}:10:00") if fixed else "00:40:00",
+                "project": "model",
+                "requeue": None if policy is None else str(policy).lower(), "application": None,
+            }
+            for key, value in expect.items():
+                assert [line for line in lines if line.startswith(f"#ORVIX {key}=")] == (
+                    [] if value is None else [f"#ORVIX {key}={value}"])
+            previous[job] = job.read_bytes()
+        assert source.read_text() == original
+        assert all(job.read_bytes() == content for job, content in previous.items())

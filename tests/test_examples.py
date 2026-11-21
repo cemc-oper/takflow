@@ -75,8 +75,8 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
     assert "#ORVIX nodes=%NODES:2%" in forecast_text
     assert "#ORVIX ntasks-per-node=%TASKS_PER_NODE:16%" in forecast_text
     assert "#ORVIX time=%WALLTIME:01:00:00%" in forecast_text
-    assert "#ORVIX queue=%QUEUE%" in forecast_text
-    assert "#ORVIX project=%WCKEY%" in forecast_text
+    assert "#ORVIX queue=%QUEUE:normal%" in forecast_text
+    assert "#ORVIX project=%WCKEY:toyflow%" in forecast_text
     # hook 注入任务对应的作业模板也被渲染
     assert (output_repo_base / "jobs" / "main" / "verify.ecf").exists()
 

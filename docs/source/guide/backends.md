@@ -65,10 +65,10 @@ takler 的三个显式不支持路径在 `test_takler_current_contract.py` 中�
 `set_runtime` 即可（对应 toyflow `flow.py` 的 `setup()`）：
 
 ```python
-from takflow.backends.runtime import set_runtime
+from takflow.backends.runtime import set_resource_variables, set_runtime
 
 set_runtime(suite, config.workload, engine=engine)
-# 两种 carrier 均通过任务级资源设置覆盖值:set_runtime(node, workload, engine=engine, task_resource=tr)
+set_resource_variables(task, tr)
 ```
 
 | Carrier | 生成内容 | 适用场景 |
@@ -83,11 +83,9 @@ set_runtime(suite, config.workload, engine=engine)
 - **`orvix` 载体**：ecFlow 下设 `ECF_JOB_CMD=orvix submit --scheduler %ORVIX_SCHEDULER% %ECF_JOB%`、
   `ECF_KILL_CMD=orvix kill %ECF_JOB%.info.yaml`（takler 下对应 `TAKLER_SHELL_JOB_CMD`/
   `TAKLER_SHELL_KILL_CMD`）；`ORVIX_SCHEDULER` 由 workload 的 `scheduler` 字段推导为 suite 变量。
-  ecFlow 任务资源还设置 `QUEUE`、`WALLTIME`、`NODES`、`TASKS_PER_NODE`，只写入已配置且适用于该任务类型的字段。
-  作业模板的公共 helper 自动生成变量引用；墙钟与布局使用带默认值的引用，保留模板资源值。
-- **`slsubmit6` 载体**：任务级 `set_runtime` 把 `TaskResource` 展开为 ecFlow 变量
-  `%QUEUE%`/`%NODES%`/`%TASKS_PER_NODE%`/`%WCKEY%`，并设 `ECF_JOB_CMD=slsubmit6 ...`、
-  `ECF_KILL_CMD=slcancel4 ...`；`#SBATCH` 的最终转译由作业 include 的 `workload.h` 完成。
+- **`slsubmit6` 载体**在选定的 ecFlow 节点设置 `ECF_JOB_CMD=slsubmit6 ...` 和 `ECF_KILL_CMD=slcancel4 ...`。
+
+两种载体的下级任务继承这些命令。配置任务资源时可以在 suite、family 或 task 声明队列、墙钟、内存、并行规模和 requeue。字段选择及模板回退见[作业资源](jobspec.md)。
 
 载体与后端的组合不表示提交语义完全等价：orvix 的 ecFlow/takler 命令分别由现有生成契约覆盖；
 `slsubmit6` 的 takler 分支当前使用 `TAKLER_SHELL_JOB_CMD=sbatch ...` 和

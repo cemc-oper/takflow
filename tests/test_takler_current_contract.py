@@ -304,7 +304,9 @@ def test_legacy_carrier_commands_render_without_submission(tmp_path, carrier):
         else SlurmWorkload(wckey="project", submit_carrier="slsubmit6")
     )
     resource = TaskResource(job_type="parallel", nodes=2, ntasks_per_node=4) if carrier.endswith("parallel") else None
-    set_runtime(task, workload, engine, resource)
+    set_runtime(suite, workload, engine)
+    if resource is not None:
+        set_runtime(task, workload, engine, resource)
     output = tmp_path / "suite.json"
     engine.save_suite(suite, output)
     flow = _load_flow(output)
@@ -349,3 +351,63 @@ def test_unsupported_attributes_fail_with_stable_errors():
     with pytest.raises(NotImplementedError) as repeat_day_error:
         task.add_repeat_day(1)
     assert str(repeat_day_error.value) == "takler backend does not support repeat_day"
+
+
+def test_shared_resource_header_follows_takler_parent_edits(tmp_path):
+    from takflow.backends.runtime import set_resource_variables
+    from takflow.toolkit.job import render_orvix_resource_block
+
+    engine = WorkflowEngine(TaklerBackend())
+    suite = engine.Suite("suite")
+    source = tmp_path / "shared.sh"
+    original = "#!/bin/sh\n" + render_orvix_resource_block(
+        job_type="parallel", workflow_mode="takler", time="06:00:00",
+        queue="fallback", application="model-default",
+    ) + "\ntrue\n"
+    source.write_text(original)
+    suite.add_variable("TAKLER_HOME", str(tmp_path / "jobs"))
+    set_runtime(suite, SlurmWorkload(project="model"), engine)
+    family = suite.add_family("fcst")
+    set_resource_variables(family, TaskResource(
+        job_type="parallel", queue="batch", nodes=4, ntasks_per_node=32,
+    ))
+    for name, resource in (
+        ("inherited", TaskResource(time="00:40:00", memory=None)),
+        ("fixed", TaskResource(job_type="parallel", queue="batch", nodes=4, requeue=True)),
+    ):
+        node = family.add_task(name)
+        node.add_variable("TAKLER_SCRIPT", str(source))
+        set_resource_variables(node, resource)
+    path = tmp_path / "suite.json"
+    engine.save_suite(suite, path)
+    flow = _load_flow(path)
+    flow.begin()
+    parent = flow.find_node("/suite/fcst")
+    previous = {}
+    for attempt, state in enumerate((None, False, True)):
+        if state is not None:
+            parent.add_parameter({"REQUEUE": state, "MEMORY": f"{8 + attempt}G", "NODES": 4 + attempt,
+                                  "TASKS_PER_NODE": 32 + attempt, "WALLTIME": "01:10:00",
+                                  "QUEUE": "new-batch", "APPLICATION": "model-app"})
+        for name in ("inherited", "fixed"):
+            fixed = name == "fixed"
+            task = flow.find_node(f"/suite/fcst/{name}")
+            task.increment_try_no()
+            task.create_job_script()
+            job = Path(task.job_path)
+            assert job not in previous
+            lines = job.read_text().splitlines()
+            expected = {
+                "queue": "batch" if fixed or not attempt else "new-batch",
+                "time": ("01:10:00" if attempt else "06:00:00") if fixed else "00:40:00",
+                "nodes": 4 if fixed else 4 + attempt, "ntasks-per-node": 32 + attempt,
+                "memory": f"{8 + attempt}G" if attempt else None, "project": "model",
+                "requeue": "true" if fixed else (str(state).lower() if state is not None else None),
+                "application": "model-app" if attempt else "model-default",
+            }
+            for key, value in expected.items():
+                assert [line for line in lines if line.startswith(f"#ORVIX {key}=")] == (
+                    [] if value is None else [f"#ORVIX {key}={value}"])
+            previous[job] = job.read_bytes()
+        assert source.read_text() == original
+        assert all(job.read_bytes() == content for job, content in previous.items())

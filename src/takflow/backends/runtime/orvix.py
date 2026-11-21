@@ -9,17 +9,12 @@ from takflow.jobspec.render import (
     to_orvix_directives,
 )
 
+from takflow.backends.runtime.resources import configure_slurm_node
+
 if TYPE_CHECKING:
     from takflow.config import WorkloadType
     from takflow.flow import Node, WorkflowEngine
     from takflow.jobspec import TaskResource
-
-
-ECFLOW_TASK_RESOURCE_VARIABLES = {
-    "time": "WALLTIME",
-    "nodes": "NODES",
-    "ntasks_per_node": "TASKS_PER_NODE",
-}
 
 
 def _is_ecflow(engine: "WorkflowEngine") -> bool:
@@ -54,31 +49,8 @@ def set_runtime(
     engine: "WorkflowEngine",
     task_resource: "TaskResource | None" = None,
 ):
-    """Configure the orvix carrier on ``node``.
-
-    ecFlow scripts reference resource variables at preprocessing time.
-    Set global defaults when no task resource is supplied; resource-specific
-    nodes override queue, time and parallel layout. Project and application
-    remain inherited; omitted task resources retain the script's defaults.
-    """
-    scheduler = workload_config.scheduler or "slurm"
-    node.add_variables(orvix_job(engine, scheduler))
-    if _is_ecflow(engine):
-        if task_resource is None:
-            node.add_variables({
-                "QUEUE": workload_config.default_serial_queue,
-                "WCKEY": workload_config.wckey,
-            })
-            if workload_config.application is not None:
-                node.add_variable("APPLICATION", workload_config.application)
-        else:
-            spec = task_resource.compile(workload_config)
-            variables = {"QUEUE": spec.queue}
-            for field, variable in ECFLOW_TASK_RESOURCE_VARIABLES.items():
-                value = getattr(spec, field)
-                if value is not None:
-                    variables[variable] = value
-            node.add_variables(variables)
+    """Install the carrier or declare a job's resources under its existing scope."""
+    configure_slurm_node(node, workload_config, task_resource, orvix_job(engine, workload_config.scheduler or "slurm"))
 
 
 __all__ = [

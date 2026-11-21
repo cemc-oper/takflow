@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
+from takflow.backends.runtime.resources import configure_slurm_node
+
 if TYPE_CHECKING:
     from takflow.config import WorkloadType
     from takflow.flow import Node, WorkflowEngine
@@ -79,43 +81,8 @@ def set_runtime(
     engine: "WorkflowEngine",
     task_resource: Optional["TaskResource"] = None,
 ):
-    """Configure the slsubmit6 carrier on ``node``."""
-    wckey = workload_config.wckey
-    if task_resource is None:
-        node.add_variables(
-            slsubmit6_serial_job(
-                engine,
-                class_name=workload_config.default_serial_queue,
-                wckey=wckey,
-            )
-        )
-        return
-
-    queue = task_resource.queue
-    if queue is None:
-        if task_resource.job_type == "parallel":
-            queue = workload_config.default_parallel_queue
-        else:
-            queue = workload_config.default_serial_queue
-
-    if task_resource.job_type == "serial":
-        node.add_variables(
-            slsubmit6_serial_job(engine, class_name=queue, wckey=wckey)
-        )
-    elif task_resource.job_type == "parallel":
-        node.add_variables(
-            slsubmit6_parallel_job(
-                engine,
-                nodes=task_resource.nodes or 1,
-                tasks_per_node=task_resource.ntasks_per_node or 1,
-                class_name=queue,
-                wckey=wckey,
-            )
-        )
-    else:
-        raise ValueError(
-            f"job type for slurm is not supported: {task_resource.job_type}"
-        )
+    """Install the carrier or declare a job's resources under its existing scope."""
+    configure_slurm_node(node, workload_config, task_resource, slsubmit6_serial_job(engine))
 
 
 __all__ = [

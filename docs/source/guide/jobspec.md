@@ -63,10 +63,23 @@ print("\n".join(to_orvix_directives(spec)))
 ## 在作业模板中使用
 
 Jinja2 作业模板通过 `render_orvix_resource_block(...)` 传入资源参数并嵌入脚本头部。
-takflow 按 workflow_mode 自动生成 ecFlow 变量引用或 Shell/takler 的直接资源值，应用无需增加模式分支。
-ecFlow 的 time、nodes、ntasks-per-node 分别使用 `%WALLTIME:默认值%`、`%NODES:默认值%`、
-`%TASKS_PER_NODE:默认值%`；默认值来自模板传入参数的编译结果。任务级 `set_runtime(..., task_resource=tr)`
-设置已配置的对应变量；未配置时继承上级变量或使用模板默认值。串行任务不输出并行布局指令，未提供的字段仍省略。
+ecFlow 和 takler 在创建 job 时从 task 向上查找最近的节点值，再采用模板回退。Shell 源作业直接包含本次有效资源。串行模板省略并行规模。
+
+```python
+from takflow.backends.runtime import set_resource_variables, set_runtime
+from takflow.jobspec import TaskResource
+
+set_runtime(suite, config.workload, engine)
+set_resource_variables(family, TaskResource(job_type="parallel", queue="batch", nodes=4, ntasks_per_node=32))
+set_resource_variables(task, TaskResource(time="00:40:00"))
+```
+
+以上 task 只固定墙钟。需要固定与父节点相同的队列或规模时，也在本级显式声明。已有混合队列应用使用的 `set_runtime(node, workload, engine, task_resource)` 保留按 parallel 选择默认并行队列的行为。载体切换由不带 task_resource 的 `set_runtime` 调用声明。
+
+ecFlow 使用 `WALLTIME`、`MEMORY`、`NODES`、`TASKS_PER_NODE`、`QUEUE`、`WCKEY`、`APPLICATION` 和小写布尔值的 `REQUEUE`。有模板值时，例如 `%WALLTIME:06:00:00%`，可直接修改节点的标量。没有模板值的可选文本或数量字段由节点携带整行引用，例如 `ORVIX_MEMORY='#ORVIX memory=%MEMORY%'`。通过 takflow 的节点 API 声明资源会一并生成引用。在已加载的原生定义上首次增加此类字段，可以调用 `parent.add_variable(ecflow_resource_variables({"MEMORY": "8G"}))`，其中 `ecflow_resource_variables` 来自 `takflow.backends.runtime`。后续修改标量即可，完整撤下本级声明时同时移除相应整行引用。
+
+ecFlow 在没有 requeue 回退的 ORVIX 模板中按 `REQUEUE` 选择公共 include。使用标准 Application 时启用 `use_public_resources` 并将输出的 `ecflow/include` 加入 `ECF_INCLUDE`。原生 Slurm 模板可以使用 `%include <common/requeue.h>`，只有有效 False 产生 `#SBATCH --no-requeue`。takler 用第二轮 Jinja 处理缺失值与布尔值。
+
 示例见 `examples/toyflow` 的 `resources/jobs/` 模板。
 
 ## 与 orvix 的契约关系
