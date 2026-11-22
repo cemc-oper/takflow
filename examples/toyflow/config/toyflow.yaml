@@ -18,7 +18,7 @@ script_invoke_mode: external     # external / inline
 
 workload:
   workload_type: slurm
-  wckey: toyflow
+  project: toyflow
   scheduler: slurm               # orvix 目标调度器: slurm / donau
   submit_carrier: orvix          # 资源载体: orvix / slsubmit6
   default_serial_queue: serial

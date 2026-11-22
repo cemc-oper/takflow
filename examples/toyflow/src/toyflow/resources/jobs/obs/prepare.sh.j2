@@ -6,7 +6,7 @@
 # 观测预处理作业（serial）。
 
 {% if config.workload.workload_type == "slurm" and config.workload.submit_carrier == "orvix" %}
-{{ render_orvix_resource_block(job_type="serial", walltime="00:30:00", output=output_std_log_path, error=output_stderr_log_path, wckey=config.workload.wckey, application=(config.workload.application | default("TOYFLOW")), scheduler=(config.workload.scheduler | default("slurm"))) }}
+{{ render_orvix_resource_block(job_type="serial", time="00:30:00", output=output_std_log_path, error=output_stderr_log_path, project=config.workload.project, application=(config.workload.application | default("TOYFLOW")), scheduler=(config.workload.scheduler | default("slurm"))) }}
 {% endif %}
 
 set -a

@@ -43,6 +43,7 @@ def toyflow(tmp_path, monkeypatch):
     return config, output_repo_base
 
 
+@pytest.mark.filterwarnings("error::takflow.config.workload.ResourceAliasWarning")
 def test_toyflow_full_pipeline(toyflow, tmp_path):
     config, output_repo_base = toyflow
 
