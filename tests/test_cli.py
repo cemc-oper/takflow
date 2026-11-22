@@ -212,16 +212,12 @@ def test_generation_never_executes_business_or_machine_shell(tmp_path, resources
     marker = tmp_path / "executed"
     put(resources, "scripts/on/task.sh", f"#!/bin/bash\ntouch '{marker}'\n")
     put(resources, "machine/site/env/runtime.sh", f"touch '{marker}'\n")
-    original = subprocess.run
-    calls = []
-    def checked(command, *args, **kwargs):
-        calls.append(command)
-        assert command[1] == "-n", "generation must only invoke interpreter syntax checks"
-        return original(command, *args, **kwargs)
-    monkeypatch.setattr(subprocess, "run", checked)
+    def unexpected(*args, **kwargs):
+        pytest.fail("default generation invoked a shell")
+    monkeypatch.setattr(subprocess, "run", unexpected)
     response = invoke(application(resources), configuration(tmp_path), "build")
     assert response.exit_code == 0, response.output
-    assert calls and not marker.exists()
+    assert not marker.exists()
 
 
 def test_shell_output_override_remains_a_controlled_error(tmp_path, resources):

@@ -196,8 +196,13 @@ def preflight_generation(
     elif required_operations:
         report.fail("GEN_OPERATION_UNSUPPORTED", stage, "shell", "shell generation does not instantiate a workflow backend")
     report.passed("GEN_CAPABILITIES_VALID", stage, "configuration", "declared generation combination and operations are supported")
-    report.unchecked("GEN_RUNTIME_UNCHECKED", stage, "runtime", "scheduler, programs, libraries and remote paths are not executed or probed")
     return report
+
+
+def check_node_name(name, *, report=None, subject="node"):
+    if not name or name in (".", "..") or re.search(r"[\s/\\\x00-\x1f\x7f]", name):
+        (report or GenerationCheckReport()).fail("GEN_NODE_NAME_INVALID", "definition.preflight", subject,
+                                                 "node name is empty or contains path separators, whitespace or controls")
 
 
 def check_workflow_structure(suite, *, engine=None, check_report: GenerationCheckReport | None = None) -> GenerationCheckReport:
@@ -218,8 +223,7 @@ def check_workflow_structure(suite, *, engine=None, check_report: GenerationChec
             report.fail("GEN_TREE_INVALID", stage, prefix or "suite", "node is cyclic or attached more than once")
         seen.add(id(node))
         name = node.name
-        if not name or name in (".", "..") or re.search(r"[\s/\\\x00-\x1f\x7f]", name):
-            report.fail("GEN_NODE_NAME_INVALID", stage, prefix or "suite", "node name is empty or contains path separators, whitespace or controls")
+        check_node_name(name, report=report, subject=prefix or "suite")
         path = f"{prefix}/{name}"
         if node.parent is not parent or node.engine is not suite.engine:
             report.fail("GEN_TREE_INVALID", stage, path, "node parent or engine does not match its public tree")

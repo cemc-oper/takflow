@@ -159,6 +159,28 @@ def create_cli(application: Application | Callable[[], Application] | str | None
             invoke = click.option("--credential-file", help="Credential input file; never credential content.")(invoke)
         return invoke
 
+    @cli.command("check")
+    @click.option("--manifest", type=click.Path(path_type=str), help="Build inventory used for expansion or integrity.")
+    @click.option("--definition", type=click.Path(path_type=str), help="Generated definition, defaults to the manifest entry.")
+    @click.option("--mode", type=click.Choice(["ecflow", "takler"]), help="Definition format if it cannot be inferred.")
+    @click.option("--parse-definition", "parse", is_flag=True, help="Only read and parse the definition.")
+    @click.option("--expand", multiple=True, metavar="TASK", help="Preprocess a selected absolute task path in a temporary directory.")
+    @click.option("--shell", multiple=True, type=click.Path(path_type=str), help="Check a concrete script with its declared shell.")
+    @click.option("--integrity", is_flag=True, help="Compare recorded files and permissions with the build inventory.")
+    @click.pass_context
+    def check(context, **options):
+        """Check selected artifacts without loading an application."""
+        from takflow.artifact_checks import check_artifacts
+        if not any(options[key] for key in ("parse", "expand", "shell", "integrity")):
+            raise click.UsageError("select --parse-definition, --expand, --shell or --integrity")
+        result = check_artifacts(**options)
+        if context.obj["format"] == "json":
+            click.echo(json.dumps(result.as_dict(), ensure_ascii=True))
+        else:
+            for item in result.checks:
+                click.echo(f"{item['scope']} {item['object']}: {item['status']} ({item['reason']})")
+        context.exit(0 if result.passed else 1)
+
     cli.command("build", help="Run the complete standard generation pipeline.")(command(None))
     for stage in ("resource", "config", "credential", "job", "workflow"):
         group = click.Group(stage, help=f"Run only the {stage} stage.", no_args_is_help=False)

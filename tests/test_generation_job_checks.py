@@ -8,6 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 import pytest
 
 from takflow.checks import GenerationCheckError, GenerationCheckReport
+from takflow.artifact_checks import check_artifacts
 from takflow.config import BaseWorkflowConfig
 from takflow.toolkit.job import render_jobs_from_directory, render_single_job_file
 
@@ -30,7 +31,7 @@ def render(root, output, *, settings=None, report=None, **kwargs):
                                       check_report=report, **kwargs)
 
 
-def test_static_include_failure_does_not_replace_any_selected_job(tmp_path):
+def test_missing_include_fails_at_render_and_keeps_earlier_job(tmp_path):
     root = jobs(tmp_path / "repo", {"first.sh.j2": "new first", "last.sh.j2": '{% include "missing.j2" %}'})
     output = tmp_path / "out"
     (output / "jobs").mkdir(parents=True)
@@ -39,26 +40,27 @@ def test_static_include_failure_does_not_replace_any_selected_job(tmp_path):
     first.chmod(0o750)
     with pytest.raises(GenerationCheckError) as caught:
         render(root, output)
-    assert caught.value.diagnostic.code == "GEN_TEMPLATE_MISSING"
-    assert caught.value.diagnostic.stage == "job.preflight"
+    assert caught.value.diagnostic.code == "GEN_JOB_RENDER"
+    assert caught.value.diagnostic.stage == "job.render"
     assert caught.value.diagnostic.object == "jobs/last.sh.j2"
-    assert caught.value.report.artifacts == []
-    assert first.read_text() == "previous first"
-    assert first.stat().st_mode & 0o777 == 0o750
+    assert [item["path"] for item in caught.value.report.artifacts] == [str(first)]
+    assert first.read_text() == "new first"
+    assert first.stat().st_mode & 0o111
     assert not (output / "jobs/last.sh").exists()
 
 
 @pytest.mark.parametrize("helper", ["include_raw", "invoke_script"])
 @pytest.mark.parametrize("mode", ["inline", "external"])
-def test_literal_script_reference_is_checked_before_any_job_write(tmp_path, helper, mode):
+def test_missing_script_fails_when_its_job_is_rendered(tmp_path, helper, mode):
     root = jobs(tmp_path / "repo", {"first.sh.j2": "echo first", "last.sh.j2": f'{{{{ {helper}("scripts/missing.sh") }}}}'})
     output = tmp_path / "out"
     with pytest.raises(GenerationCheckError) as caught:
         render(root, output, settings=config(script_invoke_mode=mode))
     assert caught.value.diagnostic.code == "GEN_INPUT_MISSING"
-    assert caught.value.diagnostic.stage == "job.preflight"
+    assert caught.value.diagnostic.stage == "job.render"
     assert caught.value.diagnostic.object.endswith("scripts/missing.sh")
-    assert not output.exists()
+    assert (output / "jobs/first.sh").read_text() == "echo first"
+    assert not (output / "jobs/last.sh").exists()
 
 
 def test_external_script_requires_execute_permission_but_inline_only_reads(tmp_path):
@@ -71,7 +73,7 @@ def test_external_script_requires_execute_permission_but_inline_only_reads(tmp_p
     with pytest.raises(GenerationCheckError) as caught:
         render(root, output, settings=config(script_invoke_mode="external"))
     assert caught.value.diagnostic.code == "GEN_INPUT_NOT_EXECUTABLE"
-    assert caught.value.diagnostic.stage == "job.preflight"
+    assert caught.value.diagnostic.stage == "job.render"
     assert not (output / "jobs").exists()
     assert render(root, output, settings=config(script_invoke_mode="inline")) is None
     assert (output / "jobs/task.sh").read_text().splitlines() == ["(", ":", "echo business", ")"]
@@ -83,7 +85,7 @@ def test_script_reference_must_be_relative_and_contained(tmp_path, reference):
     with pytest.raises(GenerationCheckError) as caught:
         render(root, tmp_path / "out")
     assert caught.value.diagnostic.code == "GEN_PATH_INVALID"
-    assert caught.value.diagnostic.stage == "job.preflight"
+    assert caught.value.diagnostic.stage == "job.render"
 
 
 def test_symlinked_script_cannot_escape_output_root(tmp_path):
@@ -184,7 +186,7 @@ def test_recursive_static_dependencies_check_script_references(tmp_path):
     with pytest.raises(GenerationCheckError) as caught:
         render(root, tmp_path / "out")
     assert caught.value.diagnostic.code == "GEN_INPUT_MISSING"
-    assert caught.value.diagnostic.stage == "job.preflight"
+    assert caught.value.diagnostic.stage == "job.render"
 
 
 def test_template_source_symlink_cannot_escape_resource_root(tmp_path):
@@ -196,7 +198,7 @@ def test_template_source_symlink_cannot_escape_resource_root(tmp_path):
     with pytest.raises(GenerationCheckError) as caught:
         render(root, tmp_path / "out")
     assert caught.value.diagnostic.code == "GEN_PATH_ESCAPE"
-    assert not (tmp_path / "out").exists()
+    assert not (tmp_path / "out/jobs/task.sh").exists()
 
 
 def test_static_include_cannot_traverse_above_resource_root(tmp_path):
@@ -204,7 +206,7 @@ def test_static_include_cannot_traverse_above_resource_root(tmp_path):
     with pytest.raises(GenerationCheckError) as caught:
         render(root, tmp_path / "out")
     assert caught.value.diagnostic.code == "GEN_PATH_ESCAPE"
-    assert caught.value.diagnostic.stage == "job.preflight"
+    assert caught.value.diagnostic.stage == "job.render"
 
 
 def test_jinja_candidate_list_and_optional_include_keep_native_semantics(tmp_path):
@@ -214,17 +216,17 @@ def test_jinja_candidate_list_and_optional_include_keep_native_semantics(tmp_pat
     report = GenerationCheckReport()
     render(root, tmp_path / "out", report=report)
     assert (tmp_path / "out/jobs/task.sh").read_text().strip() == "echo selected"
-    assert any(item.code == "GEN_TEMPLATE_OPTIONAL" and item.status == "unchecked" for item in report.checks)
+    assert not any(item.code == "GEN_TEMPLATE_OPTIONAL" for item in report.checks)
 
 
-def test_dynamic_include_and_runtime_script_are_explicitly_unchecked(tmp_path):
+def test_dynamic_include_renders_and_runtime_script_is_preserved(tmp_path):
     root = jobs(tmp_path / "repo", {"task.sh.j2": '{% include config.workflow_name %}\n{{ invoke_script("${REMOTE_SCRIPTS}/run.sh") }}'})
     (root / "templates").mkdir()
     (root / "templates/ok.j2").write_text("echo selected")
     report = GenerationCheckReport()
     render(root, tmp_path / "out", settings=config(workflow_name="templates/ok.j2"), report=report)
     unchecked = {item.code for item in report.checks if item.status == "unchecked"}
-    assert {"GEN_TEMPLATE_DYNAMIC", "GEN_SCRIPT_DYNAMIC"} <= unchecked
+    assert unchecked == {"GEN_SCRIPT_DYNAMIC"}
     assert "${REMOTE_SCRIPTS}" in (tmp_path / "out/jobs/task.sh").read_text()
 
 
@@ -257,18 +259,18 @@ def test_single_job_preflight_checks_output_and_missing_static_template(tmp_path
         render_single_job_file(Path("missing.j2"), str(tmp_path / "out"), Path("job.sh"),
                                config(), Environment(loader=FileSystemLoader(tmp_path)),
                                check_report=report)
-    assert caught.value.diagnostic.code == "GEN_TEMPLATE_MISSING"
+    assert caught.value.diagnostic.code == "GEN_JOB_RENDER"
     assert caught.value.report is report
-    assert not (tmp_path / "out").exists()
+    assert not (tmp_path / "out/job.sh").exists()
 
 
 def test_post_generation_shell_syntax_failure_records_stage_without_execution(tmp_path):
     marker = tmp_path / "business-was-executed"
     root = jobs(tmp_path / "repo", {"task.sh.j2": f'#!/bin/bash\ntouch "{marker}"\nif then\n'})
-    with pytest.raises(GenerationCheckError) as caught:
-        render(root, tmp_path / "out")
-    assert caught.value.diagnostic.code == "GEN_SCRIPT_SYNTAX"
-    assert caught.value.diagnostic.stage == "job.output"
+    render(root, tmp_path / "out")
+    result = check_artifacts(shell=[tmp_path / "out/jobs/task.sh"])
+    assert not result.passed
+    assert result.checks[0]["status"] == "failed"
     assert (tmp_path / "out/jobs/task.sh").exists()
     assert not marker.exists()
 
@@ -294,8 +296,7 @@ def test_unexecuted_control_flow_does_not_read_or_require_its_references(tmp_pat
     report = GenerationCheckReport()
     render(root, output, report=report)
     assert (output / "jobs/task.sh").read_text().strip() == "echo safe"
-    assert any(item.code == "GEN_SCRIPT_CONDITIONAL" and item.status == "unchecked" for item in report.checks)
-    assert any(item.code == "GEN_TEMPLATE_CONDITIONAL" and item.status == "unchecked" for item in report.checks)
+    assert not any(item.status == "unchecked" for item in report.checks)
 
 
 def test_overridden_parent_block_does_not_require_unused_include(tmp_path):

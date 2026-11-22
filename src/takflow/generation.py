@@ -13,11 +13,8 @@ from pathlib import Path
 from takflow.backends.ecflow import EcflowBackend
 from takflow.checks import (
     GenerationCheckReport,
-    check_definition_output,
     check_output_path,
     check_relative_path,
-    check_shell_output,
-    check_workflow_structure,
     preflight_generation,
 )
 from takflow.config import BaseWorkflowConfig
@@ -132,10 +129,7 @@ def generate_workflow(
             config, resolved_output_repo_base, workflow_repo_base
         )
         if output_path is not None:
-            check_shell_output(output_path, check_report=report, stage="workflow.output", role="shell_runner")
-        else:
-            report.unchecked("GEN_OUTPUT_UNKNOWN", "workflow.output", "shell_renderer",
-                             "legacy renderer returned None; no output path is available for postchecks")
+            report.artifact(output_path, "shell_runner", stage="workflow.output")
         return GenerationResult(
             mode=mode,
             output_repo_base=resolved_output_repo_base,
@@ -159,7 +153,10 @@ def generate_workflow(
 
     engine = WorkflowEngine(backend_cls())
     suite = suite_builder(config, engine)
-    check_workflow_structure(suite, engine=engine, check_report=report)
+    if not isinstance(suite, Node) or suite.parent is not None or suite.node_type.value != "suite":
+        report.fail("GEN_SUITE_INVALID", "definition.save", "suite", "builder must return a detached suite from the selected engine")
+    if suite.engine is not engine:
+        report.fail("GEN_TREE_INVALID", "definition.preflight", "suite", "builder returned a suite from another engine")
     context = GenerationContext(
         config=config,
         engine=engine,
@@ -169,7 +166,6 @@ def generate_workflow(
     )
     if before_save is not None:
         before_save(context)
-        check_workflow_structure(suite, engine=engine, check_report=report)
     before_write = _file_state(output_path)
     try:
         engine.save_suite(suite, output_path)
@@ -188,7 +184,6 @@ def generate_workflow(
                              "callback failed after save; output may have changed and remains unqualified")
             _record_failed_output(report, output_path, before_callback, "definition.output")
             raise
-    check_definition_output(suite, output_path, check_report=report)
 
     return GenerationResult(
         mode=mode,

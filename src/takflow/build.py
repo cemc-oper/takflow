@@ -25,9 +25,10 @@ from takflow.application import BuildContext, ResourceEntry
 from takflow.backends.ecflow.serializer.attributes import _native_variable_quotes
 from takflow.checks import (
     GenerationCheckReport, check_input_file,
-    check_output_path, check_relative_path, check_shell_output,
+    check_output_path, check_relative_path,
 )
 from takflow.config import ConfigValidationError
+from takflow._job_paths import ecflow_task_templates
 from takflow.flow.hook import _safe_hook_errors
 from takflow.generation import GenerationContext, GenerationResult, generate_workflow
 from takflow.spec.jobspec import contract_version
@@ -36,7 +37,7 @@ from takflow.toolkit.job import RESOURCE_TEMPLATE_HELPERS, render_jobs_from_dire
 from takflow.toolkit.resource import _copy_resource_layers
 
 
-STAGES = ("resource", "config", "credential", "job", "workflow", "check", "report")
+STAGES = ("resource", "config", "credential", "job", "workflow", "report")
 
 
 @dataclass
@@ -100,9 +101,17 @@ class BuildError(RuntimeError):
 
 class _BuildChecks(GenerationCheckReport):
     def __init__(self, context: BuildContext):
-        super().__init__(checks=list(context.checks.checks))
+        super().__init__()
         self.sensitive = {str(context.paths.config_dir / "credential.sh")}
         self.sensitive.update(str(context.paths.output_root / item.output) for item in context.outputs if item.mode == 0o600)
+
+    def passed(self, code, stage, object, reason):
+        # A build records writes and generation failures, not optional check receipts.
+        pass
+
+    def unchecked(self, code, stage, object, reason):
+        if "PARTIAL" in code:
+            super().unchecked(code, stage, object, reason)
 
     def artifact(self, path, role, *, stage="generation.output"):
         if str(path) not in self.sensitive:
@@ -128,9 +137,6 @@ class _ResourceLoader(FileSystemLoader):
                 break
         source, filename, current = super().get_source(environment, template)
         path = Path(filename)
-        root = next(root for root in self.roots if path.is_relative_to(root))
-        check_relative_path(root, path.relative_to(root), stage="template.input", report=self.report)
-        check_input_file(path, stage="template.input", report=self.report)
         self.inputs.add(path)
         return source, filename, current
 
@@ -244,8 +250,6 @@ class _Pipeline:
         if machine.external:
             if not any(item.path == str(target) and item.kind == "reference" for item in self.result.artifacts):
                 self.result.artifacts.append(BuildArtifact(str(target), "machine", self.stage, "reference", mutable=True))
-            self.report.unchecked("BUILD_EXTERNAL_MACHINE_UNCHECKED", self.stage, str(target),
-                                  "external target fragment is not probed on the generation host")
         else:
             local = check_relative_path(self.root, target.relative_to(PurePosixPath(str(self.root))), stage=self.stage, report=self.report)
             check_input_file(local, stage=self.stage, report=self.report)
@@ -331,8 +335,6 @@ class _Pipeline:
                 text = "\n".join(lines) + "\n" + text
             self.write(path, text, role, mode)
             self.record(path, role, source={"template": self.template_sources[template]})
-            if mode != 0o600:
-                check_shell_output(path, check_report=self.report, stage="config.output", role=role)
 
     def credential(self):
         enabled = self.context.application.credential_enabled
@@ -359,20 +361,6 @@ class _Pipeline:
                     self.record(path, "credential")
             except Exception:
                 self.report.unchecked("BUILD_PARTIAL_UNREADABLE", "credential", str(path), "credential metadata could not be collected")
-        check_shell_output(path, check_report=self.report, stage="credential.output", role="credential")
-
-    def job_inputs(self):
-        templates = {}
-        for layer in self.context.paths.resource_layers:
-            directory = layer.root / "jobs"
-            if directory.is_dir():
-                for path in sorted(directory.rglob("*.j2")):
-                    relative = path.relative_to(directory)
-                    if self.context.components.keep_job(relative):
-                        templates[relative] = path
-        suffix = ".ecf" if self.context.config.workflow_mode == "ecflow" else ".sh"
-        return [(path, self.context.paths.jobs_dir / relative.parent / (relative.stem.removesuffix(".sh") + suffix))
-                for relative, path in templates.items()]
 
     def check_script_input(self, relative):
         if self.result.scope != "full":
@@ -395,18 +383,21 @@ class _Pipeline:
 
     def job(self):
         self.config_inputs()
-        planned = self.job_inputs()
+        planned = []
         before = {}
-        for source, target in planned:
-            self.loader.inputs.add(source)
-            self.reserve(target, "job")
-            before[target] = file_state(target)
+
+        def prepare_outputs(files):
+            planned.extend(files)
+            self.loader.inputs.update(source for source, _ in files)
+            for _, target in files:
+                self.reserve(target, "job")
+                before[target] = file_state(target)
         try:
             render_jobs_from_directory(self.context.config, [layer.root for layer in self.context.paths.resource_layers],
                                        str(self.root), template_filter=self.context.components.keep_job,
                                        check_report=self.report, environment=self.environment,
                                        template_context=self.context.template_context(), file_mode=0o755, verbose=False,
-                                       script_input_check=self.check_script_input)
+                                       script_input_check=self.check_script_input, prepare_outputs=prepare_outputs)
         finally:
             for _, path in planned:
                 try:
@@ -419,8 +410,6 @@ class _Pipeline:
 
     def workflow(self):
         self.config_inputs()
-        for _, path in self.job_inputs():
-            check_input_file(path, stage="workflow.input", report=self.report, executable=True)
         path = self.context.paths.workflow_output
         self.reserve(path, "workflow")
         make_parents(path, self.root)
@@ -437,6 +426,19 @@ class _Pipeline:
                 context.suite.add_variable("TAKFLOW_MACHINE_INCLUDE_DIR", str(machine.directory))
             if self.before_save is not None:
                 self.before_save(context)
+
+            if self.result.mode == "ecflow":
+                current_jobs = {Path(item.path) for item in self.result.artifacts if item.role == "job"}
+                for node, candidates in ecflow_task_templates(context.suite):
+                    if not candidates or not all(p.is_relative_to(self.context.paths.jobs_dir) for p in candidates):
+                        continue
+                    if self.result.scope == "full":
+                        present = any(p in current_jobs for p in candidates)
+                    else:
+                        present = any(p.is_file() for p in candidates)
+                    if not present:
+                        self.fail("BUILD_JOB_INPUT_REQUIRED", node.path,
+                                  f"enabled task requires a prepared job template: {candidates[-1]}")
 
         def shell_renderer(config, output_root, resource_root):
             text = self.render(self.context.application.shell_template)
@@ -467,24 +469,6 @@ class _Pipeline:
             except Exception:
                 self.report.unchecked("BUILD_PARTIAL_UNREADABLE", "workflow", str(path), "workflow metadata could not be collected")
 
-    def check(self):
-        for path in [self.context.paths.config_file, self.context.paths.workflow_output,
-                     *(target for _, target in self.job_inputs())]:
-            check_input_file(path, stage="build.check", report=self.report)
-        for item in self.result.artifacts:
-            if item.kind == "reference" and item.mode is None:
-                continue
-            path = check_input_file(item.path, stage="build.check", report=self.report)
-            mode = oct(stat.S_IMODE(path.stat().st_mode))
-            digest = hashlib.sha256(path.read_bytes()).hexdigest() if not item.sensitive else None
-            if item.mutable:
-                if digest != item.sha256 or mode != item.mode:
-                    self.report.unchecked("BUILD_MUTABLE_REFERENCE_CHANGED", "build.check", item.path,
-                                          "machine fragment differs from its build-time observation; reference remains updateable")
-            elif digest != item.sha256 or mode != item.mode:
-                self.fail("BUILD_ARTIFACT_CHANGED", item.path, "registered artifact content or permissions changed during the build")
-        self.report.passed("BUILD_ARTIFACTS_VALID", "build.check", "artifacts", "registered invocation artifacts checked; stale files not adopted")
-
     def publish(self):
         public_inputs = {"mode": self.result.mode, "workflow_name": self.context.config.workflow_name,
                          "script_invoke_mode": self.context.config.script_invoke_mode,
@@ -498,7 +482,8 @@ class _Pipeline:
                        resource_layers=[{"name": layer.name, "root": str(layer.root)} for layer in self.context.paths.resource_layers])
         payload["implementation_sha256"] = {
             name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-            for name in ("application.py", "build.py", "generation.py", "checks.py", "_files.py", "flow/hook.py",
+            for name in ("application.py", "build.py", "generation.py", "checks.py", "_files.py", "_job_paths.py",
+                         "flow/node.py", "flow/hook.py",
                          "toolkit/job.py", "toolkit/resource.py", "toolkit/credential.py", "backends/ecflow/serializer/attributes.py")
         }
         spec = Path(__file__).parent / "spec"
@@ -541,7 +526,6 @@ class _Pipeline:
                 outcome.status = "skipped" if reason else "passed"
                 outcome.reason = reason
                 self.collect()
-            self.result.diagnostics = [asdict(item) for item in self.report.checks]
             if full:
                 self.stage = "report"
                 self.publish()
@@ -566,7 +550,7 @@ class _Pipeline:
 
 def build(context: BuildContext, *, credential_file=None, before_save: Callable | None = None,
           after_save: Callable | None = None) -> BuildResult:
-    """Run all standard stages; publish success only after final checks pass."""
+    """Run all standard stages; publish the manifest after all generation stages succeed."""
     return _Pipeline(context, credential_file=credential_file, before_save=before_save, after_save=after_save).run(STAGES, full=True)
 
 

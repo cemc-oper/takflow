@@ -14,6 +14,7 @@ from takflow.backends.takler import TaklerBackend
 from takflow.checks import (
     GenerationCheckError,
     GenerationCheckReport,
+    check_definition_output,
     check_input_file,
     check_output_path,
     check_relative_path,
@@ -22,6 +23,7 @@ from takflow.checks import (
     preflight_generation,
 )
 from takflow.config import BaseWorkflowConfig
+from takflow.artifact_checks import check_artifacts
 from takflow.flow import WorkflowEngine
 from takflow.generation import generate_workflow
 
@@ -68,7 +70,7 @@ def test_preflight_accepts_declared_combinations_without_claiming_runtime(tmp_pa
     report = GenerationCheckReport()
     assert preflight_generation(settings, check_report=report) is report
     assert has_check(report, "GEN_CAPABILITIES_VALID", "passed")
-    assert has_check(report, "GEN_RUNTIME_UNCHECKED", "unchecked")
+    assert not any(item.status == "unchecked" for item in report.checks)
     assert report.artifacts == []
     assert not (tmp_path / "out").exists()
 
@@ -241,7 +243,7 @@ def test_success_reports_only_current_default_or_explicit_definition(tmp_path, e
     assert report.artifacts == [{"path": str(expected), "role": "definition",
                                  "mode": oct(expected.stat().st_mode & 0o777),
                                  "sha256": hashlib.sha256(expected.read_bytes()).hexdigest()}]
-    assert has_check(report, "GEN_SERIALIZER_VALID", "passed")
+    assert not has_check(report, "GEN_SERIALIZER_VALID", "passed")
 
 
 def test_default_definition_name_cannot_escape_output_root(tmp_path):
@@ -257,9 +259,9 @@ def test_after_save_corruption_is_detected_and_current_bad_file_is_reported(tmp_
     report = GenerationCheckReport()
     def corrupt(context):
         context.output_path.write_text("corrupt saved definition")
+    result = generate_workflow(config(tmp_path), suite_builder=build_suite, after_save=corrupt, check_report=report)
     with pytest.raises(GenerationCheckError) as caught:
-        generate_workflow(config(tmp_path), suite_builder=build_suite,
-                          after_save=corrupt, check_report=report)
+        check_definition_output(result.suite, result.output_path, check_report=report)
     assert_failure(caught.value, "GEN_DEFINITION_INVALID", "definition.output")
     output = tmp_path / "out/demo.def"
     assert output.read_text() == "corrupt saved definition"
@@ -270,8 +272,8 @@ def test_after_save_brand_comments_are_accepted_without_claiming_native_jobs(tmp
     report = GenerationCheckReport()
     def brand(context):
         context.output_path.write_text("# application brand\n" + context.output_path.read_text() + "\n# generated footer\n")
-    generate_workflow(config(tmp_path), suite_builder=build_suite,
-                      after_save=brand, check_report=report)
+    result = generate_workflow(config(tmp_path), suite_builder=build_suite, after_save=brand, check_report=report)
+    check_definition_output(result.suite, result.output_path, check_report=report)
     assert has_check(report, "GEN_SERIALIZER_VALID", "passed")
     assert not any("JOB" in item.code and item.status == "passed" for item in report.checks)
 
@@ -280,8 +282,8 @@ def test_after_save_brand_comments_are_accepted_without_claiming_native_jobs(tmp
                     reason="native ecFlow is installed; missing-dependency case is inapplicable")
 def test_absent_native_ecflow_is_explicitly_unchecked(tmp_path):
     report = GenerationCheckReport()
-    generate_workflow(config(tmp_path), suite_builder=build_suite, check_report=report)
-    assert has_check(report, "GEN_NATIVE_ECFLOW_UNAVAILABLE", "unchecked")
+    result = generate_workflow(config(tmp_path), suite_builder=build_suite, check_report=report)
+    assert check_artifacts(definition=result.output_path, parse=True).checks[0]["status"] == "incomplete"
     assert not has_check(report, "GEN_NATIVE_ECFLOW_VALID", "passed")
 
 
@@ -291,8 +293,8 @@ def test_actual_takler_parse_is_distinct_from_job_creation(tmp_path):
     result = generate_workflow(config(tmp_path, "takler"), suite_builder=build_suite,
                                check_report=report)
     assert json.loads(result.output_path.read_bytes())["schema_version"] == 1
-    assert has_check(report, "GEN_TAKLER_DEFINITION_VALID", "passed")
-    assert has_check(report, "GEN_TAKLER_JOB_UNCHECKED", "unchecked")
+    assert check_artifacts(definition=result.output_path, parse=True).passed
+    assert not any(item.status == "unchecked" for item in report.checks)
 
 
 @takler_required
@@ -301,9 +303,9 @@ def test_valid_takler_json_cannot_silently_lose_built_tasks_after_save(tmp_path)
         document = json.loads(context.output_path.read_bytes())
         document["root"]["children"] = []
         context.output_path.write_text(json.dumps(document))
+    result = generate_workflow(config(tmp_path, "takler"), suite_builder=build_suite, after_save=remove_children)
     with pytest.raises(GenerationCheckError) as caught:
-        generate_workflow(config(tmp_path, "takler"), suite_builder=build_suite,
-                          after_save=remove_children)
+        check_definition_output(result.suite, result.output_path)
     assert_failure(caught.value, "GEN_DEFINITION_INVALID", "definition.output")
 
 

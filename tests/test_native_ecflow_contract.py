@@ -16,6 +16,7 @@ import pytest
 from takflow.backends.ecflow import EcflowBackend
 from takflow.checks import GenerationCheckReport, check_definition_output
 from takflow.flow import WorkflowEngine
+from test_build import resources
 from test_runtime_local_carrier import assert_command_argv
 
 
@@ -534,3 +535,60 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
             previous[job] = job.read_bytes()
         assert source.read_text() == original
         assert all(job.read_bytes() == content for job, content in previous.items())
+
+
+def test_native_ecflow_checks_isolate_commands_includes_and_jobs(tmp_path, resources):
+    from test_build import application, data, put
+    from test_artifact_checks import snapshot
+    from takflow.artifact_checks import check_artifacts
+    from takflow.build import build
+    import shlex
+    from takflow._native_artifacts import expand_ecflow
+    from takflow.artifact_checks import Inventory, _parse
+
+    out = tmp_path / "outputs with space"
+    source = out / "jobs/on/task.ecf"
+    sentinel = put(tmp_path, "outside/original.job0", "original", 0o640)
+    marker = sentinel.parent / "executed"
+    def suite(config, engine):
+        root = engine.Suite("suite")
+        root.add_variables({"ECF_HOME": str(sentinel.parent), "ECF_JOB": str(sentinel), "ECF_INCLUDE": str(out),
+                            "ECF_SCRIPT_CMD": "cat " + shlex.quote(str(source)), "SELECTED": "native-value"})
+        root.add_task("task")
+        return root
+    put(resources, "jobs/on/task.sh.j2", '#!/bin/bash\n%include <scripts/on/part.h>\n%nopp\n%include <literal-body>\n%end\ntouch ' + str(marker) + '\n')
+    put(resources, "scripts/on/part.h", "echo %SELECTED%\n")
+    with application(resources, suite_builder=suite).prepare(data(out)) as ctx:
+        result = build(ctx)
+    resources.rename(tmp_path / "detached-source")
+    inventory = Inventory(result.manifest_path)
+    original = snapshot(out)
+    before = snapshot(sentinel.parent)
+    work = tmp_path / "native"
+    work.mkdir()
+    job = expand_ecflow(_parse(result.workflow_output, "ecflow"), "/suite/task", inventory, work)
+    assert "echo native-value" in job.read_text() and "%include <literal-body>" in job.read_text()
+    assert job.is_relative_to(work)
+    assert check_artifacts(manifest=result.manifest_path, parse=True, expand=["/suite/task"]).passed
+    assert snapshot(out) == original and snapshot(sentinel.parent) == before
+
+    definition = result.workflow_output.read_text()
+    cmd = next(line for line in definition.splitlines() if "edit ECF_SCRIPT_CMD" in line)
+    result.workflow_output.write_text(definition.replace(cmd, "  edit ECF_SCRIPT_CMD 'touch " + str(marker) + "'"))
+    before_out = snapshot(out)
+    assert check_artifacts(manifest=result.manifest_path, parse=True).passed
+    checked = check_artifacts(manifest=result.manifest_path, expand=["/suite/task"])
+    assert checked.checks[0]["status"] == "incomplete" and "ECF_SCRIPT_CMD" in checked.checks[0]["reason"]
+    assert before_out == snapshot(out) and before == snapshot(sentinel.parent)
+    result.workflow_output.write_text(definition)
+    put(out, "old.h", "old output")
+    for content, status in [("%include <old.h>\n", "incomplete"),
+                            ("%includenopp <" + str(sentinel) + ">\n", "incomplete"),
+                            ("%MISSING_NATIVE_VALUE%\n", "failed")]:
+        source.write_text(content)
+        before_out = snapshot(out)
+        checked = check_artifacts(manifest=result.manifest_path, expand=["/suite/task"])
+        assert checked.checks[0]["status"] == status
+        assert before_out == snapshot(out) and before == snapshot(sentinel.parent)
+    result.workflow_output.write_text("invalid definition\n")
+    assert check_artifacts(manifest=result.manifest_path, parse=True).checks[0]["status"] == "failed"

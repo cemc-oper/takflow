@@ -23,7 +23,7 @@ with application.prepare("config.yaml", output_repo_base="build") as context:
 只运行所选阶段，不隐式补跑前置阶段，不发布完整成功清单。必须在 prepare 的作用域内使用。
 prepare 的加载/校验失败继续使用 TC-02 异常；这时尚未开始写出，不虚构本轮阶段产物。
 
-阶段顺序为 `resource → config → credential → job → workflow → check → report`。
+阶段顺序为 `resource → config → credential → job → workflow → report`。
 分步调用检查相同前置条件；例如 job 要求运行配置及所选脚本已准备。
 每次调用只登记自己的写出，已有前置文件不会因为存在就变成本轮产物。
 多个步骤成功也不会自动升级为完整成功，需要显式完整 build 才发布清单。
@@ -57,9 +57,9 @@ machine 由公共选择管理，拒绝手工ResourceEntry复制整个machine树�
 复用credential toolkit组合局部贡献，标准路径使用严格环境和0600，写入前/期间即受保护。
 单独凭证步骤不放宽已有父目录权限。旧render_credential默认0700和None返回保持。
 
-作业复用目录renderer、include_raw、invoke_script、资源指令helper和TC-03检查，统一jobs/、0755。
+作业复用目录 renderer、include_raw、invoke_script 和资源指令 helper，统一写入 jobs/，权限为 0755。
 标准Environment只渲染最终有效模板，禁用组件不读模板正文；inline先准备脚本，external正确引用路径。
-旧renderer不传新增keyword-only参数时保持原布局、空白、来源、权限与返回行为。
+已启用的 ecFlow task 指向本地 jobs 目录时，完整 build 要求本轮已渲染相应 job。分步 workflow 可以消费已准备的输出。
 
 流程继续调用takflow.generation.generate_workflow。
 definition回调仍为builder → before_save → save → after_save，异常保留原异常与已写文件。
@@ -77,15 +77,15 @@ shell/takler配置写Shell字面值；ecFlow配置写原生变量引用，保存
 模板helper `include_machine("env/runtime.sh")` 不内嵌正文、不执行片段。
 默认只复制所选machine/<name>，ecFlow生成绝对includenopp，shell/takler生成正确引用的点号加载。
 普通Shell与需原生预处理的旧片段仍需消费者分类，要求source语义的业务入口保持原作用域。
-显式machine_dir不复制、不本地探测、不回退，记录unchecked reference。
-本地片段检查存在性并记录构建时摘要；copied/reference均标mutable，最终观察到更新会报告差异而非强制重生成。
+显式 machine_dir 的片段登记为外部引用，留到目标环境读取。
+本地片段检查存在性并记录构建时摘要。copied/reference 均标 mutable，允许构建后更新。
 缺失/不可读仍在当前可检查范围内失败。ecFlow后续新建job读取更新，已展开job不自动改变；shell在加载时读取。
 
 ## 失败和清单
 
-写出入口在任何阶段输出前使旧generation_manifest.json失效；check/report单步不写产物，不发布成功。
+写出入口在阶段开始输出前使旧 generation_manifest.json 失效。独立产物检查不会修改它。
 首错停止，负责阶段failed、后续not_run，保留已写文件和原异常；不重试、清空输出根或回滚整个目录。
-完整阶段和最终内容/权限检查通过后，写同目录临时清单、flush/fsync，以os.replace原子发布0644清单。
+完整构建写完所选产物后，report 将清单写到同目录临时文件，flush/fsync 后以 os.replace 原子发布 0644 清单。
 发布失败是report failed，不留下新成功标志，尽力清理临时清单。原子性只覆盖成功标志，整个目录为原位写入。
 
 清单schema_version=1包含本轮结果、包/解释器/jobspec与pin版本、实际库模块摘要、资源层和产物来源。
@@ -95,7 +95,7 @@ config_fingerprint.scope=public-generation-options只摘要模式、流程名、
 reference摘要仅为构建时观察，不冻结运行时内容；陈旧文件不进入本轮结果。
 
 此清单不是Sledra definition manifest，也不是引擎job创建、实际提交、HPC或产品合格证明。
-serializer、真实原生解析、动态模板/远端unchecked分别报告，不用skip代替必测能力通过。
+要核对已交付文件、解析定义或隔离展开原生 job，可另行运行[独立产物检查](generation-checks.md)。
 
 ## ecFlow machine 引用的路径边界（TC-07）
 

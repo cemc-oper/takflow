@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union, TYPE_CHECKING
 from collections.abc import Mapping
 
-from jinja2 import Environment, FileSystemLoader, TemplateError, TemplateNotFound, TemplateSyntaxError, nodes, pass_context
+from jinja2 import Environment, FileSystemLoader, TemplateError, pass_context
 
 from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
@@ -26,7 +26,6 @@ from takflow.checks import (
     check_input_file,
     check_output_path,
     check_relative_path,
-    check_shell_output,
     preflight_generation,
 )
 from takflow.config import SlurmWorkload
@@ -245,25 +244,6 @@ def _check_script_reference(
     )
 
 
-def _template_names(expression: nodes.Expr) -> Optional[List[str]]:
-    if isinstance(expression, nodes.Const) and isinstance(expression.value, str):
-        return [expression.value]
-    if isinstance(expression, (nodes.List, nodes.Tuple)) and all(
-        isinstance(item, nodes.Const) and isinstance(item.value, str)
-        for item in expression.items
-    ):
-        return [item.value for item in expression.items]
-    return None
-
-
-def _template_nodes(node: nodes.Node, conditional: bool = False):
-    """Identify guarded references without trying to evaluate Jinja control flow."""
-    yield node, conditional
-    guarded = conditional or isinstance(node, (nodes.If, nodes.For, nodes.Macro, nodes.Block, nodes.CallBlock))
-    for child in node.iter_child_nodes():
-        yield from _template_nodes(child, guarded)
-
-
 def _template_file(env: Environment, name: str) -> Optional[Path]:
     if isinstance(env.loader, FileSystemLoader):
         return next((Path(root, name) for root in env.loader.searchpath
@@ -279,142 +259,38 @@ class _JobTemplateLoader(FileSystemLoader):
         self._report = report
 
     def get_source(self, environment: Environment, template: str):
+        if Path(template).is_absolute() or ".." in Path(template).parts:
+            self._report.fail("GEN_PATH_ESCAPE", "job.render", template, "template reference must stay within its resource roots")
         for root in self.searchpath:
             candidate = Path(root, template)
-            if candidate.is_file():
+            if os.path.lexists(candidate):
                 path = check_relative_path(root, template, stage="job.render", report=self._report)
                 check_input_file(path, stage="job.render", report=self._report)
                 break
         return super().get_source(environment, template)
 
 
-def _loader_inputs(env: Environment, inputs: set[Path]) -> None:
-    if isinstance(env.loader, FileSystemLoader):
-        for root in env.loader.searchpath:
-            # Metadata-only discovery protects source templates that a later
-            # job may need; filtered templates are never read or compiled.
-            inputs.update(Path(root).rglob("*.j2"))
+def _job_input_guard(outputs, report: GenerationCheckReport):
+    """Index selected destinations once, then check each template or script as it is used."""
+    paths = {path.resolve() for path in outputs}
+    identities = {}
+    for path in paths:
+        if path.is_file():
+            metadata = path.stat()
+            identities[(metadata.st_dev, metadata.st_ino)] = path
 
-
-def _check_input_output_overlap(
-    outputs, inputs: set[Path], report: GenerationCheckReport,
-) -> None:
-    paths, identities = set(), set()
-    for source in inputs:
-        try:
-            if not source.is_file():
-                continue
+    def protect(source: Path) -> None:
+        resolved = source.resolve()
+        target = resolved if resolved in paths else None
+        if target is None and identities and source.is_file():
             metadata = source.stat()
-            paths.add(source.resolve())
-            identities.add((metadata.st_dev, metadata.st_ino))
-        except (OSError, RuntimeError):
-            report.unchecked("GEN_INPUT_IDENTITY_UNCHECKED", "job.preflight", str(source),
-                             "input file identity could not be inspected")
-    for output in outputs:
-        same = output.resolve() in paths
-        if not same and output.is_file():
-            metadata = output.stat()
-            same = (metadata.st_dev, metadata.st_ino) in identities
-        if same:
-            report.fail("GEN_INPUT_OUTPUT_OVERLAP", "job.preflight", str(output),
+            target = identities.get((metadata.st_dev, metadata.st_ino))
+        if target is not None:
+            report.fail("GEN_INPUT_OUTPUT_OVERLAP", "job.preflight", str(target),
                         "job output would overwrite a known template or script input")
 
+    return protect
 
-def _get_template_source(
-    env: Environment, name: str, report: GenerationCheckReport,
-) -> Optional[str]:
-    stage = "job.preflight"
-    if Path(name).is_absolute() or ".." in Path(name).parts:
-        report.fail("GEN_PATH_ESCAPE", stage, name,
-                    "template reference must stay within its resource roots")
-    if isinstance(env.loader, FileSystemLoader):
-        for root in env.loader.searchpath:
-            candidate = Path(root, name)
-            if candidate.is_file():
-                check_relative_path(root, name, stage=stage, report=report)
-                check_input_file(candidate, stage=stage, report=report)
-                break
-    try:
-        return env.loader.get_source(env, name)[0] if env.loader is not None else None
-    except TemplateNotFound:
-        return None
-    except (OSError, UnicodeError):
-        report.fail("GEN_TEMPLATE_READ", stage, name,
-                    "template could not be read", error_type=GenerationInputError)
-
-
-def _check_job_template(
-    env: Environment, name: str, config: "BaseWorkflowConfig", output_repo_base: str,
-    report: GenerationCheckReport, seen: set[str], inputs: set[Path],
-) -> None:
-    if name in seen:
-        return
-    source = _get_template_source(env, name, report)
-    if source is None:
-        report.fail("GEN_TEMPLATE_MISSING", "job.preflight", name,
-                    "required job template is unavailable", error_type=GenerationInputError)
-    source_path = _template_file(env, name)
-    if source_path is not None:
-        inputs.add(source_path)
-    seen.add(name)
-    try:
-        tree = env.parse(source)
-        env.get_template(name)
-    except TemplateSyntaxError:
-        report.fail("GEN_TEMPLATE_SYNTAX", "job.preflight", name,
-                    "job template has invalid Jinja syntax")
-    report.passed("GEN_TEMPLATE_VALID", "job.preflight", name,
-                  "template is readable and Jinja syntax is valid")
-    for reference, conditional in _template_nodes(tree):
-        if not isinstance(reference, (nodes.Include, nodes.Extends, nodes.Import, nodes.FromImport)):
-            continue
-        candidates = _template_names(reference.template)
-        if candidates is not None:
-            inputs.update(path for candidate in candidates
-                          if (path := _template_file(env, candidate)) is not None)
-        if conditional:
-            report.unchecked("GEN_TEMPLATE_CONDITIONAL", "job.preflight", name,
-                             "template reference is guarded by Jinja control flow or an overridable block")
-            continue
-        if candidates is None:
-            report.unchecked("GEN_TEMPLATE_DYNAMIC", "job.preflight", name,
-                             "referenced template name depends on dynamic context")
-            continue
-        for candidate in candidates:
-            if _get_template_source(env, candidate, report) is not None:
-                _check_job_template(env, candidate, config, output_repo_base, report, seen, inputs)
-                break
-        else:
-            if isinstance(reference, nodes.Include) and reference.ignore_missing:
-                report.unchecked("GEN_TEMPLATE_OPTIONAL", "job.preflight", name,
-                                 "optional include candidates are unavailable")
-            else:
-                report.fail("GEN_TEMPLATE_MISSING", "job.preflight", name,
-                            "required referenced template is unavailable",
-                            error_type=GenerationInputError)
-    for call, conditional in _template_nodes(tree):
-        if not isinstance(call, nodes.Call) or not isinstance(call.node, nodes.Name) or call.node.name not in {"include_raw", "invoke_script"}:
-            continue
-        helper = env.globals.get(call.node.name)
-        if getattr(helper, "__module__", None) != __name__:
-            report.unchecked("GEN_SCRIPT_HELPER_CUSTOM", "job.preflight", name,
-                             "custom script helper semantics were not analyzed")
-            continue
-        path = call.args[0] if call.args else next(
-            (item.value for item in call.kwargs if item.key == "script_path"), None,
-        )
-        if isinstance(path, nodes.Const) and isinstance(path.value, str) and not _runtime_reference(path.value):
-            inputs.add(Path(output_repo_base, path.value))
-        if conditional:
-            report.unchecked("GEN_SCRIPT_CONDITIONAL", "job.preflight", name,
-                             "script reference is guarded by Jinja control flow or an overridable block")
-            continue
-        if not isinstance(path, nodes.Const) or not isinstance(path.value, str):
-            report.unchecked("GEN_SCRIPT_DYNAMIC", "job.preflight", name,
-                             "script helper path depends on dynamic context")
-            continue
-        _check_script_reference(path.value, output_repo_base, config, report,
-                                helper=call.node.name, stage="job.preflight")
 
 def render_jobs_from_directory(
     config: "BaseWorkflowConfig",
@@ -429,6 +305,7 @@ def render_jobs_from_directory(
     file_mode: int | None = None,
     verbose: bool = True,
     script_input_check: Callable[[str], None] | None = None,
+    prepare_outputs: Callable[[list[tuple[Path, Path]]], None] | None = None,
 ) -> None:
     """Render every ``jobs/**/*.j2`` template under one or more repo roots.
 
@@ -457,9 +334,7 @@ def render_jobs_from_directory(
         never enter rendering. ``None`` (default) renders everything —
         identical to the previous behaviour.
     check_report : GenerationCheckReport, optional
-        Collect checks, unresolved dynamic references and this invocation's
-        actual outputs. Static checks finish before any selected job is written;
-        later rendering/output failures retain files already produced.
+        Collect generation failures and files written by this invocation.
     script_input_check : callable, optional
         Additional validation of local scripts actually consumed while rendering.
         The standard full build uses this to reject stale prerequisite files.
@@ -495,6 +370,7 @@ def render_jobs_from_directory(
     def include_raw(script_path: str) -> str:
         script_file = check_relative_path(output_repo_base, script_path, stage="job.render",
                                           report=report)
+        protect_input(script_file)
         if script_input_check is not None:
             script_input_check(script_path)
         check_input_file(script_file, stage="job.render", report=report)
@@ -536,8 +412,10 @@ def render_jobs_from_directory(
             _check_script_reference(script_path, output_repo_base, config, report,
                                     helper="invoke_script", stage="job.render")
             runtime_path = _runtime_reference(script_path)
-            if script_input_check is not None and not runtime_path:
-                script_input_check(script_path)
+            if not runtime_path:
+                protect_input(Path(output_repo_base, script_path))
+                if script_input_check is not None:
+                    script_input_check(script_path)
             if environment is None and runtime_path:
                 # The legacy renderer allows runtime references in the path.
                 invocation = f'"${{OUTPUT_REPO_BASE}}/{script_path}"'
@@ -592,7 +470,7 @@ def render_jobs_from_directory(
     destinations = {}
     for source_idx, repo_base_str, jobs_dir in repo_jobs_pairs:
         env = build_environment(source_idx)
-        j2_files = sorted(jobs_dir.rglob("*.j2")) if environment is not None else jobs_dir.rglob("*.j2")
+        j2_files = sorted(jobs_dir.rglob("*.j2"))
         for j2_file in j2_files:
             relative_path = j2_file.relative_to(repo_base_str)
             jobs_relative_path = j2_file.relative_to(jobs_dir)
@@ -631,15 +509,14 @@ def render_jobs_from_directory(
         # Shadowed templates must neither render nor fail on obsolete inputs.
         planned = list({destination: (env, relative, destination)
                         for env, relative, destination in planned}.values())
-    seen_by_environment = {}
-    inputs = set()
-    for env, relative_path, _ in planned:
-        if id(env) not in seen_by_environment:
-            _loader_inputs(env, inputs)
-            seen_by_environment[id(env)] = set()
-        _check_job_template(env, relative_path.as_posix(), config, output_repo_base,
-                            report, seen_by_environment[id(env)], inputs)
-    _check_input_output_overlap(destinations, inputs, report)
+    files = [(source, Path(output_repo_base, target))
+             for env, relative, target in planned
+             if (source := _template_file(env, relative.as_posix())) is not None]
+    protect_input = _job_input_guard(destinations, report)
+    for source, _ in files:
+        protect_input(source)
+    if prepare_outputs is not None:
+        prepare_outputs(files)
 
     for env, relative_path, output_file_relative_path in planned:
         _render_single_job_file(
@@ -672,12 +549,11 @@ def render_single_job_file(
     destination = check_relative_path(output_repo_base, output_relative_path,
                                       stage="job.preflight", report=report)
     check_output_path(destination, stage="job.preflight", report=report)
-    inputs = set()
-    _loader_inputs(env, inputs)
     for name, helper in RESOURCE_TEMPLATE_HELPERS.items():
         env.globals.setdefault(name, helper)
-    _check_job_template(env, relative_path.as_posix(), config, output_repo_base, report, set(), inputs)
-    _check_input_output_overlap([destination], inputs, report)
+    source = _template_file(env, relative_path.as_posix())
+    if source is not None:
+        _job_input_guard([destination], report)(source)
     _render_single_job_file(relative_path, output_repo_base, output_relative_path, config, env, report)
 
 
@@ -723,8 +599,7 @@ def _render_single_job_file(
         if file_mode is not None:
             from takflow._files import write_text
             write_text(output_file_path, rendered_content, file_mode, Path(output_repo_base))
-            check_shell_output(output_file_path, check_report=report, executable=True,
-                               stage="job.output", role="job")
+            report.artifact(output_file_path, "job", stage="job.output")
             return
         output_file_path.parent.mkdir(exist_ok=True, parents=True)
         with open(output_file_path, "w") as f:
@@ -738,8 +613,7 @@ def _render_single_job_file(
             raise
         report.fail("GEN_JOB_WRITE", "job.output", output_relative_path.as_posix(),
                     "job output could not be written or its permissions could not be set")
-    check_shell_output(output_file_path, check_report=report, executable=True,
-                       stage="job.output", role="job")
+    report.artifact(output_file_path, "job", stage="job.output")
 
 
 def generate_output_log_data(

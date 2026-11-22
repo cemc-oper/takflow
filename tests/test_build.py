@@ -14,6 +14,7 @@ from takflow.application import (
     Application, ApplicationBrand, ApplicationExtension, ComponentSelection,
     ResourceEntry, ResourceLayer, TemplateOutput,
 )
+from takflow.artifact_checks import check_artifacts
 from takflow.build import build, run_stage, BuildError, STAGES
 from takflow.config import BaseWorkflowConfig
 from takflow.toolkit.credential import register_credential_hook, render_credential_template, CredentialHookPoint
@@ -171,7 +172,7 @@ def test_complete_and_step_business_artifacts_are_equivalent(tmp_path, resources
             assert statuses(result)[stage] in ("passed", "skipped")
             assert all(item.status == "not_run" for item in result.stages if item.name != stage)
         assert all(item.stage == "workflow" for item in result.artifacts)
-        assert run_stage(context, "check").artifacts == []
+        assert "check" not in statuses(result)
     assert full.complete
     assert comparable(tmp_path / "full") == comparable(tmp_path / "steps")
 
@@ -479,27 +480,28 @@ def test_save_callback_order_and_original_failure(tmp_path, resources, point):
     assert not (tmp_path / "out/generation_manifest.json").exists()
 
 
-def test_final_check_rejects_changed_generated_job(tmp_path, resources):
+def test_independent_integrity_check_rejects_changed_job(tmp_path, resources):
     output = tmp_path / "out"
     def tamper(context):
         (output / "jobs/on/task.ecf").write_text("changed after render")
     with application(resources).prepare(data(output)) as context:
-        with pytest.raises(BuildError) as captured:
-            build(context, after_save=tamper)
-    assert statuses(captured.value.result)["check"] == "failed"
-    assert statuses(captured.value.result)["workflow"] == "passed"
-    assert statuses(captured.value.result)["report"] == "not_run"
-    assert any(item["code"] == "BUILD_ARTIFACT_CHANGED" for item in captured.value.result.diagnostics)
+        result = build(context, after_save=tamper)
+    assert result.complete and "check" not in statuses(result)
+    checked = check_artifacts(manifest=result.manifest_path, integrity=True)
+    assert not checked.passed and checked.checks[0]["status"] == "failed"
+    assert "task.ecf" in checked.checks[0]["reason"]
+    assert result.manifest_path.exists()
 
 
-def test_mutable_machine_reference_changes_are_reported_without_freezing(tmp_path, resources):
+def test_mutable_machine_reference_changes_are_allowed_by_integrity_check(tmp_path, resources):
     output = tmp_path / "out"
     def update(context):
         (output / "machine/site/env/runtime.sh").write_text("RUNTIME_VALUE=after\n")
     with application(resources).prepare(data(output)) as context:
         result = build(context, after_save=update)
     assert result.complete
-    assert any(item["code"] == "BUILD_MUTABLE_REFERENCE_CHANGED" for item in result.diagnostics)
+    assert not result.diagnostics
+    assert check_artifacts(manifest=result.manifest_path, integrity=True).passed
     assert "%includenopp" in (output / "jobs/on/task.ecf").read_text()
 
 

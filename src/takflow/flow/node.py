@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from takflow.flow.backend import WorkflowBackend
+from takflow.checks import GenerationCheckReport, check_node_name
 
 
 class NodeType(str, Enum):
@@ -57,6 +58,7 @@ class Node:
         self._engine = engine
         self._parent: Optional["Node"] = None
         self._children: List["Node"] = []
+        check_node_name(self.name)
 
     @property
     def raw(self) -> Any:
@@ -98,6 +100,20 @@ class Node:
     # ------------------------------------------------------------------
     # 树挂载
     # ------------------------------------------------------------------
+    def _require_child(self, child, kind):
+        if child.node_type != kind or self.node_type == NodeType.TASK or child.engine is not self.engine or child.parent:
+            GenerationCheckReport().fail("GEN_TREE_INVALID", "definition.preflight", child.name,
+                                         "child must be detached and belong to its parent engine")
+        if any(existing.name == child.name for existing in self._children):
+            GenerationCheckReport().fail("GEN_NODE_DUPLICATE", "definition.preflight", child.name,
+                                         "sibling node names must be unique")
+        ancestor = self
+        while ancestor is not None:
+            if ancestor is child:
+                GenerationCheckReport().fail("GEN_TREE_INVALID", "definition.preflight", child.name,
+                                             "a node cannot contain its ancestor")
+            ancestor = ancestor.parent
+
     def add_family(self, family: Union["Node", str]) -> "Node":
         """
         挂载 Family 节点。
@@ -114,6 +130,7 @@ class Node:
         """
         if isinstance(family, str):
             family = self._engine.Family(family)
+        self._require_child(family, NodeType.FAMILY)
         self._engine.backend.add_family(self, family)
         family._parent = self
         self._children.append(family)
@@ -135,6 +152,7 @@ class Node:
         """
         if isinstance(task, str):
             task = self._engine.Task(task)
+        self._require_child(task, NodeType.TASK)
         self._engine.backend.add_task(self, task)
         task._parent = self
         self._children.append(task)

@@ -24,7 +24,7 @@ from takflow.checks import (
     check_relative_path,
 )
 
-_CopyFile = tuple[Path, Path, str, int]
+_CopyFile = tuple[Path, Path, str | None, int]
 
 
 def _check_directory(path: Path, report: GenerationCheckReport, *, source: bool) -> None:
@@ -133,7 +133,7 @@ def _copy_plan(
                 mode |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
             if standard:
                 mode = 0o755 if executable else 0o644
-            digest = hashlib.sha256(child.read_bytes()).hexdigest()
+            digest = None if standard else hashlib.sha256(child.read_bytes()).hexdigest()
             files.append((child, target, digest, mode))
 
     plans = []
@@ -384,10 +384,6 @@ def _copy_entry_plan(output_repo_base: Path, directories: list[Path], plans: lis
             check_report.artifact(target, "resource", stage="resource.copy")
             check_report.artifacts[-1]["source"] = str(source)
             check_report.artifacts[-1]["layer"] = source_layer
-        _check_copied_files(files, check_report)
-        for source, target, _, _ in files:
-            item = next(item for item in check_report.artifacts if item["path"] == str(target))
-            item.update(source=str(source), layer=source_layer)
 
 
 __all__ = ["copy_resources_to_output", "make_scripts_executable", "copy_resource_entries"]

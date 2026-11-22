@@ -300,7 +300,7 @@ def test_machine_is_derived_or_external_without_local_probes(tmp_path, monkeypat
         assert context.machine.external == (external is not None)
         assert context.variables == {"MACHINE_NAME": "site", "MACHINE_DIR": directory}
         assert context.config.machine_dir == external
-        assert any(item.status == "unchecked" and item.object == "machine_dir" for item in context.checks.checks)
+        assert not any(item.status == "unchecked" for item in context.checks.checks)
 
 
 @pytest.mark.parametrize("values,code", [

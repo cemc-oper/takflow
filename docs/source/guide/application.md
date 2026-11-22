@@ -223,7 +223,7 @@ TYM 的 create_suite 接受显式 paths，并把同一 BuildPaths 传给原有 d
 
 ## 业务 Shell 延后加载 machine（TC-08）
 
-`required_machine_fragments=("env/forecast_mpi.sh", ...)` 声明业务脚本将在原位置 source 的片段。资源阶段先检查本轮所选 machine 的有序来源，再复制并登记引用；输出目录中的陈旧文件不能代替缺少的来源。默认目录检查存在性与摘要，显式外部目录保持 unchecked、不作生成机探测。框架不执行或提前 source，不改变业务 cwd/作用域，不自动把片段正文嵌进父作业。片段内容、加载位置和库/MPI 参数继续由消费者维护。
+`required_machine_fragments=("env/forecast_mpi.sh", ...)` 声明业务脚本将在原位置 source 的片段。资源阶段先检查本轮所选 machine 的有序来源，再复制并登记引用；输出目录中的陈旧文件不能代替缺少的来源。默认目录检查存在性与摘要，显式外部目录仅登记引用，留到目标环境读取。框架不执行或提前 source，不改变业务 cwd/作用域，不自动把片段正文嵌进父作业。片段内容、加载位置和库/MPI 参数继续由消费者维护。
 
 MCV oper、GFS oper及独立RA2已使用同一资源层、显式初始化和公共构建服务。MCV通过配置声明上传必需输入，GFS oper另按实际任务的ECF引用检查最终模板；目录/领域规则留应用。`ApplicationExtension`不新增整套handler接管口。
 

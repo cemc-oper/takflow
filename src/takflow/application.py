@@ -437,9 +437,6 @@ class Application(Generic[ConfigT]):
                 config, supported_modes=self.supported_modes,
                 required_operations=self.required_operations(config) if self.required_operations else (),
             )
-            if not config.observability.enabled:
-                report.passed("APPLICATION_OBSERVABILITY_DISABLED", "application.context", "observability",
-                              "optional observability is not enabled")
             suffix = ".def" if config.workflow_mode == "ecflow" else ".json"
             if config.workflow_mode == "shell":
                 if output is not None:
@@ -471,8 +468,6 @@ class Application(Generic[ConfigT]):
                 if variables.keys() & machine.variables.keys():
                     _error("APPLICATION_VARIABLE_CONFLICT", "variables", "machine variables are reserved")
                 variables.update(machine.variables)
-                report.unchecked("APPLICATION_MACHINE_RUNTIME_UNCHECKED", "application.context", "machine_dir",
-                                 "target-side visibility and fragment execution are not checked")
             outputs = self.outputs(config) if callable(self.outputs) else self.outputs
             for extension in self.extensions:
                 outputs += extension.outputs(config) if callable(extension.outputs) else extension.outputs

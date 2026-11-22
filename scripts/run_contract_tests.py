@@ -16,6 +16,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "base": (
+        "tests/test_artifact_checks.py::test_checks_do_not_load_an_application_or_publish_a_manifest",
+        "tests/test_artifact_checks.py::test_unavailable_engine_only_affects_selected_checks",
+        "tests/test_artifact_checks.py::test_default_build_leaves_shell_and_definition_checks_to_the_caller",
         "tests/test_extension_composition.py::test_composed_choices_and_extension_data_share_effective_config",
         "tests/test_extension_composition.py::test_extension_context_conflicts_restore_brand_without_exposing_values",
         "tests/test_extension_composition.py::test_composed_variables_cannot_replace_framework_values",
@@ -67,7 +70,8 @@ REQUIRED = {
         "test_orvix_generate_matches_golden",
         "test_public_slurm_header_matches_orvix_conversion",
     )),
-    "takler": ("tests/test_build_takler_contract.py::test_takler_pipeline_uses_real_native_json",) + tuple(f"tests/test_takler_current_contract.py::{name}" for name in (
+    "takler": ("tests/test_build_takler_contract.py::test_takler_pipeline_uses_real_native_json",
+               "tests/test_build_takler_contract.py::test_native_takler_checks_isolate_explicit_job_paths_and_include_lookup") + tuple(f"tests/test_takler_current_contract.py::{name}" for name in (
         "test_backend_does_not_create_legacy_application_bunch",
         "test_suite_name_is_caller_supplied",
         "test_saved_suite_builds_and_loads_current_definition",
@@ -87,6 +91,7 @@ REQUIRED = {
     )),
     "native": tuple(f"tests/test_native_ecflow_contract.py::{name}" for name in (
         "test_native_ecflow_parses_takflow_definition",
+        "test_native_ecflow_checks_isolate_commands_includes_and_jobs",
         "test_native_ecflow_preprocesses_job_without_running_it",
         "test_native_ecflow_commands_use_current_try[orvix]",
         "test_native_ecflow_commands_use_current_try[slsubmit6]",
