@@ -87,9 +87,8 @@ class SlurmWorkload(BaseWorkload):
     ``submit_carrier`` selects how job resources reach the scheduler:
     ``"orvix"`` writes ``#ORVIX`` directives + ``orvix submit`` job command,
     ``"slsubmit6"`` keeps the legacy ``%QUEUE%``/``%NODES%`` ecFlow variables +
-    ``slsubmit6``. ``scheduler`` is the orvix target family. Apps subclass this
-    and override the defaults (mcv defaults to ``orvix``; gfs/meso will default
-    to ``slsubmit6``).
+    ``slsubmit6``. ``scheduler`` is the orvix target family. Applications can
+    override the default carrier in their workload models.
     """
 
     workload_type: Literal["slurm"] = "slurm"
