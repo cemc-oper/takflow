@@ -73,8 +73,8 @@ set_resource_variables(task, tr)
 
 | Carrier | 生成内容 | 适用场景 |
 |---------|----------|----------|
-| `orvix` | `#ORVIX key=value` 指令 + `orvix submit` | MCV、GFS 及 GFS 的两个 oper 扩展的调度默认值 |
-| `slsubmit6` | `%QUEUE%` / `%NODES%` / `%WCKEY%` 变量 + `slsubmit6` | GFS 的显式历史配置，`meso-post` 默认 |
+| `orvix` | `#ORVIX key=value` 指令 + `orvix submit` | MCV、GFS 及其两个 oper 扩展、TYM ecFlow 和 Shell 的 Slurm 调度默认值 |
+| `slsubmit6` | `%QUEUE%` / `%NODES%` / `%WCKEY%` 变量 + `slsubmit6` | GFS 和 TYM 的显式历史 ecFlow 配置，`meso-post` 默认 |
 
 ecFlow 的两种载体使用相同的 `TaskResource` 输入。takler 的调度任务使用 `orvix`，配置 `slsubmit6` 会在构建定义前报错。
 
