@@ -50,6 +50,8 @@ print("\n".join(to_orvix_directives(spec)))
 
 `queue`、`time`、`memory` 要求字符串至少含一个非空白字符。`time="0"`、`memory="0"` 和 `requeue=False` 均保留。既有 ORVIX 模板辅助接受 `queue`/`partition`、`time`/`walltime`、`project`/`wckey`。每对名称最多提供一个非 None 值，同时提供两个值会报错，即使两者相同。
 
+`render_orvix_resource_block` 成功接受旧参数后，Python 发出 `ResourceAliasWarning`，标准 CLI 显示替代名。将 `partition` 改为 `queue`、`walltime` 改为 `time`、`wckey` 改为 `project`。Slurm workload 的配置输入相应改为 `workload.project`。省略旧名或传入 None 均无迁移提示。旧名移除版本和日期待定。原生 Slurm helper 使用规范参数，提交指令仍按 Slurm 语法输出 `--partition` 和 `--wckey`，引擎继续通过 `WCKEY` 继承项目值。
+
 应用可为某个任务的资源字段声明局部缺省。例如 `Annotated[TaskResource, task_resource_defaults(forecast_defaults)]` 中的工厂返回应用自己的 `TaskResource`。仅调整时间时会沿用任务原有的类型与规模。显式切换类型时，旧类型的队列和规模缺省随之退出。允许省略整个字段时，在该字段上配置同一 `default_factory`。这些值供资源编译使用，本级节点变量仍由应用声明。
 
 > **命名冲突（务必注意）：** `TaskResource.job_type`（serial/parallel）是 takflow 的

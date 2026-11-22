@@ -1,6 +1,7 @@
 """Explicit application CLI over the public preparation and build lifecycle."""
 from __future__ import annotations
 
+from collections import Counter
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict
 import importlib
@@ -18,6 +19,7 @@ from takflow.application import Application
 from takflow.build import BuildError, build, run_stage
 from takflow.checks import GenerationCheckError
 from takflow.config import ConfigValidationError
+from takflow.config.workload import RESOURCE_ALIAS_HINTS, ResourceAliasWarning
 
 
 class ApplicationLoadError(ValueError):
@@ -41,6 +43,26 @@ def load_application(reference: str) -> Application:
 
 def _diagnostic(code, reason, stage="cli"):
     return {"code": code, "stage": stage, "reason": reason}
+
+
+def _warning_diagnostics(captured):
+    # Match the framework category and its fixed notices. Application text is private.
+    counts = Counter(item.message.args[0] for item in captured
+                     if type(item.message) is ResourceAliasWarning and len(item.message.args) == 1
+                     and type(item.message.args[0]) is str)
+    diagnostics = []
+    suppressed = len(captured)
+    for field, hint in RESOURCE_ALIAS_HINTS.items():
+        count = counts[hint]
+        if count:
+            stage = "config.validation" if field == "workload.wckey" else "resource.render"
+            diagnostics.append(_diagnostic("RESOURCE_ALIAS_DEPRECATED", hint, stage)
+                               | {"object": field, "count": count})
+            suppressed -= count
+    if suppressed:
+        diagnostics.append(_diagnostic("CLI_APPLICATION_WARNINGS", "application warnings suppressed")
+                           | {"count": suppressed})
+    return diagnostics
 
 
 def _execute(application, options):
@@ -76,6 +98,9 @@ def _execute(application, options):
             exit_code = 1
         except ConfigValidationError as error:
             diagnostics = [item.as_dict() for item in error.diagnostics]
+            for item in diagnostics:
+                if item["stage"] == "config.read":
+                    item["object"] = "--config-file"
             exit_code = 1
         except GenerationCheckError as error:
             diagnostics = [asdict(error.diagnostic)]
@@ -84,8 +109,12 @@ def _execute(application, options):
             diagnostics = [_diagnostic("CLI_INTERRUPTED", "generation interrupted")]
             exit_code = 130
         except (Exception, SystemExit):
-            code = "CLI_APPLICATION_LOAD" if phase == "application" else "CLI_PREPARE_FAILED" if phase == "prepare" else "CLI_BUILD_FAILED"
-            diagnostics = [_diagnostic(code, "application loading failed" if phase == "application" else "generation preparation or execution failed", phase)]
+            code, subject, reason = {
+                "application": ("CLI_APPLICATION_LOAD", "application", "could not import or initialize the application"),
+                "prepare": ("CLI_PREPARE_FAILED", "application context", "could not prepare the generation context"),
+                "build": ("CLI_BUILD_FAILED", options["stage"] or "build", "could not run the requested generation"),
+            }[phase]
+            diagnostics = [_diagnostic(code, reason, phase) | {"object": subject}]
             exit_code = 1
         finally:
             logging.disable(old_disable)
@@ -93,7 +122,7 @@ def _execute(application, options):
         "schema_version": 1, "status": "failed" if exit_code else "success",
         "result": result.as_dict() if result is not None else None,
         "diagnostics": diagnostics,
-        "warnings": ([_diagnostic("CLI_APPLICATION_WARNINGS", "application warnings suppressed") | {"count": len(captured)}] if captured else []),
+        "warnings": _warning_diagnostics(captured),
     }
 
 
@@ -114,7 +143,11 @@ def _display(report, format):
             click.echo(f"manifest: {result['manifest_path']}")
     for diagnostic in report["diagnostics"] + (result["diagnostics"] if result else []) + report["warnings"]:
         count = f" ({diagnostic['count']})" if "count" in diagnostic else ""
-        click.echo(f"[{diagnostic['code']}] {diagnostic['stage']}: {diagnostic['reason']}{count}")
+        subject = diagnostic.get("object")
+        if subject is None and "path" in diagnostic:
+            subject = ".".join(map(str, diagnostic["path"])) or "$"
+        location = f" {subject}" if subject is not None else ""
+        click.echo(f"[{diagnostic['code']}] {diagnostic['stage']}{location}: {diagnostic['reason']}{count}")
 
 
 def create_cli(application: Application | Callable[[], Application] | str | None = None, *, name: str = "takflow") -> click.Group:

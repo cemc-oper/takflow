@@ -52,6 +52,9 @@ _REASONS = {
     "config_date_order": ("CONFIG_DATE_ORDER", "end_date must be on or after start_date"),
     "resource_positive": ("CONFIG_RESOURCE_POSITIVE", "must be a positive integer or None"),
     "resource_blank": ("CONFIG_RESOURCE_BLANK", "must contain a non-whitespace character"),
+    "resource_project_conflict": ("CONFIG_RESOURCE_ALIAS_CONFLICT", "use only one of project and wckey"),
+    "resource_queue_conflict": ("CONFIG_RESOURCE_ALIAS_CONFLICT", "use only one of queue and partition"),
+    "resource_time_conflict": ("CONFIG_RESOURCE_ALIAS_CONFLICT", "use only one of time and walltime"),
     "extra_forbidden": ("CONFIG_UNKNOWN_FIELD", "unknown configuration field"),
     "missing": ("CONFIG_REQUIRED", "required configuration field is missing"),
     "literal_error": ("CONFIG_CHOICE", "value is not one of the declared choices"),
@@ -61,6 +64,16 @@ _REASONS = {
     "value_error": ("CONFIG_DOMAIN_RULE", "application configuration rule rejected this object"),
     "assertion_error": ("CONFIG_DOMAIN_RULE", "application configuration rule rejected this object"),
 }
+
+
+def validation_reason(kind: str) -> tuple[str, str]:
+    if kind in _REASONS:
+        return _REASONS[kind]
+    if kind.endswith(("_type", "_parsing")) or kind == "int_from_float":
+        return "CONFIG_TYPE", "value has an invalid type or representation"
+    if kind in {"greater_than", "greater_than_equal", "less_than", "less_than_equal"}:
+        return "CONFIG_RANGE", "value is outside the declared bounds"
+    return "CONFIG_INVALID", "value does not satisfy the declared configuration rule"
 
 
 def validation_diagnostics(
@@ -76,15 +89,7 @@ def validation_diagnostics(
     # Pydantic 2.0 has no include_input keyword. Select only type/loc below;
     # never copy its input value or original message into a diagnostic.
     for detail in error.errors(include_context=False, include_url=False):
-        kind = detail["type"]
-        if kind in _REASONS:
-            code, reason = _REASONS[kind]
-        elif kind.endswith(("_type", "_parsing")) or kind == "int_from_float":
-            code, reason = "CONFIG_TYPE", "value has an invalid type or representation"
-        elif kind in {"greater_than", "greater_than_equal", "less_than", "less_than_equal"}:
-            code, reason = "CONFIG_RANGE", "value is outside the declared bounds"
-        else:
-            code, reason = "CONFIG_INVALID", "value does not satisfy the declared configuration rule"
+        code, reason = validation_reason(detail["type"])
         diagnostics.append(ConfigDiagnostic(code, tuple(detail["loc"]), reason, stage))
     return tuple(diagnostics)
 
@@ -154,12 +159,18 @@ def load_config_data(file_path: str | Path) -> Mapping[str, Any]:
     """Read a raw YAML mapping using the same safe diagnostics as validation."""
     try:
         content = Path(file_path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        _fail("CONFIG_READ_ERROR", "configuration file was not found", "config.read")
+    except PermissionError:
+        _fail("CONFIG_READ_ERROR", "permission denied reading configuration file", "config.read")
     except (OSError, UnicodeError):
         _fail("CONFIG_READ_ERROR", "configuration file could not be read as UTF-8", "config.read")
     try:
         data = yaml.safe_load(content)
-    except yaml.YAMLError:
-        _fail("CONFIG_YAML_SYNTAX", "configuration is not valid YAML", "config.read")
+    except yaml.YAMLError as error:
+        mark = getattr(error, "problem_mark", None)
+        location = f" at line {mark.line + 1}, column {mark.column + 1}" if mark is not None else ""
+        _fail("CONFIG_YAML_SYNTAX", "configuration is not valid YAML" + location, "config.read")
     if not isinstance(data, Mapping):
         _fail("CONFIG_ROOT_TYPE", "configuration must be a mapping", "config.validation")
     return data

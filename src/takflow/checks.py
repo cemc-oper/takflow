@@ -16,7 +16,53 @@ import shlex
 import shutil
 import stat
 import subprocess
+from traceback import walk_tb
 from typing import Any, NoReturn
+
+from jinja2 import TemplateNotFound, TemplateSyntaxError, UndefinedError
+from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
+
+from takflow._files import io_failure_reason
+from takflow.config.validation import validation_diagnostics, validation_reason
+
+
+def template_failure(template, env, error):
+    """Report the selected Jinja source and line without rendering its text or values."""
+    subject = str(template)
+    line = None
+    for frame, number in walk_tb(error.__traceback__):
+        if frame.f_globals.get("__jinja_exception__") is error:
+            filename = Path(frame.f_code.co_filename)
+            for root in getattr(env.loader, "searchpath", ()):
+                if filename.is_relative_to(root):
+                    subject, line = str(filename.relative_to(root)), number
+                    break
+    if isinstance(error, TemplateSyntaxError):
+        reason = "invalid Jinja template syntax"
+        if type(error.lineno) is int:
+            line = error.lineno
+    elif isinstance(error, TemplateNotFound):
+        reason = "required template was not found"
+    elif isinstance(error, UndefinedError):
+        reason = "template uses an undefined value"
+    elif isinstance(error, ValidationError):
+        items = validation_diagnostics(error)
+        reason = "template input failed validation"
+        if items:
+            item = items[0]
+            reason = f"{'.'.join(map(str, item.path)) or '$'}: {item.reason}"
+    elif isinstance(error, PydanticCustomError):
+        _, reason = validation_reason(error.type)
+    elif isinstance(error, UnicodeError):
+        reason = "template input is not valid UTF-8"
+    elif isinstance(error, OSError):
+        reason = io_failure_reason("template input could not be read", error)
+    else:
+        reason = "template evaluation failed"
+    if line is not None:
+        reason = f"line {line}: {reason}"
+    return subject, reason
 
 
 @dataclass(frozen=True)
@@ -311,8 +357,11 @@ def check_shell_output(
     report.artifact(path, role, stage=stage)
     try:
         text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        report.fail("GEN_SCRIPT_INVALID", stage, str(path), "generated script is not readable UTF-8 text")
+    except UnicodeError:
+        report.fail("GEN_SCRIPT_INVALID", stage, str(path), "generated script is not valid UTF-8 text")
+    except OSError as error:
+        report.unchecked("GEN_INPUT_UNREADABLE", stage, str(path), io_failure_reason("could not read the script", error))
+        return report
     if not text.strip():
         report.fail("GEN_SCRIPT_INVALID", stage, str(path), "generated script is empty")
     if path.suffix == ".ecf" or "{{" in text or "{%" in text:
@@ -345,11 +394,26 @@ def check_shell_output(
             else:
                 report.unchecked("GEN_SHELL_UNAVAILABLE", stage, str(path), "a supported declared shell interpreter is not available; script was not executed")
         else:
-            result = subprocess.run([executable_path, "-n", str(path.resolve())],
-                                    env={"PATH": os.defpath, "LC_ALL": "C"},
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            filename = str(path.resolve())
+            try:
+                result = subprocess.run([executable_path, "-n", filename],
+                                        env={"PATH": os.defpath, "LC_ALL": "C"},
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            except OSError as error:
+                report.unchecked("GEN_SHELL_UNAVAILABLE", stage, str(path),
+                                 io_failure_reason(f"could not start {shell} for the syntax check", error))
+                return report
             if result.returncode:
-                report.fail("GEN_SCRIPT_SYNTAX", stage, str(path), "declared shell rejected generated script syntax")
+                # Shells may echo the entire offending line. Keep only their numeric location.
+                stderr = result.stderr.decode("utf-8", errors="replace")
+                location = re.search(r"^(?:E: )?" + re.escape(filename) +
+                                     r"(?:: (?:line |syntax error at line )?|\[)([0-9]+)\b", stderr, re.MULTILINE)
+                if result.returncode in (1, 2, 3) and (location or "syntax error" in stderr.lower()):
+                    where = f" at line {location[1]}" if location else ""
+                    report.fail("GEN_SCRIPT_SYNTAX", stage, str(path), f"{shell} rejected script syntax{where}")
+                report.unchecked("GEN_SHELL_INCOMPLETE", stage, str(path),
+                                 f"{shell} did not complete the syntax check (return code {result.returncode})")
+                return report
             report.passed("GEN_SHELL_SYNTAX_VALID", stage, str(path), f"{shell} syntax-only check completed; business commands were not run")
     return report
 

@@ -505,6 +505,26 @@ def test_mutable_machine_reference_changes_are_allowed_by_integrity_check(tmp_pa
     assert "%includenopp" in (output / "jobs/on/task.ecf").read_text()
 
 
+def test_failed_manifest_invalidation_keeps_previous_build(tmp_path, resources, monkeypatch):
+    from test_artifact_checks import snapshot
+    app = application(resources)
+    with app.prepare(data(tmp_path / "out")) as ctx:
+        first = build(ctx)
+        previous = snapshot(first.output_root)
+        unlink = Path.unlink
+        def deny_manifest(path, **kwargs):
+            if path == first.manifest_path:
+                raise PermissionError("private filesystem message")
+            return unlink(path, **kwargs)
+        monkeypatch.setattr(Path, "unlink", deny_manifest)
+        with pytest.raises(BuildError) as caught:
+            run_stage(ctx, "config")
+    assert caught.value.result.artifacts == [] and not caught.value.result.complete
+    issue = next(d for d in caught.value.result.diagnostics if d["code"] == "BUILD_MANIFEST_INVALIDATE")
+    assert issue["object"] == str(first.manifest_path) and "private" not in issue["reason"]
+    assert snapshot(first.output_root) == previous
+
+
 def test_manifest_publish_failure_never_leaves_success(tmp_path, resources, monkeypatch):
     original = OSError("replace failed")
     def fail(*args):
@@ -525,7 +545,7 @@ def test_manifest_publish_failure_never_leaves_success(tmp_path, resources, monk
 def test_external_machine_is_referenced_without_copy_or_fallback(tmp_path, resources):
     with application(resources).prepare(data(tmp_path / "out", machine_dir="/remote/not-mounted/site")) as context:
         result = build(context)
-    assert result.complete
+    assert result.complete and result.diagnostics == []
     assert not (tmp_path / "out/machine").exists()
     assert any(item.kind == "reference" and item.sha256 is None and item.mode is None for item in result.artifacts)
 

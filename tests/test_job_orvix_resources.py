@@ -1,6 +1,7 @@
 """Workflow-aware ORVIX rendering is a framework default, independent of apps."""
 
 import re
+import warnings
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from takflow.build import BuildError, run_stage
 from takflow.config import BaseWorkflowConfig
+from takflow.config.workload import ResourceAliasWarning
 from takflow.toolkit.job import (
     render_jobs_from_directory, render_orvix_resource_block, render_single_job_file, render_slurm_resource_block,
 )
@@ -153,12 +155,20 @@ def test_ecflow_optional_layout_and_walltime_alias(job_type):
     ("queue", "partition"), ("time", "walltime"), ("project", "wckey"),
 ])
 def test_resource_helper_resolves_one_name_per_pair(name, alias):
-    canonical = render_orvix_resource_block(**{name: "one", alias: None})
-    assert f"#ORVIX {name}=one" in canonical.splitlines()
-    assert render_orvix_resource_block(**{name: None, alias: "one"}) == canonical
-    for other in ("one", "two"):
-        with pytest.raises(ValueError, match=f"{name}.*{alias}"):
-            render_orvix_resource_block(**{name: "one", alias: other})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ResourceAliasWarning)
+        canonical = render_orvix_resource_block(**{name: "one", alias: None})
+        assert f"#ORVIX {name}=one" in canonical.splitlines()
+        for other in ("one", "two"):
+            with pytest.raises(ValueError, match=f"{name}.*{alias}"):
+                render_orvix_resource_block(**{name: "one", alias: other})
+        with pytest.raises(ValueError):
+            render_orvix_resource_block(**{alias: "one", "memory": " "})
+        with pytest.raises(TypeError):
+            render_slurm_resource_block(**{alias: "one"})
+    with pytest.warns(ResourceAliasWarning, match=rf"render_orvix_resource_block\.{alias} is deprecated\. Use {name}\.") as notices:
+        assert render_orvix_resource_block(**{name: None, alias: "one"}) == canonical
+    assert len(notices) == 1
 
 
 @pytest.mark.parametrize(("name", "alias"), [("queue", "partition"), ("time", "walltime")])

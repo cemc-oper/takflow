@@ -5,9 +5,11 @@ from dataclasses import asdict, dataclass, field
 import hashlib
 import json
 from pathlib import Path
+import re
 import stat
 from tempfile import TemporaryDirectory
 
+from takflow._files import io_failure_reason
 from takflow.checks import GenerationCheckError, check_shell_output
 
 
@@ -23,18 +25,28 @@ class CheckResult:
     def passed(self):
         return bool(self.checks) and all(item["status"] == "passed" for item in self.checks)
 
-    def check(self, scope, subject, operation):
+    def check(self, scope, subject, operation, *, resolve=None):
         try:
-            operation()
+            if resolve is None:
+                operation()
+            else:
+                subject = resolve()
+                operation(subject)
             status, reason = "passed", "selected check completed"
         except (ImportError, Unavailable) as error:
             status = "incomplete"
             reason = str(error) if isinstance(error, Unavailable) else "selected native engine is unavailable"
         except GenerationCheckError as error:
-            status, reason = "failed", error.diagnostic.reason
-        except (ValueError, RuntimeError, OSError, UnicodeError) as error:
-            status = "failed"
-            reason = str(error) if isinstance(error, InvalidArtifact) else "generated artifact could not be read or was rejected by the selected parser"
+            status = "incomplete" if error.diagnostic.code == "GEN_INPUT_UNREADABLE" else "failed"
+            reason = error.diagnostic.reason
+        except InvalidArtifact as error:
+            status, reason = "failed", str(error)
+        except UnicodeError:
+            status, reason = "failed", "generated artifact is not valid UTF-8"
+        except OSError as error:
+            status, reason = "incomplete", io_failure_reason("could not access files or run the selected check", error)
+        except Exception:
+            status, reason = "incomplete", "selected check could not complete"
         self.checks.append({"scope": scope, "object": str(subject), "status": status, "reason": reason})
 
     def as_dict(self):
@@ -96,6 +108,8 @@ class Inventory:
                           str(next(iter(candidates), "(no local candidate)")))
 
     def integrity(self):
+        if not self.files:
+            raise Unavailable("inventory contains no local outputs to verify")
         for path, item in self.files.items():
             actual = self.local(path)
             if item.get("mutable"):
@@ -109,10 +123,37 @@ class Inventory:
 def _parse(path, mode):
     if mode == "ecflow":
         import ecflow
-        return ecflow.Defs(str(path))
+        try:
+            return ecflow.Defs(str(path))
+        except RuntimeError as error:
+            # ecFlow uses RuntimeError for both open and parse failures.
+            try:
+                with path.open("rb"):
+                    pass
+            except FileNotFoundError:
+                raise InvalidArtifact("selected definition was not found") from error
+            except (IsADirectoryError, NotADirectoryError):
+                raise InvalidArtifact("selected definition is not a regular file") from error
+            message = str(error)
+            location = re.search(r" around line number (\d+)\b", message)
+            if message.startswith("Error: Expression node tree references failed"):
+                reason = "ecFlow could not resolve a node reference"
+            else:
+                reason = "ecFlow rejected the definition"
+            if location:
+                reason += f" at line {location[1]}"
+            raise InvalidArtifact(reason) from error
     if mode == "takler":
+        from takler.schema.definition import DefinitionError
         from takler.serialization.builder import build_definition
-        return build_definition(path.read_bytes())
+        try:
+            return build_definition(path.read_bytes())
+        except FileNotFoundError as error:
+            raise InvalidArtifact("selected definition was not found") from error
+        except (IsADirectoryError, NotADirectoryError) as error:
+            raise InvalidArtifact("selected definition is not a regular file") from error
+        except DefinitionError as error:
+            raise InvalidArtifact(f"takler rejected the definition: {error.code} at {error.document_path}") from error
     raise Unavailable("select ecflow or takler for a native definition check")
 
 
@@ -135,8 +176,14 @@ def check_artifacts(*, manifest=None, definition=None, mode=None, parse=False, e
         if inventory is None:
             try:
                 inventory = Inventory(manifest)
-            except (OSError, ValueError, KeyError, TypeError) as error:
-                raise InvalidArtifact("artifact inventory is missing or invalid") from error
+            except InvalidArtifact:
+                raise
+            except FileNotFoundError as error:
+                raise InvalidArtifact("selected artifact inventory was not found") from error
+            except (IsADirectoryError, NotADirectoryError) as error:
+                raise InvalidArtifact("selected artifact inventory is not a regular file") from error
+            except (ValueError, KeyError, TypeError) as error:
+                raise InvalidArtifact("invalid artifact inventory") from error
         return inventory
 
     def definition_input():
@@ -150,19 +197,22 @@ def check_artifacts(*, manifest=None, definition=None, mode=None, parse=False, e
     def engine(path):
         return mode or (inventory.mode if inventory else None) or {".def": "ecflow", ".json": "takler"}.get(path.suffix)
 
-    def read_definition():
-        path = definition_input()
+    def read_definition(path):
         return _parse(path, engine(path))
 
     if parse:
         subject = definition or manifest or "definition"
-        result.check("definition", subject, read_definition)
+        result.check("definition", subject, read_definition, resolve=definition_input)
     for task in expand:
         def expand_task():
             recorded = get_inventory()
             path = definition_input()
             from takflow._native_artifacts import expand_ecflow, expand_takler
-            with TemporaryDirectory(prefix="takflow-check-") as directory:
+            try:
+                scratch = TemporaryDirectory(prefix="takflow-check-")
+            except OSError as error:
+                raise Unavailable(io_failure_reason("could not create the temporary directory for native expansion", error)) from error
+            with scratch as directory:
                 if engine(path) == "takler":
                     expand_takler(path, task, recorded, Path(directory))
                 elif engine(path) == "ecflow":

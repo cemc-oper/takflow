@@ -1,11 +1,13 @@
 """Public config validation, with domain rules and flat jobspec strings preserved."""
 from __future__ import annotations
 
+import warnings
+
 import pytest
 from pydantic import BaseModel, ValidationError
 
 from takflow.config.scheduling import SchedulingConfig
-from takflow.config.workload import SlurmWorkload
+from takflow.config.workload import ResourceAliasWarning, SlurmWorkload
 from takflow.jobspec import ResourceSpec, TaskResource, to_orvix_directives
 from takflow.spec.jobspec import load_schema
 
@@ -128,12 +130,18 @@ def test_blank_global_queue_is_rejected_even_if_unused(field):
     {"project": "p", "wckey": None},
 ])
 def test_workload_project_round_trip_and_legacy_access(values):
-    workload = SlurmWorkload(**values)
-    assert workload.project == workload.wckey == "p"
-    assert workload.model_dump(exclude_unset=True) == {"project": "p"}
-    assert SlurmWorkload(**workload.model_dump()) == workload
-    workload.wckey = "q"
-    spec = TaskResource(queue=None, time="0", memory="0", requeue=False).compile(workload)
+    with warnings.catch_warnings(record=True) as notices:
+        warnings.simplefilter("always", ResourceAliasWarning)
+        workload = SlurmWorkload(**values)
+        assert workload.project == workload.wckey == "p"
+        assert workload.model_dump(exclude_unset=True) == {"project": "p"}
+        assert SlurmWorkload(**workload.model_dump()) == workload
+        workload.wckey = "q"
+        spec = TaskResource(queue=None, time="0", memory="0", requeue=False).compile(workload)
+    expected = 1 if values.get("wckey") is not None else 0
+    assert len(notices) == expected
+    if expected:
+        assert notices[0].category is ResourceAliasWarning and "Use workload.project." in str(notices[0].message)
     assert (spec.project, spec.queue, spec.time, spec.memory, spec.requeue) == (
         "q", "serial", "0", "0", False,
     )
@@ -142,10 +150,13 @@ def test_workload_project_round_trip_and_legacy_access(values):
 @pytest.mark.parametrize("values", [
     {}, {"wckey": None}, {"project": None}, {"project": None, "wckey": None},
     {"project": "p", "wckey": "p"}, {"project": "p", "wckey": "q"},
+    {"wckey": []}, {"wckey": "p", "default_serial_queue": " "},
 ])
 def test_workload_requires_one_project_spelling(values):
-    with pytest.raises(ValidationError):
-        SlurmWorkload(**values)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ResourceAliasWarning)
+        with pytest.raises(ValidationError):
+            SlurmWorkload(**values)
 
 
 def test_flat_resource_keeps_runtime_expressions_and_metadata():

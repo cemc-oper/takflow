@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import shlex
 import stat
+import warnings
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union, TYPE_CHECKING
 from collections.abc import Mapping
@@ -19,6 +20,7 @@ from takflow.build_info import get_build_info as _generic_build_info
 from takflow.build_info import get_build_info_lines as _generic_build_info_lines
 from takflow.build_info import _scoped_lines
 from takflow.backends.runtime.resources import RESOURCE_VARIABLES, ecflow_log_value
+from takflow._files import io_failure_reason
 from takflow.checks import (
     GenerationCheckReport,
     GenerationCheckError,
@@ -27,9 +29,10 @@ from takflow.checks import (
     check_output_path,
     check_relative_path,
     preflight_generation,
+    template_failure,
 )
 from takflow.config import SlurmWorkload
-from takflow.config.workload import resolve_resource_alias
+from takflow.config.workload import RESOURCE_ALIAS_HINTS, ResourceAliasWarning, resolve_resource_alias
 from takflow.jobspec import CANONICAL_KEYS, ResourceSpec, TaskResource
 from takflow.jobspec.render import orvix_directive, slurm_directive
 
@@ -178,7 +181,11 @@ def render_orvix_resource_block(
         ntasks_per_node=ntasks_per_node, memory=memory, output=output, error=error,
         application=application, scheduler=scheduler, requeue=requeue, job_name=job_name, exclusive=exclusive,
     )
-    return _workflow_resource_block(spec, workflow_mode, job_type)
+    block = _workflow_resource_block(spec, workflow_mode, job_type)
+    for name, value in (("partition", partition), ("walltime", walltime), ("wckey", wckey)):
+        if value is not None:
+            warnings.warn(RESOURCE_ALIAS_HINTS[f"render_orvix_resource_block.{name}"], ResourceAliasWarning, stacklevel=2)
+    return block
 
 
 def render_slurm_resource_block(*, job_type="serial", workflow_mode=None, **resources) -> str:
@@ -586,13 +593,12 @@ def _render_single_job_file(
         rendered_content = template.render(data)
     except GenerationCheckError:
         raise
-    except (TemplateError, TypeError, ValueError, OSError, UnicodeError):
+    except (TemplateError, TypeError, ValueError, OSError) as error:
+        subject, reason = template_failure(relative_path, env, error)
         if file_mode is not None:
-            report.failed("GEN_JOB_RENDER", "job.render", relative_path.as_posix(),
-                          "job rendering failed; original exception retained")
+            report.failed("GEN_JOB_RENDER", "job.render", subject, reason)
             raise
-        report.fail("GEN_JOB_RENDER", "job.render", relative_path.as_posix(),
-                    "job rendering failed; unresolved references may require generation or runtime context")
+        report.fail("GEN_JOB_RENDER", "job.render", subject, reason)
 
     output_file_path = Path(output_repo_base, output_relative_path)
     try:
@@ -606,13 +612,12 @@ def _render_single_job_file(
             f.write(rendered_content)
         mode = os.stat(output_file_path).st_mode
         os.chmod(output_file_path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    except OSError:
+    except OSError as error:
+        reason = io_failure_reason("job output could not be written or its permissions could not be set", error)
         if file_mode is not None:
-            report.failed("GEN_JOB_WRITE", "job.output", output_relative_path.as_posix(),
-                          "job writing failed; partial output is retained")
+            report.failed("GEN_JOB_WRITE", "job.output", output_relative_path.as_posix(), reason)
             raise
-        report.fail("GEN_JOB_WRITE", "job.output", output_relative_path.as_posix(),
-                    "job output could not be written or its permissions could not be set")
+        report.fail("GEN_JOB_WRITE", "job.output", output_relative_path.as_posix(), reason)
     report.artifact(output_file_path, "job", stage="job.output")
 
 

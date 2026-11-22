@@ -1,6 +1,14 @@
 """Small POSIX output helpers for the standard generation path."""
 from pathlib import Path
+import errno
 import os
+
+
+def io_failure_reason(action: str, error: Exception) -> str:
+    """Keep the OS reason without copying filenames or application exception text."""
+    if isinstance(error, OSError) and isinstance(error.errno, int) and error.errno in errno.errorcode:
+        return f"{action}: {os.strerror(error.errno)}"
+    return action
 
 
 def file_state(path: Path):

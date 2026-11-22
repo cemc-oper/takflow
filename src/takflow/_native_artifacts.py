@@ -8,10 +8,11 @@ import sys
 import re
 import shutil
 
-from jinja2 import TemplateNotFound
+from jinja2 import TemplateError, TemplateNotFound, TemplateSyntaxError
 from jinja2.sandbox import SandboxedEnvironment
 
 from takflow._job_paths import ecflow_templates
+from takflow._files import io_failure_reason
 from takflow.artifact_checks import InvalidArtifact, Unavailable
 
 
@@ -135,8 +136,11 @@ def expand_ecflow(defs, name, inventory, work):
     control.set_node_path(name)
     control.set_dir_for_job_creation(str(jobs))
     defs.check_job_creation(control)
-    if control.get_error_msg():
-        raise InvalidArtifact("ecFlow rejected the isolated job template")
+    message = control.get_error_msg()
+    if message:
+        reason = ("ecFlow could not substitute a job variable" if "EcfFile::variableSubstitution: failed" in message
+                  else "ecFlow rejected the isolated job template")
+        raise InvalidArtifact(f"{reason} while expanding {inventory.local(source)}")
     found = list(jobs.rglob("*.job0"))
     if len(found) != 1:
         raise Unavailable("ecFlow did not create the selected job in the temporary directory")
@@ -173,8 +177,14 @@ def _worker():
         response = ["passed", str(job.relative_to(directory))]
     except (ImportError, Unavailable) as error:
         response = ["incomplete", str(error) if isinstance(error, Unavailable) else "native takler is unavailable"]
-    except (InvalidArtifact, ValueError, OSError, RuntimeError) as error:
-        response = ["failed", str(error) if isinstance(error, InvalidArtifact) else "takler rejected the selected artifact"]
+    except InvalidArtifact as error:
+        response = ["failed", str(error)]
+    except UnicodeError:
+        response = ["failed", "generated artifact is not valid UTF-8"]
+    except OSError as error:
+        response = ["incomplete", io_failure_reason("could not stage or access files for the takler check", error)]
+    except (ValueError, RuntimeError):
+        response = ["incomplete", "isolated takler check could not complete"]
     print(json.dumps(response))
 
 
@@ -251,12 +261,21 @@ def _takler_job(flow, name, inventory, work):
     except TaklerError as error:
         cause = error
         while cause is not None:
-            if isinstance(cause, Unavailable):
+            if isinstance(cause, (Unavailable, InvalidArtifact)):
                 raise cause
             if isinstance(cause, TemplateNotFound):
                 raise Unavailable("required takler include is outside the recorded outputs") from error
+            if isinstance(cause, OSError):
+                raise Unavailable(io_failure_reason("could not access files for takler job creation", cause)) from error
+            if isinstance(cause, TemplateSyntaxError):
+                filename = Path(cause.filename) if cause.filename else source
+                if filename.is_relative_to(templates):
+                    original = inventory.original / filename.relative_to(templates)
+                    raise InvalidArtifact(f"invalid Jinja syntax in {inventory.local(original)} at line {cause.lineno}") from error
             cause = cause.__cause__
-        raise InvalidArtifact("takler rejected the isolated job template") from error
+        if isinstance(error.__cause__, (ValueError, TypeError, ArithmeticError, TemplateError)):
+            raise InvalidArtifact(f"takler rejected the isolated job template from {local}") from error
+        raise Unavailable("takler could not complete native job creation") from error
     if not expected.is_file() or not expected.stat().st_mode & 0o100:
         raise Unavailable("takler did not create the executable job in the temporary directory")
     return expected

@@ -83,10 +83,11 @@ shell/takler配置写Shell字面值；ecFlow配置写原生变量引用，保存
 
 ## 失败和清单
 
-写出入口在阶段开始输出前使旧 generation_manifest.json 失效。独立产物检查不会修改它。
-首错停止，负责阶段failed、后续not_run，保留已写文件和原异常；不重试、清空输出根或回滚整个目录。
-完整构建写完所选产物后，report 将清单写到同目录临时文件，flush/fsync 后以 os.replace 原子发布 0644 清单。
-发布失败是report failed，不留下新成功标志，尽力清理临时清单。原子性只覆盖成功标志，整个目录为原位写入。
+配置在 `prepare` 期间失败时，此前的输出和成功清单仍代表上次构建。完整或分步生成在进入第一个改写阶段前撤下旧清单。若撤下失败，`BUILD_MANIFEST_INVALIDATE` 指出清单路径，生成随即停止。
+
+资源复制、模板渲染或写出失败时，本阶段为 `failed`，后续阶段为 `not_run`。Python 调用者可从 `BuildError.original` 取得原异常，从 `BuildError.result` 取得受控原因与已确认的部分产物。目录保留失败时的文件。修正输入后可在同一目录重新构建。
+
+完整构建写完产物后，report 阶段将清单写到同目录临时文件，经 flush 和 fsync 后用 `os.replace` 原子发布为 0644。发布失败时，`BUILD_MANIFEST_PUBLISH` 指出目标和可用的系统错误原因，CLI 退出 1，`complete` 为 false。独立产物检查单独返回自己的结果。
 
 清单schema_version=1包含本轮结果、包/解释器/jobspec与pin版本、实际库模块摘要、资源层和产物来源。
 config_fingerprint.scope=public-generation-options只摘要模式、流程名、脚本模式和组件等公开选项，

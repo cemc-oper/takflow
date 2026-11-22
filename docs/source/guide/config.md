@@ -102,7 +102,7 @@ takler 会再用 Jinja 展开生成的 job 模板。helper 为 inline 正文保�
 需要 takler 处理的变量和 include 放在业务调用外。这个例子将 `TAKLER_INCLUDE`
 设为工作流输出根目录。源模板保留环境头的 include，供 takler 在创建 job 时展开。
 
-```jinja2
+```jinja
 {% raw %}
 {% include "takler/include/env.sh" %}
 {% endraw %}
@@ -129,7 +129,7 @@ workload:
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
-| `project` | 必填 | 项目关键字，映射到 Slurm `--wckey`。旧配置仍可单独填写 `wckey`，配置模型按 `project` 导出 |
+| `project` | 必填 | 项目关键字，映射到 Slurm `--wckey`。单独填写有效的旧名 `workload.wckey` 会提示改用 `workload.project`，模型按 `project` 导出。退出版本和日期待定 |
 | `scheduler` | `slurm` | orvix 目标调度器:`slurm` / `donau` |
 | `submit_carrier` | `orvix` | takler 调度任务使用 ORVIX。ecFlow 和已有直接 Slurm runner 可显式选择历史值 `slsubmit6`，此时 scheduler 为 `slurm` |
 | `default_serial_queue` | `serial` | 串行任务默认队列 |
@@ -239,6 +239,7 @@ GFS 的路径/default partition alias 与 partition/tasks_per_node 归一化由�
 |---|---|
 | `CONFIG_DATE_INVALID` / `CONFIG_DATE_ORDER` | 日期不存在/格式错误，或起止倒序 |
 | `CONFIG_RESOURCE_POSITIVE` | 高层申请资源非正 |
+| `CONFIG_RESOURCE_ALIAS_CONFLICT` | 同时填写 `project` 和 `wckey` 的非 None 值，须选择其中一个名称 |
 | `CONFIG_UNKNOWN_FIELD` / `CONFIG_REQUIRED` | 未知字段或必填字段缺失 |
 | `CONFIG_TYPE` / `CONFIG_CHOICE` / `CONFIG_RANGE` | 类型/选择/已声明边界错误 |
 | `CONFIG_DOMAIN_RULE` / `CONFIG_INVALID` | 领域验证器拒绝对象或其他配置规则不满足 |
@@ -246,4 +247,4 @@ GFS 的路径/default partition alias 与 partition/tasks_per_node 归一化由�
 | `CONFIG_OVERRIDES_TYPE` / `CONFIG_OVERRIDE_ALIAS` | 覆盖结构错误或复杂 alias 覆盖不支持 |
 | `CONFIG_STRICT_UNAVAILABLE` | 未安装严格字段检查所需的 Pydantic 接口 |
 
-输入读取负责 `config.read`，覆盖负责 `config.overrides`，模型校验负责 `config.validation`。`validation_diagnostics(pydantic_error)` 可用于适配旧入口抛出的 `ValidationError`。诊断不包含 input、ctx、YAML 出错行或任意验证器原始消息；领域验证器消息也可能含敏感值，所以未知/领域错误使用固定原因和对象路径。需要领域细节的应用可基于自己的受控代码补充说明，不应直接打印原始异常。该适配不改变应用验证器的执行和拒绝行为。
+输入读取负责 `config.read`，覆盖负责 `config.overrides`，模型校验负责 `config.validation`。YAML 解析器给出位置时，诊断保留从 1 开始的行号和列号。模型错误保留 Pydantic 字段路径。`validation_diagnostics(pydantic_error)` 可用于适配旧入口的 `ValidationError`。配置值、出错行正文及应用验证器的异常文本都留在公开报告之外。

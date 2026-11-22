@@ -17,7 +17,9 @@
 
 标准输出从旧 ecffiles 迁到 jobs，Shell workflow/run_job.sh 迁到根 run_workflow.sh，config 与 include 的来源、配置 0644/作业 0755/machine 0644 以及 generation_manifest.json 均由公共管线规定。CLI 统一退出码 0/1/2/130 和结构化结果；旧 Path/dict/None 返回与随意打印不属于标准结果。新的 workflow repo 覆盖必须包含相应完整资源；不合并全部旧 oper/include/观测选项为永久公共 schema。
 
-TYM 标准入口直接使用 cma_tym.application 的配置、组件、构图及模板上下文；不调用 resource_copy/config_generate/job_generate/workflow_generate 或它们调用的旧 renderer。当前默认根命令已由公共 create_cli 实现；旧 handler 已削减为共享阶段的 Python 返回适配。util/job/derived/shell runner/run_functions 已使用标准路径，machine 引用经真实原生与 Shell 局部验证；实际部署仍须完成目标站点检查。Shell 原有调度与 graph 能力限制保持，CLI 只显示警告数量，具体限制见应用 Shell 文档和 YAML 配置说明。
+TYM 标准入口直接使用 cma_tym.application 的配置、组件、构图及模板上下文；不调用 resource_copy/config_generate/job_generate/workflow_generate 或它们调用的旧 renderer。当前默认根命令已由公共 create_cli 实现；旧 handler 已削减为共享阶段的 Python 返回适配。util/job/derived/shell runner/run_functions 已使用标准路径，machine 引用经真实原生与 Shell 局部验证；实际部署仍须完成目标站点检查。Shell 的调度与 graph 能力限制见应用 Shell 文档和 YAML 配置说明。此类应用警告在 CLI 中只显示数量。
+
+资源输入另有迁移提示。Slurm workload 的 `wckey` 改为 `project`。ORVIX helper 的 `partition`、`walltime`、`wckey` 分别改为 `queue`、`time`、`project`。标准 CLI 在实际使用旧名的命令上显示 `RESOURCE_ALIAS_DEPRECATED`。这四个输入的移除版本和日期待定。下表中的发布目标适用于各仓库的旧外围与命令。[输入示例和字段映射](jobspec.md)
 
 ## 最低版本与弃用/移除窗口
 

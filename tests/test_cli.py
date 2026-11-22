@@ -1,5 +1,6 @@
 """Public CLI lifecycle, artifact parity, safe failures and parser boundaries."""
 from dataclasses import replace
+import errno
 import json
 import logging
 import sys
@@ -13,6 +14,7 @@ import yaml
 from takflow.application import ApplicationExtension
 from takflow.build import build, BuildError
 from takflow.cli import ApplicationLoadError, create_cli, load_application, main
+from takflow.config.workload import ResourceAliasWarning
 from test_build import application, comparable, data, put, resources
 
 SECRET = "must-never-appear-in-cli-output"
@@ -187,6 +189,9 @@ def test_controlled_failures_and_partial_results(tmp_path, resources, monkeypatc
         if failure == "partial":
             assert any(item["role"] == "config" for item in report["result"]["artifacts"])
             assert str(error.value.original) == SECRET
+            write_error = next(d for d in report["result"]["diagnostics"] if d["code"] == "BUILD_OUTPUT_WRITE")
+            assert write_error["object"] == str(tmp_path / "output/config/config.sh")
+            assert write_error["stage"] == "config.write"
     else:
         assert report["result"] is None and report["diagnostics"]
 
@@ -246,3 +251,96 @@ def test_domain_validator_message_is_not_exposed(tmp_path, resources):
     response = invoke(application(resources, config_type=DomainConfig), configuration(tmp_path), "build")
     assert response.exit_code == 1 and SECRET not in response.output
     assert json.loads(response.output)["diagnostics"][0]["code"] == "CONFIG_DOMAIN_RULE"
+
+
+@pytest.mark.parametrize("format", ["text", "json"])
+def test_cli_reports_only_known_resource_migrations(tmp_path, resources, format):
+    def initialize():
+        warnings.warn(SECRET)
+        warnings.warn(SECRET, ResourceAliasWarning)
+    app = application(resources, extensions=(ApplicationExtension("test", initialize=initialize),))
+    path = configuration(tmp_path, workload={"workload_type": "slurm", "wckey": SECRET})
+    # A helper can run several times during one generation.
+    helper = '{{ render_orvix_resource_block(partition="batch", walltime="03:00:00", wckey=config.workload.project) }}'
+    put(resources, "jobs/on/task.sh.j2", helper + "\n" + helper)
+    result = invoke(app, path, "build", format=format)
+    assert result.exit_code == 0 and SECRET not in result.output
+    fields = {"workload.wckey": ("workload.project", 1), "render_orvix_resource_block.partition": ("queue", 2),
+              "render_orvix_resource_block.walltime": ("time", 2), "render_orvix_resource_block.wckey": ("project", 2)}
+    if format == "json":
+        notices = json.loads(result.output)["warnings"]
+        assert {n["object"]: n["count"] for n in notices if n["code"] == "RESOURCE_ALIAS_DEPRECATED"} == {
+            key: count for key, (_, count) in fields.items()}
+        assert [n["count"] for n in notices if n["code"] == "CLI_APPLICATION_WARNINGS"] == [2]
+    for field, (replacement, _) in fields.items():
+        assert f"{field} is deprecated. Use {replacement}." in result.output
+    assert "No removal version or date has been set" in result.output
+
+
+@pytest.mark.parametrize("format", ["text", "json"])
+def test_config_failure_locates_the_field_and_preserves_previous_build(tmp_path, resources, format):
+    from test_artifact_checks import snapshot
+    app = application(resources)
+    path = configuration(tmp_path)
+    assert invoke(app, path, "build").exit_code == 0
+    before = snapshot(tmp_path / "output")
+    assert (tmp_path / "output/generation_manifest.json").is_file()
+    configuration(tmp_path, workload={"workload_type": "slurm", "project": SECRET, "wckey": SECRET})
+    failed = invoke(app, path, "build", format=format)
+    assert failed.exit_code == 1 and SECRET not in failed.output
+    assert "use only one of project and wckey" in failed.output
+    if format == "json":
+        report = json.loads(failed.output)
+        assert report["diagnostics"][0]["path"] == ["workload", "slurm"]
+        assert report["result"] is None and report["warnings"] == []
+    else:
+        assert "config.validation workload.slurm:" in failed.output
+    path.write_text("private: " + SECRET + "\ninvalid: [\n")
+    failed = invoke(app, path, "build", format=format)
+    assert failed.exit_code == 1 and SECRET not in failed.output
+    assert "--config-file" in failed.output and "line 3, column 1" in failed.output
+    assert snapshot(tmp_path / "output") == before
+
+
+@pytest.mark.parametrize("format", ["text", "json"])
+@pytest.mark.parametrize("kind", ["syntax", "undefined", "missing", "conflict"])
+def test_template_diagnostic_keeps_source_and_reason(tmp_path, resources, format, kind):
+    app = application(resources)
+    path = configuration(tmp_path)
+    content, reason = {
+        "syntax": ("{% invalid_private_token %}", "invalid Jinja template syntax"),
+        "undefined": ("{{ invalid_private_token }}", "template uses an undefined value"),
+        "missing": ('{% include "invalid_private_token" %}', "required template was not found"),
+        "conflict": ('{{ render_orvix_resource_block(time="a", walltime="b") }}', "use only one of time and walltime"),
+    }[kind]
+    put(resources, "config/config.sh.j2", '{% include "templates/part.j2" %}')
+    put(resources, "templates/part.j2", "\n\n" + content)
+    failed = invoke(app, path, "build", format=format)
+    assert failed.exit_code == 1 and "invalid_private_token" not in failed.output
+    assert "templates/part.j2" in failed.output and f"line 3: {reason}" in failed.output
+    with app.prepare(path) as context, pytest.raises(BuildError) as caught:
+        build(context)
+    assert caught.value.original is caught.value.__cause__
+    assert any(item.get("object") == "templates/part.j2" for item in caught.value.result.diagnostics)
+
+
+def test_manifest_publication_failure_on_cli(tmp_path, resources, monkeypatch):
+    from takflow import build as build_module
+    app = application(resources)
+    path = configuration(tmp_path)
+    manifest = tmp_path / "output/generation_manifest.json"
+    assert invoke(app, path, "build").exit_code == 0 and manifest.is_file()
+    def full_disk(temporary, destination):
+        assert destination == manifest and not manifest.exists()
+        raise OSError(errno.ENOSPC, SECRET)
+    monkeypatch.setattr(build_module.os, "replace", full_disk)
+    for format in ("text", "json"):
+        failed = invoke(app, path, "build", format=format)
+        assert failed.exit_code == 1 and SECRET not in failed.output
+        assert "BUILD_MANIFEST_PUBLISH" in failed.output and str(manifest) in failed.output
+        assert "No space left on device" in failed.output
+        if format == "json":
+            result = json.loads(failed.output)["result"]
+            assert not result["complete"] and result["manifest_path"] is None
+            assert result["stages"][-1]["status"] == "failed" and result["artifacts"]
+    assert not manifest.exists() and not list(manifest.parent.glob(".generation_manifest.*"))

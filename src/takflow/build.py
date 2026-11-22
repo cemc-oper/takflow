@@ -17,15 +17,15 @@ import tempfile
 from typing import Any, Callable
 from uuid import uuid4
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateError, TemplateNotFound
 
 from takflow import __version__
-from takflow._files import file_state, make_parents, write_text
+from takflow._files import file_state, io_failure_reason, make_parents, write_text
 from takflow.application import BuildContext, ResourceEntry
 from takflow.backends.ecflow.serializer.attributes import _native_variable_quotes
 from takflow.checks import (
-    GenerationCheckReport, check_input_file,
-    check_output_path, check_relative_path,
+    GenerationCheckError, GenerationCheckReport, check_input_file,
+    check_output_path, check_relative_path, template_failure,
 )
 from takflow.config import ConfigValidationError
 from takflow._job_paths import ecflow_task_templates
@@ -224,6 +224,10 @@ class _Pipeline:
         try:
             write_text(path, text, mode, self.root)
             completed = True
+        except OSError as error:
+            self.report.failed("BUILD_OUTPUT_WRITE", self.stage + ".write", str(path),
+                               io_failure_reason("could not write output or set its permissions", error))
+            raise
         finally:
             try:
                 if path.is_file() and (completed or file_state(path) != before):
@@ -232,10 +236,22 @@ class _Pipeline:
                 self.report.unchecked("BUILD_PARTIAL_UNREADABLE", self.stage, str(path),
                                       "partial output metadata could not be collected")
 
-    def render(self, template):
-        selected = self.environment.get_template(template)
-        self.template_sources[template] = selected.filename
-        return selected.render(self.context.template_context())
+    def render(self, template, *, required=True):
+        try:
+            try:
+                selected = self.environment.get_template(template)
+            except TemplateNotFound as error:
+                if not required and error.name == template:
+                    return None
+                raise
+            self.template_sources[template] = selected.filename
+            return selected.render(self.context.template_context())
+        except GenerationCheckError:
+            raise
+        except (TemplateError, TypeError, ValueError, OSError) as error:
+            subject, reason = template_failure(template, self.environment, error)
+            self.report.failed("BUILD_TEMPLATE_RENDER", self.stage + ".render", subject, reason)
+            raise
 
     def include_machine(self, relative):
         machine = self.context.machine
@@ -319,11 +335,8 @@ class _Pipeline:
             seen.add(path)
             self.reserve(path, role)
         for template, path, role, mode, required in planned:
-            try:
-                text = self.render(template)
-            except TemplateNotFound as error:
-                if required or error.name != template:
-                    raise
+            text = self.render(template, required=required)
+            if text is None:
                 self.result.stages[STAGES.index("config")].skipped_outputs.append(str(path))
                 continue
             if role == "config":
@@ -355,6 +368,12 @@ class _Pipeline:
         try:
             render_credential(str(self.credential_file), self.context.config, str(self.root), dict(self.context.build_info),
                               environment=self.environment, file_mode=0o600)
+        except (ConfigValidationError, GenerationCheckError):
+            raise
+        except Exception as error:
+            self.report.failed("BUILD_CREDENTIAL_RENDER", "credential.render", str(path),
+                               io_failure_reason("could not render or write the credential output", error))
+            raise
         finally:
             try:
                 if path.is_file() and file_state(path) != before:
@@ -518,7 +537,12 @@ class _Pipeline:
                 self.fail("BUILD_VARIABLE_CONFLICT", "OUTPUT_REPO_BASE", "output variable must match the effective output root")
             # Invalidate before the first mutating stage, including step calls.
             if any(name in stages for name in STAGES[:5]):
-                self.manifest.unlink(missing_ok=True)
+                try:
+                    self.manifest.unlink(missing_ok=True)
+                except OSError as error:
+                    self.report.failed("BUILD_MANIFEST_INVALIDATE", "manifest.invalidate", str(self.manifest),
+                                       io_failure_reason("could not invalidate the previous success manifest", error))
+                    raise
             for name in stages:
                 self.stage = name
                 outcome = self.result.stages[STAGES.index(name)]
@@ -528,7 +552,12 @@ class _Pipeline:
                 self.collect()
             if full:
                 self.stage = "report"
-                self.publish()
+                try:
+                    self.publish()
+                except Exception as error:
+                    self.report.failed("BUILD_MANIFEST_PUBLISH", "report.publish", str(self.manifest),
+                                       io_failure_reason("could not publish the success manifest", error))
+                    raise
         except Exception as error:
             outcome = self.result.stages[STAGES.index(self.stage)]
             outcome.status = "failed"
@@ -540,6 +569,12 @@ class _Pipeline:
             self.result.diagnostics = []
             if isinstance(error, ConfigValidationError):
                 self.result.diagnostics.extend(item.as_dict() for item in error.diagnostics)
+                if self.stage == "credential":
+                    for item in self.result.diagnostics:
+                        if not item["path"]:
+                            item["object"] = "credential_file"
+            if isinstance(error, GenerationCheckError) and error.report is not self.report:
+                self.result.diagnostics.append(asdict(error.diagnostic))
             self.report.failed("BUILD_STAGE_FAILED", self.stage, self.stage, "generation stage failed; original exception retained")
             self.result.diagnostics.extend(asdict(item) for item in self.report.checks)
             raise BuildError(self.result, error) from error

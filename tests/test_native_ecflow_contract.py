@@ -589,6 +589,11 @@ def test_native_ecflow_checks_isolate_commands_includes_and_jobs(tmp_path, resou
         before_out = snapshot(out)
         checked = check_artifacts(manifest=result.manifest_path, expand=["/suite/task"])
         assert checked.checks[0]["status"] == status
+        if status == "failed":
+            assert "could not substitute a job variable" in checked.checks[0]["reason"]
+            assert str(source) in checked.checks[0]["reason"] and "MISSING_NATIVE_VALUE" not in repr(checked)
         assert before_out == snapshot(out) and before == snapshot(sentinel.parent)
-    result.workflow_output.write_text("invalid definition\n")
-    assert check_artifacts(manifest=result.manifest_path, parse=True).checks[0]["status"] == "failed"
+    result.workflow_output.write_text("suite example\nprivate_definition_text\nendsuite\n")
+    checked = check_artifacts(manifest=result.manifest_path, parse=True).checks[0]
+    assert checked["status"] == "failed" and checked["object"] == str(result.workflow_output)
+    assert "line 2" in checked["reason"] and "private_definition_text" not in repr(checked)

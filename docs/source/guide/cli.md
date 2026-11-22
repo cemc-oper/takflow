@@ -32,7 +32,9 @@ python -m takflow --help
 
 执行成功退出 0；应用引用/工厂、配置、准备、模板、写入、验证失败退出 1；命令语法、缺参、非法选项或非法选择退出 2；执行中用户中断退出 130。帮助/版本退出 0。语法错误使用 Click 的 stderr 提示（包括所给参数），不输出 JSON；`--format` 只控制已正确解析的执行报告，不应在命令行参数中传递凭证内容。
 
-JSON 在 stdout 输出一个对象：`schema_version: 1`、`status: success|failed`、`result: BuildResult.as_dict()|null`、`diagnostics: []`、`warnings: []`。构建失败保留部分 result，其诊断和阶段包含 passed/skipped/failed/not_run；准备失败没有 result。warnings 只包含受控代码和数量，不含原 warning 文本。text 输出相同状态、各阶段原因、诊断及全部产物路径/角色/权限，完整成功时显示清单位置。JSON 的 artifacts 包含同一管线记录的来源与摘要，敏感产物遵循 BuildResult 的摘要省略规则。
+JSON 在 stdout 返回 `schema_version: 1`、`status: success|failed`、`result: BuildResult.as_dict()|null`、`diagnostics` 和 `warnings`。准备失败时 `result` 为 `null`。生成中断时，`result` 保留阶段状态、本次已写出的产物和失败诊断。text 与 JSON 都显示出错的操作、配置字段或模板文件，以及可公开的原因。有现成行号时一并显示，例如 `[BUILD_TEMPLATE_RENDER] config.render config/config.sh.j2: line 3: invalid Jinja template syntax`。完整成功后可从 `manifest_path` 取得清单。JSON 的 artifacts 保留来源与摘要，敏感产物遵循 BuildResult 的摘要省略规则。
+
+实际使用旧资源输入时，`warnings` 中的 `RESOURCE_ALIAS_DEPRECATED` 给出输入位置、规范名和本次出现次数。text 每个旧名显示一条提示。其他应用警告汇总为 `CLI_APPLICATION_WARNINGS` 和数量。四个受支持的迁移见[资源名称](jobspec.md)。
 
 框架捕获执行期间应用任意打印、日志、warning 和原异常，禁止 traceback 与原异常正文进入 CLI；初始化和工厂失败使用 CLI_APPLICATION_LOAD/PREPARE_FAILED，配置/检查沿用受控诊断，BuildError 保留公共部分结果。显式 module 引用会执行该 Python 模块，须使用可信的已安装应用。调用命令期间不要并行改变进程日志或标准流；Python 并行与 hook 的限制与 Application 一致。
 

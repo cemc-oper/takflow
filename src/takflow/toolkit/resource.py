@@ -360,7 +360,7 @@ def _copy_resource_layers(
 
 def _copy_entry_plan(output_repo_base: Path, directories: list[Path], plans: list[list[_CopyFile]],
                      check_report: GenerationCheckReport, source_layer: str | None) -> None:
-    from takflow._files import file_state, make_parents
+    from takflow._files import file_state, io_failure_reason, make_parents
 
     for directory in directories:
         make_parents(directory / ".directory", output_repo_base)
@@ -371,9 +371,9 @@ def _copy_entry_plan(output_repo_base: Path, directories: list[Path], plans: lis
                 make_parents(target, output_repo_base)
                 shutil.copy2(source, target)
                 target.chmod(mode)
-            except Exception:
+            except Exception as error:
                 check_report.failed("RESOURCE_COPY_FAILED", "resource.copy", str(target),
-                                    "resource copy failed; partial output is retained")
+                                    io_failure_reason("could not copy resource or set its permissions", error))
                 try:
                     if file_state(target) != before and target.is_file():
                         check_report.artifact(target, "resource_partial", stage="resource.copy")

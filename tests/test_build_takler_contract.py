@@ -66,6 +66,8 @@ def test_native_takler_checks_isolate_explicit_job_paths_and_include_lookup(tmp_
         prior = snapshot(out)
         checked = check_artifacts(manifest=result.manifest_path, expand=[task_path])
         assert checked.checks[0]["status"] == status
+        if status == "failed":
+            assert f"{template} at line 1" in checked.checks[0]["reason"]
         assert prior == snapshot(out) and snapshot(home) == before
     definition = result.workflow_output.read_text()
     result.workflow_output.write_text(definition.replace(str(declared), str(sentinel)))
@@ -73,3 +75,7 @@ def test_native_takler_checks_isolate_explicit_job_paths_and_include_lookup(tmp_
     checked = check_artifacts(manifest=result.manifest_path, expand=[task_path])
     assert checked.checks[0]["status"] == "incomplete" and "TAKLER_JOB" in checked.checks[0]["reason"]
     assert snapshot(home) == before
+    result.workflow_output.write_text('{"private_definition_text": "private-value"}')
+    checked = check_artifacts(manifest=result.manifest_path, parse=True).checks[0]
+    assert checked["status"] == "failed" and checked["object"] == str(result.workflow_output)
+    assert "invalid_field at $." in checked["reason"] and "private" not in checked["reason"]

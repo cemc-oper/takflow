@@ -10,9 +10,25 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Annotated, Literal, Optional, Union
+import warnings
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
+
+
+class ResourceAliasWarning(FutureWarning):
+    """Migration notice for a legacy resource input accepted by takflow."""
+
+
+RESOURCE_ALIAS_HINTS = {
+    old: f"{old} is deprecated. Use {new}. No removal version or date has been set."
+    for old, new in (
+        ("workload.wckey", "workload.project"),
+        ("render_orvix_resource_block.partition", "queue"),
+        ("render_orvix_resource_block.walltime", "time"),
+        ("render_orvix_resource_block.wckey", "project"),
+    )
+}
 
 
 def nonblank_resource_text(value: Optional[str]) -> Optional[str]:
@@ -29,8 +45,8 @@ def resolve_resource_alias(
         if nonblank:
             for spelling, candidate in ((name, value), (alias, legacy)):
                 if isinstance(candidate, str) and not candidate.strip():
-                    raise ValueError(f"{spelling} must contain a non-whitespace character")
-        raise ValueError(f"use only one of {name} and {alias}")
+                    raise PydanticCustomError("resource_blank", f"{spelling} must contain a non-whitespace character")
+        raise PydanticCustomError(f"resource_{name}_conflict", f"use only one of {name} and {alias}")
     return value if value is not None else legacy
 
 
@@ -87,14 +103,18 @@ class SlurmWorkload(BaseWorkload):
 
     _validate_queues = field_validator("default_serial_queue", "default_parallel_queue")(nonblank_resource_text)
 
-    @model_validator(mode="before")
+    @model_validator(mode="wrap")
     @classmethod
-    def _accept_wckey(cls, data):
+    def _accept_wckey(cls, data, handler):
         if isinstance(data, Mapping) and "wckey" in data:
             values = dict(data)
-            values["project"] = resolve_resource_alias("project", values.get("project"), "wckey", values.pop("wckey"))
-            return values
-        return data
+            legacy = values.pop("wckey")
+            values["project"] = resolve_resource_alias("project", values.get("project"), "wckey", legacy)
+            workload = handler(values)
+            if legacy is not None:
+                warnings.warn(RESOURCE_ALIAS_HINTS["workload.wckey"], ResourceAliasWarning, stacklevel=2)
+            return workload
+        return handler(data)
 
     @property
     def wckey(self) -> str:
