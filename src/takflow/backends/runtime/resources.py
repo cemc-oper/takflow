@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from takflow.flow import NodeType
 from takflow.jobspec import TaskResource
-from takflow.jobspec.render import slurm_directive
 
 if TYPE_CHECKING:
     from takflow.config import SlurmWorkload
@@ -39,31 +38,13 @@ def ecflow_log_value(value: str) -> str:
 def ecflow_resource_variables(
     variables: Mapping[str, str | int | float | bool | None],
 ) -> dict[str, str | int | float | bool]:
-    """Encode node edits for ecFlow, including optional whole-line directives.
-
-    The returned edits also work with native ecflow.Node.add_variable(dict)
-    when introducing an optional field on an already loaded definition.
-    """
+    """Encode scalar node edits for native ecFlow variable substitution."""
     edits = {name: value for name, value in variables.items() if value is not None}
-    for field, variable in RESOURCE_VARIABLES.items():
-        if variable not in edits:
-            continue
-        if field == "requeue":
-            if isinstance(edits[variable], bool):
-                edits[variable] = str(edits[variable]).lower()
-        else:
-            key = field.replace("_", "-")
-            reference = f"%{variable}%"
-            if field in ("output", "error"):
-                if f"{variable}_PREFIX" not in variables:
-                    edits[variable] = ecflow_log_value(str(edits[variable]))
-                # A log fallback may itself contain %ECF_JOBOUT%. Keep it out
-                # of a nested %VAR:default% and comment it when an override exists.
-                edits[f"{variable}_PREFIX"] = "##"
-            if field in ("output", "error", "job_name"):
-                reference = f'"{reference}"'
-            edits.setdefault(f"ORVIX_{variable}", f"#ORVIX {key}={reference}")
-            edits.setdefault(f"SLURM_{variable}", slurm_directive(field, f"%{variable}%", engine_reference=True))
+    if isinstance(edits.get("REQUEUE"), bool):
+        edits["REQUEUE"] = str(edits["REQUEUE"]).lower()
+    for name in ("JOB_OUTPUT", "JOB_ERROR"):
+        if name in edits:
+            edits[name] = ecflow_log_value(str(edits[name]))
     return edits
 
 

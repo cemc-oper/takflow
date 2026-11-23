@@ -77,6 +77,25 @@ def _job_resource_spec(
     return ResourceSpec(**fields)
 
 
+def _ecflow_optional_line(variable: str, line: str, default_line: str | None = None) -> str:
+    """Select a header line during native job creation.
+
+    Inside %comment ecFlow tolerates a missing reference. Only a successful
+    substitution unescapes %%end and %%comment before comment removal.
+    """
+    ref = f"%{variable}%"
+    # Resolve a supplied value outside %comment too, so a broken reference in
+    # its value fails job creation. Resetting the delimiter emits no job text.
+    lines = [f"%%ecfmicro %% %{variable}:%", "%comment", f"%%end {ref}", line, f"%%comment {ref}"]
+    if default_line is not None:
+        # When the override resolved, keep the same comment open across the
+        # default by temporarily changing its closing delimiter. Restore %
+        # before the next job line. No scalar is interpreted as a directive.
+        lines.extend((f"%%ecfmicro @ {ref}", "%end", default_line, "%comment", "@ecfmicro %"))
+    lines.append("%end")
+    return "\n".join(lines)
+
+
 def _resource_directive(field: str, variable: str, fallback, mode: str, native_slurm: bool) -> str:
     key = field.replace("_", "-")
     prefix = f"#ORVIX {key}="
@@ -86,12 +105,14 @@ def _resource_directive(field: str, variable: str, fallback, mode: str, native_s
         if field == "requeue" and (native_slurm or fallback is None):
             fragment = "requeue" if native_slurm else "orvix-requeue"
             return f"%include <common/{fragment}-%REQUEUE:{fallback or 'unset'}%.h>"
-        if fallback is None:
-            carrier = "SLURM" if native_slurm else "ORVIX"
-            return f"%{carrier}_{variable}:%"
-        ref = f"%{variable}:{fallback}%"
+        ref = f"%{variable}%" if fallback is None else f"%{variable}:{fallback}%"
         if native_slurm:
-            return slurm_directive(field, ref, engine_reference=True)
+            line = slurm_directive(field, ref, engine_reference=True)
+        elif field == "job_name" or (fallback is not None and any(c.isspace() for c in str(fallback))):
+            line = f'{prefix}"{ref}"'
+        else:
+            line = prefix + ref
+        return _ecflow_optional_line(variable, line) if fallback is None else line
     else:
         expression = variable
         if fallback is not None:
@@ -113,14 +134,15 @@ def _engine_log_directive(field: str, fallback: str | None, mode: str, native_sl
     """Keep the engine's job log expression available until job creation."""
     variable = RESOURCE_VARIABLES[field]
     if mode == "ecflow":
-        carrier = "SLURM" if native_slurm else "ORVIX"
-        override = f"%{carrier}_{variable}:%"
-        if fallback is None:
-            return override
-        value = ecflow_log_value(fallback)
-        line = (slurm_directive(field, value, engine_reference=True) if native_slurm
-                else f'#ORVIX {field}="{value}"')
-        return f"%{variable}_PREFIX:#%{line[1:]}\n{override}"
+        def log_line(value):
+            if native_slurm:
+                return slurm_directive(field, value, engine_reference=True)
+            return f'#ORVIX {field}="{value}"'
+
+        if fallback is not None and "%" not in fallback:
+            return log_line(f"%{variable}:{fallback}%")
+        default = log_line(ecflow_log_value(fallback)) if fallback is not None else None
+        return _ecflow_optional_line(variable, log_line(f"%{variable}%"), default)
     path = variable + ' | replace("{{ TAKLER_JOBOUT }}", TAKLER_JOBOUT | default(""))'
     line = f'#ORVIX {field}="{{{{ {path} }}}}"'
     default = f'{{% else %}}#ORVIX {field}="{fallback}"' if fallback is not None else ""

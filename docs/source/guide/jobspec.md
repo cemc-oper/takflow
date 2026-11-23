@@ -89,7 +89,11 @@ set_resource_variables(task, TaskResource(time="00:40:00"))
 
 以上 task 只固定墙钟。需要固定与父节点相同的队列或规模时，也在本级显式声明。已有混合队列应用使用的 `set_runtime(node, workload, engine, task_resource)` 保留按 parallel 选择默认并行队列的行为。载体切换由不带 task_resource 的 `set_runtime` 调用声明。
 
-ecFlow 使用 `WALLTIME`、`MEMORY`、`NODES`、`TASKS_PER_NODE`、`QUEUE`、`WCKEY`、`APPLICATION`、`JOB_NAME`、`JOB_OUTPUT`、`JOB_ERROR` 和小写布尔值的 `REQUEUE`。有模板值时，例如 `%WALLTIME:06:00:00%`，可直接修改节点的标量。没有模板值的可选文本或数量字段由节点携带整行引用，例如 `ORVIX_MEMORY` 和 `SLURM_MEMORY` 分别包含引用 `%MEMORY%` 的完整指令。通过 takflow 的节点 API 声明资源会一并生成引用。在已加载的原生定义上首次增加此类字段，可以调用 `parent.add_variable(ecflow_resource_variables({"MEMORY": "8G"}))`，其中 `ecflow_resource_variables` 来自 `takflow.backends.runtime`。普通字段后续可直接修改标量。调整日志路径时每次用同一函数传入原始文本，如 `{"JOB_OUTPUT": "/log dir/%A_%a.%j.out"}`。它会保护传给 Slurm 的百分号，并写入对应的 `JOB_OUTPUT_PREFIX` 或 `JOB_ERROR_PREFIX`，使当前 attempt 的默认日志行成为普通注释。撤下本级声明时同时移除标量、两种载体的整行变量及该日志的前缀，子节点即可再次继承父值。
+ecFlow 在声明资源的 suite、family 或 task 上写入标量。常用变量有 `QUEUE`、`WCKEY`、`APPLICATION`、`NODES`、`TASKS_PER_NODE`、`WALLTIME`、`MEMORY`、`REQUEUE`、`JOB_NAME`、`JOB_OUTPUT` 和 `JOB_ERROR`。ORVIX 的提交命令另外读取 `ORVIX_SCHEDULER` 来选择实际调度器。
+
+源作业或其 include 包含所选载体的完整指令，例如 ORVIX 的 `#ORVIX memory=%MEMORY%` 或原生 Slurm 的 `#SBATCH --mem=%MEMORY%`。创建作业时，ecFlow 从 task 向上查找标量，再采用模板回退，例如 `%WALLTIME:06:00:00%`。可选字段在两处都无值时，生成的作业中会省略整行。已加载定义可直接用 `family.add_variable("MEMORY", "8G")` 首次声明内存，用 `task.add_variable("MEMORY", "4G")` 覆盖，用 `task.delete_variable("MEMORY")` 恢复继承。再删除 family 上的声明，下一次创建的作业就会恢复模板回退或省略该行。
+
+日志文件名可以同时含有 ecFlow 和 Slurm 的占位符。通过 takflow 的节点 API 传入原始路径即可。在原生 ecFlow Python API 中，可用 `node.add_variable(ecflow_resource_variables({"JOB_OUTPUT": "/log dir/%A_%a.%j.out"}))` 写入所需的百分号转义。该函数由 `takflow.backends.runtime` 导出，只返回传入的标量。删除日志覆盖后，默认路径中的 `%ECF_JOBOUT%` 会随本次尝试重新展开。升级已有产物时，用同一次构建生成的定义和源作业配套加载。
 
 ecFlow 在没有 requeue 回退的 ORVIX 模板中按 `REQUEUE` 选择公共 include。使用标准 Application 时启用 `use_public_resources` 并将输出的 `ecflow/include` 加入 `ECF_INCLUDE`。原生 Slurm 模板可以使用 `%include <common/requeue.h>`，只有有效 False 产生 `#SBATCH --no-requeue`。takler 用第二轮 Jinja 处理缺失值与布尔值。
 

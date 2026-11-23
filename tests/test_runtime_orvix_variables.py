@@ -9,6 +9,20 @@ from takflow.flow import WorkflowEngine
 from takflow.jobspec import TaskResource
 
 
+def test_ecflow_resource_edits_contain_only_supplied_scalars():
+    from takflow.backends.runtime import ecflow_resource_variables
+
+    assert ecflow_resource_variables({
+        "QUEUE": "normal", "WCKEY": "project", "APPLICATION": None, "MEMORY": "0",
+        "NODES": 4, "TASKS_PER_NODE": 64, "REQUEUE": False, "JOB_NAME": "trial forecast",
+        "JOB_OUTPUT": "%ECF_JOBOUT%.%j", "JOB_ERROR": "/log/%A_%a.err", "HH": "00",
+    }) == {
+        "QUEUE": "normal", "WCKEY": "project", "MEMORY": "0", "NODES": 4,
+        "TASKS_PER_NODE": 64, "REQUEUE": "false", "JOB_NAME": "trial forecast",
+        "JOB_OUTPUT": "%ECF_JOBOUT%.%%j", "JOB_ERROR": "/log/%%A_%%a.err", "HH": "00",
+    }
+
+
 @pytest.mark.parametrize("scheduler", ["slurm", "donau"])
 @pytest.mark.parametrize("application", [None, "GRAPES"])
 @pytest.mark.parametrize(("job_type", "queue", "expected_queue"), [

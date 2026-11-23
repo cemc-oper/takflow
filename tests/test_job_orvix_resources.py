@@ -116,7 +116,7 @@ def test_orvix_helper_uses_workflow_resource_policy(
         elif template_default:
             assert "#ORVIX application=%APPLICATION:template-app%" in rendered
         else:
-            assert "#ORVIX application=" not in rendered
+            assert "#ORVIX application=%APPLICATION%" in rendered
     else:
         if mode == "takler":
             assert "{{ NODES" in rendered
@@ -135,9 +135,9 @@ def test_orvix_helper_uses_workflow_resource_policy(
 @pytest.mark.parametrize("job_type", ["serial", "parallel"])
 def test_ecflow_optional_layout_and_walltime_alias(job_type):
     omitted = render_orvix_resource_block(job_type=job_type, workflow_mode="ecflow")
-    assert "#ORVIX time=" not in omitted
-    assert "#ORVIX nodes=" not in omitted
-    assert "#ORVIX ntasks-per-node=" not in omitted
+    assert "#ORVIX time=%WALLTIME%" in omitted
+    for line in ("#ORVIX nodes=%NODES%", "#ORVIX ntasks-per-node=%TASKS_PER_NODE%"):
+        assert (line in omitted) == (job_type == "parallel")
     explicit = render_orvix_resource_block(
         job_type=job_type, nodes=2, ntasks_per_node=8,
         walltime="00:45:00", workflow_mode="ecflow",

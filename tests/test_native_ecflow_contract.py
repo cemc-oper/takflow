@@ -473,6 +473,7 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
     ))
     path = tmp_path / "suite.def"
     engine.save_suite(suite, path)
+    assert "#ORVIX " not in path.read_text() and "#SBATCH " not in path.read_text()
     defs = ecflow.Defs(str(path))
     native_family = defs.find_abs_node("/suite/fcst")
     fields = dict(job_type="parallel", workflow_mode="ecflow", time="06:00:00", requeue=fallback,
@@ -487,9 +488,11 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
             native_family.add_variable("NODES", str(4 + attempt))
             native_family.add_variable("TASKS_PER_NODE", str(32 + attempt))
             if attempt == 1:
-                native_family.add_variable(ecflow_resource_variables({
-                    "MEMORY": "9G", "JOB_OUTPUT": "/parent log/%A_%a.%j.out", "JOB_NAME": "new forecast",
-                }))
+                native_family.add_variable("MEMORY", "9G")
+                native_family.add_variable("JOB_NAME", "new forecast")
+                log_edits = ecflow_resource_variables({"JOB_OUTPUT": "/parent log/%A_%a.%j.out"})
+                assert log_edits == {"JOB_OUTPUT": "/parent log/%%A_%%a.%%j.out"}
+                native_family.add_variable(log_edits)
             else:
                 native_family.add_variable("MEMORY", "10G")
             native_family.add_variable("WALLTIME", f"0{attempt}:10:00")
@@ -535,6 +538,35 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
             previous[job] = job.read_bytes()
         assert source.read_text() == original
         assert all(job.read_bytes() == content for job, content in previous.items())
+
+    # Remove only scalars on the loaded definition. The fixed task first
+    # inherits its parent's value, then both tasks lose the memory directive.
+    defs.find_abs_node("/suite/fcst/fixed").delete_variable("MEMORY")
+    native_family.delete_variable("JOB_OUTPUT")
+    for label, memory in (("inherited", "10G"), ("removed", None)):
+        if memory is None:
+            native_family.delete_variable("MEMORY")
+        directory = tmp_path / label
+        control = ecflow.JobCreationCtrl()
+        control.set_dir_for_job_creation(str(directory))
+        defs.check_job_creation(control)
+        assert not control.get_error_msg(), control.get_error_msg()
+        jobs = list(directory.rglob("*.job0"))
+        assert len(jobs) == 2
+        for job in jobs:
+            lines = job.read_text().splitlines()
+            for prefix in ("#ORVIX memory=", "#SBATCH --mem="):
+                assert [line for line in lines if line.startswith(prefix)] == (
+                    [prefix + memory] if memory else [])
+            for prefix in ('#ORVIX output="', '#SBATCH --output="'):
+                output, = [line for line in lines if line.startswith(prefix)]
+                assert output.endswith('.%A_%a.%04j.%j%j.out"') and "/parent log/" not in output
+
+    native_family.add_variable("MEMORY", "%UNDEFINED_LIMIT%")
+    control = ecflow.JobCreationCtrl()
+    control.set_dir_for_job_creation(str(tmp_path / "invalid"))
+    defs.check_job_creation(control)
+    assert "UNDEFINED_LIMIT" in control.get_error_msg()
 
 
 def test_native_ecflow_checks_isolate_commands_includes_and_jobs(tmp_path, resources):
