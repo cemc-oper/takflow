@@ -20,7 +20,7 @@ takflow.toolkit.resource
 takflow.toolkit.config
 ----------------------
 
-旧应用适配器的配置渲染入口。新应用使用 ``takflow.build`` 的 config 阶段，详见 :doc:`../guide/build`。
+旧应用适配器的配置渲染入口。新应用使用 ``takflow.build`` 的 config 阶段，详见 :doc:`../guide/build`；历史边界见 :doc:`../guide/legacy-adapters`。
 
 .. automodule:: takflow.toolkit.config
    :members:

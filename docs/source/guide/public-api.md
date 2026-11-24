@@ -28,7 +28,7 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | 公共命名空间 | 主要入口与用途 |
 |---|---|
 | `takflow` | `__version__`；只暴露包版本，不承载应用生成入口 |
-| `takflow.application` | `Application`、`BuildContext`、`BuildPaths`、品牌/资源层/组件/machine/扩展声明；[应用上下文](application.md)规定准备生命周期与扩展边界 |
+| `takflow.application` | `Application`、`BuildContext`、`BuildPaths`、品牌/资源层/组件/machine/扩展声明；[应用上下文](application.md)规定准备生命周期与扩展边界，[资源层](resource-layers.md)规定静态来源、组件和 machine 选择 |
 | `takflow.cli` | `create_cli`、`load_application`、`ApplicationLoadError`；标准 build 与五组分步命令，仅解析参数与展示公共结果 |
 | `takflow.build` | `build`、`run_stage`、`BuildResult`、`BuildError`、`StageResult`、`BuildArtifact`；[标准管线](build.md)规定写出、失败和成功清单契约 |
 | `takflow.config` | `BaseWorkflowConfig`、`load_config_from_file`、`load_validated_config`、`validate_config`、`ConfigDiagnostic`、`ConfigValidationError`、`validation_diagnostics`，workload/scheduling 配置、`FortranBool` 和变量组装 helpers |

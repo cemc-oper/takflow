@@ -2,7 +2,7 @@
 
 `takflow.build` 消费 [Application.prepare](application.md) 的同一有效上下文，不重新读取配置。
 完整构建和分步调用共享阶段实现；不执行 machine、业务程序、引擎 load 或调度提交。
-本页是 TC-06 公开契约，公共 CLI 见[命令契约](cli.md)，TYM 生产入口和旧布局迁移仍由 TC-07 负责。
+本页说明当前标准构建契约，公共 CLI 见[命令契约](cli.md)。资源层选择见[资源层、组件与 machine](resource-layers.md)；旧复制和配置接口见[旧接口适配](legacy-adapters.md)，生产入口和布局迁移见[CLI 迁移](cli-migration.md)。
 
 ## 调用和结果
 
@@ -21,7 +21,7 @@ with application.prepare("config.yaml", output_repo_base="build") as context:
 `build(context, *, credential_file=None, before_save=None, after_save=None)` 返回 `BuildResult`。
 `run_stage(context, stage, *, credential_file=None, before_save=None, after_save=None)` 返回相同类型，
 只运行所选阶段，不隐式补跑前置阶段，不发布完整成功清单。必须在 prepare 的作用域内使用。
-prepare 的加载/校验失败继续使用 TC-02 异常；这时尚未开始写出，不虚构本轮阶段产物。
+prepare 的加载/校验失败继续使用配置校验异常；这时尚未开始写出，不虚构本轮阶段产物。
 
 阶段顺序为 `resource → config → credential → job → workflow → report`。
 分步调用检查相同前置条件；例如 job 要求运行配置及所选脚本已准备。
@@ -34,7 +34,7 @@ prepare 的加载/校验失败继续使用 TC-02 异常；这时尚未开始写�
 | mode / output_root / workflow_output | 有效模式、绝对输出根、definition或runner位置 |
 | stages: list[StageResult] | name/status/reason/skipped_outputs；passed、failed、skipped、not_run |
 | artifacts: list[BuildArtifact] | 路径、角色、负责阶段、generated/copied/reference、mode、sha256、来源、mutable/sensitive |
-| diagnostics | 保留 TC-03 的code/stage/object/reason/status及 TC-02 的code/path/reason/stage，无原始配置或异常正文 |
+| diagnostics | 保留生成检查的 code/stage/object/reason/status 及配置校验的 code/path/reason/stage，无原始配置或异常正文 |
 | generation | 现有低层 GenerationResult，供薄适配读取output_path/suite，不进入JSON报告 |
 | manifest_path | 只有完整成功发布后存在，其他调用为None |
 
@@ -98,7 +98,7 @@ reference摘要仅为构建时观察，不冻结运行时内容；陈旧文件�
 此清单不是Sledra definition manifest，也不是引擎job创建、实际提交、HPC或产品合格证明。
 要核对已交付文件、解析定义或隔离展开原生 job，可另行运行[独立产物检查](generation-checks.md)。
 
-## ecFlow machine 引用的路径边界（TC-07）
+## ecFlow machine 引用的路径边界
 
 普通路径仍使用绝对 `%includenopp <...>`。ecFlow 5.12 在替换变量前按空白切分直接 include 路径；有效 machine 目录含空格时，helper 使用 `%includenopp <%TAKFLOW_MACHINE_INCLUDE_DIR%/fragment>`，保存阶段为此添加原始路径的专用原生变量。该名字保留给框架，不作为 Shell 环境导出；MACHINE_DIR 继续采用同一有效目录的 Shell 字面值通道，避免路径中的引号和美元符号被执行。完整与 workflow 分步均建立相同通道。
 
@@ -106,37 +106,16 @@ reference摘要仅为构建时观察，不冻结运行时内容；陈旧文件�
 
 共享 ECF_SCRIPT_CMD 的 cat 文件参数采用 Shell 引用，普通路径的原字节保持，带空格/引号的有效路径经过真实原生预处理验证。
 
-## TC-08 的消费者补齐
+## 配置选择与 takler 配置编码
 
 资源层可用 `ResourceLayer.config_field` 从同一已验证配置选择扩展根；`credential_enabled` 可按该配置判定，不额外加载配置。`required_machine_fragments` 检查本轮来源并保留业务脚本延后加载的作用域。
 
 MCV 的真实 takler 作业通过 Shell source 外部 config.sh，该文件不会再经过运行期 Jinja；因此标准 config 阶段将 takler 与 Shell 一样编码成 Shell 字面值。ecFlow 仍保留 suite 可 alter 的变量引用。此修正有真实 takler 定义与生成作业加载回归，不增加应用名分支。
 
-## 旧复制接口的额外目录映射（TC-09.3）
-
-标准阶段继续按 ResourceEntry 和 ResourceLayer 处理复制及来源；相同有序层同时供配置和作业模板读取。
-旧 `takflow.toolkit.copy_resources_to_output` 可用 `additional_entries=((source, destination, executable), ...)`
-声明额外目录，不再由应用补写 copytree。source/destination 均相对各自根目录，声明的目录必须存在，
-统一进入类型、权限、重叠及目标冲突预检；可选目录由调用方在存在时才声明。同名目标冲突不能用此参数模拟覆盖，
-标准多来源覆盖使用有序 ResourceLayer。
-
-此旧接口沿用来源权限及 *.sh 补执行位的既有行为，映射目录的 executable 为 False 时不补执行位；
-标准 `copy_resource_entries` 和构建阶段的精确权限策略不变。GFS base/oper 及旧 Execution 准备复用此机制，
-其历史 include 布局、默认来源和 None 返回由兼容适配保留，不能将该低层映射当作完整标准构建或业务扩展的验收。
-
-## 旧配置渲染适配（TC-09.4）
-
-旧配置接口可以委托 `takflow.toolkit.render_config_template(config, template_path, output_path)`，
-集中保留历史 Jinja 默认环境、写入和0755权限；返回 None，缺失模板抛出 TemplateNotFound，
-可选/WARN策略由旧门面适配。此接口用于尚未切换的旧消费者，不发布成功清单，
-随旧 toolkit 的[迁移窗口](cli-migration.md)退出。
-标准应用继续通过 config 阶段使用同一严格环境、模板声明、0644角色权限和公共结果，
-不调用该 legacy helper，也不添加应用环境 profile。
-
-## 配置选择的输入与后续阶段（TC-09.6）
+## 额外配置产物与后续阶段
 
 可选资源层、额外模板输出和 machine 必需片段的选择由 Application.prepare 固定，
-具体声明见 [应用指南](application.md)。resource 阶段先验证每个选定层的 required_inputs；
+具体声明见[资源层、组件与 machine](resource-layers.md)。resource 阶段先验证每个选定层的 required_inputs；
 该来源要求不能由别的层或磁盘旧产物满足，随后继续使用同一复制、覆盖与来源记录机制。
 
 job/workflow 除主配置外，还要求本轮声明中 required=True 的额外配置产物已经存在且可读。

@@ -1,8 +1,8 @@
 # 应用声明与有效上下文
 
-`takflow.application` 提供应用声明、一次配置加载和有作用域的有效上下文。
-TC-05 交付准备生命周期；资源复制、模板写出、作业/流程保存、完整成功清单
-由 [TC-06 标准管线](build.md)消费同一上下文，公共命令见 [CLI 契约](cli.md)。`prepare` 不写生成文件。
+`takflow.application` 提供应用声明、一次配置加载和有作用域的有效上下文。资源复制、模板写出、作业/流程保存和完整成功清单由[标准管线](build.md)消费同一上下文，公共命令见 [CLI 契约](cli.md)。`prepare` 不写生成文件。
+
+本页聚焦配置、路径、上下文和扩展生命周期。脚本、模板、include、组件和 machine 的声明与选择集中在[资源层、组件与 machine](resource-layers.md)。
 
 ## 公开入口
 
@@ -24,13 +24,13 @@ with application.prepare(
     overrides={"workflow_name": "daily"},
 ) as context:
     print(context.paths.workflow_output)
-    # TC-06 的阶段在此作用域中消费同一 context。
+    # 标准构建阶段在此作用域中消费同一 context。
 ```
 
 必需声明是 `config_type`、`resources` 和显式 `brand`。默认只声明 ecFlow 支持，
 definition 模式要求 `suite_builder`，shell 模式要求 `shell_template`。
 可选凭证通过 `credential_enabled=False` 或接收有效 config 的布尔判定函数显式选择，TYM 等未启用的应用无需空 handler；
-凭证文件输入及生成/缺失/skipped 结果由 TC-06 处理。观测选择沿用有效 config.observability。
+凭证文件输入及生成/缺失/skipped 结果由标准构建处理。观测选择沿用有效 config.observability。
 `supported_modes` 必须反映实际消费者能力；公共模型接受 takler 不代表应用已支持它。
 接口直接引用 Python 对象，允许入口分布在多层包中，不要求统一文件名或动态插件发现。
 
@@ -81,15 +81,10 @@ mapping 或文件，以保证覆盖先于派生。显式 definition `output` 仍
 
 | 声明 | 责任与限制 |
 |---|---|
-| `ResourceLayer(name, root, config_field=None, required_inputs=())` | base 后按声明顺序覆盖，扩展层在后；名称唯一；配置目录字段的非空值优先于 root，配置相对路径基于 source_dir、canonical overrides 基于调用 cwd；required_inputs 是本层必须提供的相对文件，不能由其他层或旧输出满足；静态与模板共用层序及来源记录 |
-| `ResourceEntry(source, destination, executable=False, required=False)` | 声明静态目录/文件映射，路径相对且不逃逸；默认 scripts、ecflow/include、takler/include、utils；迁移映射由应用给出，不新增应用名 profile |
-| `use_public_resources` | 默认 False。传 True 或接受有效 config 的布尔函数，可在 base 之前加入随 takflow 安装的公共资源层 |
-| `TemplateOutput(template, output, required=True, mode=0o644)` | 声明额外模板产物，mode 仅 0644/0755/0600；TC-06 检查实际模板、目标碰撞、编码、权限及写出 |
-| `select_components(config)` | 只计算一次，返回 `ComponentSelection`；enabled 与两个路径分类器供资源/作业共用，不读禁用文件 |
-| `variables(config)` | 返回名称为变量标识符、值为 str 的映射；值由领域计算，编码和实际导出由 TC-06 负责 |
+| `variables(config)` | 返回名称为变量标识符、值为 str 的映射；值由领域计算，编码和实际导出由标准构建负责 |
 | `context(context)` | 返回领域模板数据，不接管 renderer；应用贡献先于扩展，键冲突报错；各贡献读取相同基础上下文 |
 | `normalize_config(data)` | 在覆盖后处理领域旧输入，返回 raw mapping，不加载第二份配置或执行环境脚本 |
-| `required_operations(config)` | 返回已有后端操作名，复用 TC-03 能力预检，不建立新 IR |
+| `required_operations(config)` | 返回已有后端操作名，复用公共能力预检，不建立新 IR |
 
 `BuildContext.template_context()` 返回只读外层 mapping，包含 config、paths、brand、
 components、machine、variables、两个 build_info 行以及领域贡献。保留键还包括
@@ -108,9 +103,9 @@ context=None, outputs=())` 只提供局部初始化、数据和规则。名称�
 
 不接受 resource/config/job/workflow 整套 handler 注册，也不提供阶段接管开关。
 业务构图、科学配置、组件判定、变量值、模板、Shell runner 调用序列与领域 Hook 内容由应用维护。
-Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/分步结果及公共命令属于 TC-06/12。
+Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/分步结果及公共命令属于标准构建与公共 CLI。
 
-### 组合 oper 的最终声明（TC-10.4）
+### 组合 oper 的最终声明
 
 `config_type`、`brand`、`variables` 和 `credential_enabled` 属于最终 Application，
 不由扩展隐式合并。应用工厂可用 `dataclasses.replace(base, config_type=OperConfig,
@@ -140,62 +135,7 @@ machine 变量沿用 APPLICATION_VARIABLE_CONFLICT；OUTPUT_REPO_BASE 必须与�
 错误消息使用受控诊断。MCV shadow 和 GFS base Execution 的实际贡献可使用这些接口；
 GFS oper 的观测拒绝边界仍由应用判定。
 
-### 按有效配置选择可选输入（TC-09.6）
-
-`Application.resource_layers/outputs` 和 `ApplicationExtension.resource_layers/outputs`
-既可以保持固定 tuple，也可以传入 `selector(config) -> tuple`。Application 的
-required_machine_fragments 同样接受该形式。每个选择器在一次 prepare 中只调用一次，
-读取同一个已验证配置；base 的默认资源 factory 先按需调用一次并解析成有效目录，
-因此层选择器能从 config.workflow_repo_base_dir 构造其子目录。现有 config_field
-字段仍按表中规则解析，不增加第二次 YAML 加载或领域模型校验。
-
-资源层按 `base → Application.resource_layers → 各 ApplicationExtension.resource_layers`
-的声明顺序选择并解析。每项贡献解析完成后再调用下一项贡献的选择器，因此后续扩展
-能从前面 `config_field` 的有效绝对根（包含包默认）派生观测子目录。一个选择器返回的
-tuple 内各层随后依次解析；该选择器执行期间不能读取其尚未返回的层的解析结果。
-依赖 oper 根的独立观测层应声明在 oper 贡献之后，未启用时返回空 tuple；框架不替应用
-推断启用条件。MCV 的 shadow 按 ecFlow 与 observability.enabled 选择资源条目，
-GFS base 的 Execution 试点使用 base 后的 execution 层；GFS oper 仍拒绝观测模式。
-
-`config_field` 必须使用规范字段名，历史字符串 alias 由原配置模型校验；Python
-canonical overrides 在校验前替换 alias 值。YAML 根相对 YAML 所在目录，mapping/model
-根相对 source_dir；相对 canonical override 基于调用 cwd；声明的默认 root 基于调用
-cwd。显式 workflow_repo_base 仅替换 base，扩展仍按自己的有效字段或包默认解析。
-静态 ResourceEntry、config/job、TemplateOutput 与嵌套 Jinja include 均使用最终层序，
-同名项后层覆盖、缺失项向前回落。公共结果中静态文件保留有序 layer/path 来源，渲染
-产物的 template 指向选中的源文件；成功清单记录相同的层根，不记录模板正文。
-
-多模式应用可声明 `use_public_resources=lambda config: config.workflow_mode == "ecflow"`。
-公共文件包括 `ecflow/include/common/{head,tail}.h`、`takler/include/{head,tail}.sh`
-和 `utils/{logger,orvix_functions,run_functions}.sh`。沿用普通
-`resource_entries` 和组件筛选选择要复制的文件。允许只映射其中一个文件。
-同一相对路径的优先级从低到高依次为 takflow、有效应用基础根、应用后续层、扩展层。
-`config.workflow_repo_base_dir` 始终指向有效应用基础根。job 通过工作流输出的 include
-目录引用头尾，例如在 `ECF_INCLUDE` 中加入输出的 `ecflow/include` 后使用
-`%include <common/head.h>` 和 `%include <common/tail.h>`。
-
-takler 应用启用该资源层后，可将 `TAKLER_INCLUDE` 指向输出的 `takler/include`。
-在 job 模板的 Jinja raw 块中写入 `{% include "head.sh" %}` 和 `{% include "tail.sh" %}`，
-业务调用放在两个块之间。takler 创建 job 时展开这两处 include。公共 head 在 init 前导出任务名、
-本次 attempt UUID 及引擎提供的作业口令，init 的 `--task-id` 使用作业 PID。
-应用定制片段仍按同一路径逐文件覆盖。
-
-顺序执行的 Bash runner 从输出目录显式 source 日志、运行及所选的提交辅助。logger 需要 Bash 4+。
-`run local` 传递业务脚本退出码。`run orvix` 需要运行机 PATH 上的 `orvix` 和 `python3`，
-使用 Python 标准库解析 `orvix status <info.yaml> --format json`。Slurm 和 Donau 确认成功后继续。
-local 只报告进程消失时，runner 提示“无法确认业务结果”并以 6 停止。保留直接 Slurm 的应用须先
-导入自己的 `submit_and_monitor_slurm_job`。Ksh 头尾和各应用的业务顺序保持独立。
-
-选择结果固定在 BuildPaths.resource_layers、BuildContext.outputs 和
-BuildContext.required_machine_fragments；完整与单步构建读取同一结果。
-选择器只返回数据，不复制、写出或执行脚本。扩展初始化仍在加载配置前执行，
-可选层/产物不构成按配置接管完整阶段或重排业务 Hook 的接口。
-
-选定层的 required_inputs 在 resource 复制前逐项检查来源、类型及可读性。
-用它声明必须存在的覆盖文件，可以防止缺少扩展 head 时悄悄落回基础 head；
-未选择的层不会被检查。普通稀疏覆盖继续使用不带这些必需项的 ResourceLayer。
-
-## 品牌和 machine
+## 品牌
 
 `ApplicationBrand(tool_name, version, target_model=None)` 在上下文中固定本轮头部与构建时间。
 准备作用域使用 `build_info_scope`，现有公共 job renderer 优先消费该作用域的头部；
@@ -203,17 +143,7 @@ BuildContext.required_machine_fragments；完整与单步构建读取同一结�
 作用域退出后恢复原品牌，顺序应用不会串用；JSON 等原生格式如何记录品牌由保存阶段处理，
 这里不向 JSON 注入注释。
 
-公共配置增加可选顶层 `machine_name/machine_dir`。未使用站点能力的应用无需填写；
-`require_machine=True` 时必须显式选择。默认目录为最终输出根下的 `machine/<name>`，
-原始 config.machine_dir 保持 None，派生结果在 `MachineContext.directory`。
-显式 machine_dir 是所选站点目录本身，必须为绝对目标路径，不复制、不回退、不本地探测。
-
-`MachineContext.external` 区分两种来源；`BuildContext.variables` 合入同一份
-`MACHINE_NAME/MACHINE_DIR`，拒绝领域覆盖，检查报告注明远端可见性/执行未验。
-实际变量写出、所选站点分发和 include_machine 原生引用 helper 由 [TC-06](build.md)提供，
-原生消费者、Shell 加载位置及可更新片段语义由 TC-07 验证。
-
-## 构图消费有效路径（TC-07）
+## 构图消费有效路径
 
 `context_suite_builder(context, engine)` 是 `suite_builder(config, engine)` 的可选替代，二者互斥。新增字段位于声明末尾，不改变既有位置参数；原签名继续工作。需要输出/组件路径的应用可直接从本轮 `BuildContext.paths` 构图，无需把运行上下文塞回配置、使用全局变量或重新推导布局。仅 definition 模式调用，Shell 仍由声明的模板生成。
 
@@ -221,34 +151,13 @@ TYM 的 create_suite 接受显式 paths，并把同一 BuildPaths 传给原有 d
 
 未启用 observability 时，准备报告记录 APPLICATION_OBSERVABILITY_DISABLED，完整清单保留这一可选能力选择；它不授予任何运行资格。
 
-## 业务 Shell 延后加载 machine（TC-08）
-
-`required_machine_fragments=("env/forecast_mpi.sh", ...)` 声明业务脚本将在原位置 source 的片段。资源阶段先检查本轮所选 machine 的有序来源，再复制并登记引用；输出目录中的陈旧文件不能代替缺少的来源。默认目录检查存在性与摘要，显式外部目录仅登记引用，留到目标环境读取。框架不执行或提前 source，不改变业务 cwd/作用域，不自动把片段正文嵌进父作业。片段内容、加载位置和库/MPI 参数继续由消费者维护。
-
-MCV oper、GFS oper及独立RA2已使用同一资源层、显式初始化和公共构建服务。MCV通过配置声明上传必需输入，GFS oper另按实际任务的ECF引用检查最终模板；目录/领域规则留应用。`ApplicationExtension`不新增整套handler接管口。
-
-
-`required_resource_inputs` 为相对文件名元组或接收有效 config 的纯判定函数，用于声明选定业务能力的必需脚本/模板。资源阶段从同一有序来源验证输入，缺失即失败，输出目录里的旧 job 不作替代。MCV oper 只在上传启用时声明其上传 job 模板和脚本；稀疏 oper 不启用上传时仍可回落基础资源。
-
-## 初始化的注册表所有权（TC-10.2）
+## 初始化的注册表所有权
 
 每次 prepare 先隔离公共 credential 注册表、Application.registries 与各 Extension.registries，再按 extensions 顺序初始化，最后加载/校验配置并构造上下文。同一个注册表重复出现在声明中时只进入一次作用域。初始化函数每次显式注册已有函数，导入缓存不会代替注册；非 credential 的领域注册表必须全部列入声明，credential 注册表由框架自动处理。
 
 作用域内从空注册表开始，调用者的外来注册不会参与本轮构建。正常退出或初始化、校验、上下文及构建失败时恢复原表，KeyboardInterrupt/SystemExit 也不遗留本轮注册。Python 调用保留原异常或公共 BuildError.original，CLI 使用既有受控错误和中断退出码；作用域恢复不回滚生成文件。MCV/GFS 的真实消费者回归位于 test-suite/tests/test_oper_initialization.py，框架必测还验证重复声明、部分初始化及基础异常。该保证适用于顺序调用，不承诺共享单例的并发隔离。
 
-## 已验证消费者与可选能力范围
-
-标准声明和Python/CLI共用一套机制，领域能力的支持范围分别声明：
-
-| 能力 | 已验证消费者及边界 |
-|---|---|
-| 完整组件选择 | TYM的model/data/graph/typhoon；Shell仍按原业务限制排除graph。MCV shadow资源筛选与GFS试点job筛选属于局部消费者 |
-| 配置变量通道 | MCV base/oper的有效覆盖、Shell字面值和ecFlow/takler引用；TYM Fortran参数、GFS flags/设置仍保留领域格式 |
-| 有序资源、context/outputs与初始化 | MCV/GFS oper及RA2的覆盖/回落、三层来源、完整/分步/CLI、冲突和中断恢复。显式initializer继续使用 |
-| 可选凭证 | MCV base→oper组合与RA2 CTS条件；0600和公开报告保护由公共阶段处理，字段/编码留应用，未统一迁移静态历史账户 |
-| 可选观测 | MCV base/oper仅ecFlow forecast及五个prepare/bckg wrapper的shadow；GFS base仅ecFlow+inline Execution data试点。GFS oper/RA2明确拒绝，不创建运行身份或统一状态机 |
-
-观测默认关闭，关闭不要求SDK或目标配置；启用只选择已声明输入，不授予运行资格。同目录启停按本轮结果和任务引用判定，旧文件可以保留，但不能替代当前必需源输入。RA2的CTS动作flag关闭仍保留上传任务族，不等同于整体上传关闭。生成、原生预处理、SDK夹具与现场业务证据应分别登记。
+消费者验证范围与可选能力的实测边界见[开发测试](../develop/testing.md)，不作为阅读本页契约的前置条件。
 
 (mcv-s1-reference)=
 ## MCV S1 真实应用参考

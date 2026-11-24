@@ -54,7 +54,7 @@ Application 声明 + YAML + 资源层 + 扩展
 
 `Application.prepare()` 把应用声明与本轮输入组合成一个 `BuildContext`：加载和校验配置，应用显式覆盖，解析路径和资源层，初始化扩展，并固定本轮品牌、组件、变量和模板上下文。
 
-`prepare` 不写生成文件。完整构建和分步生成必须在这个作用域内消费**同一个**上下文，不能各自重新读取配置、推导路径或注册 hook。
+`prepare` 不写生成文件。完整构建和分步生成必须在这个作用域内消费**同一个**上下文，不能各自重新读取配置、推导路径或注册 hook。静态资源与站点的选择规则见[资源层、组件与 machine](resource-layers.md)。
 
 ### 3. 生成产物
 
@@ -130,10 +130,10 @@ orvix 拥有语言无关的 jobspec 契约；takflow 保存只读 vendor 副本�
 
 新应用优先使用 `Application.prepare()`、`takflow.build` 和公共 CLI。`takflow.flow` 与 `takflow.jobspec` 是这条主路径中的领域能力；`takflow.generation` 是标准 workflow 阶段复用的低层生成编排入口。
 
-旧 toolkit 适配器、应用自有 CLI 和历史 handler 仍用于兼容既有消费者，但不应与标准路径拼接成另一套并行的构建生命周期。迁移时先阅读[CLI 迁移](cli-migration.md)，公共入口及兼容边界见[公共 API 与兼容策略](public-api.md)。
+旧 toolkit 适配器、应用自有 CLI 和历史 handler 仍用于兼容既有消费者，但不应与标准路径拼接成另一套并行的构建生命周期。旧复制与配置接口见[旧接口适配](legacy-adapters.md)；迁移时先阅读[CLI 迁移](cli-migration.md)，公共入口及兼容边界见[公共 API 与兼容策略](public-api.md)。
 
 ## 阅读下一步
 
 - 第一次构建应用：进入[快速上手](../quickstart.md)，随后阅读[应用声明](application.md)。
-- 已了解示例、需要补齐领域能力：依次阅读[配置](config.md)、[流程与钩子](flow-and-hooks.md)和[作业资源](jobspec.md)。
+- 已了解示例、需要补齐领域能力：依次阅读[配置](config.md)、[资源层](resource-layers.md)、[流程与钩子](flow-and-hooks.md)和[作业资源](jobspec.md)。
 - 需要生成和验收产物：阅读[标准构建](build.md)、[CLI](cli.md)和[产物检查](generation-checks.md)。

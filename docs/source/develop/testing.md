@@ -102,3 +102,19 @@ python scripts/sync_jobspec.py --orvix-ref <40位完整commit>
 同步脚本原样保存输入 ref，CI 的 conformance job 只接受完整 commit，并用
 `scripts/sync_jobspec.py --check` 校验 vendor 副本与 pin 完全一致，不一致即红。输出含 `(stale)` 时，上游删除对应的本地副本仍需在变更中显式处理并复核；同步脚本不会自动删除它们，不能把返回 0 当作同步完成。本地提交 orvix 改动前也可用
 `python scripts/sync_jobspec.py --check --worktree` 预检未提交的工作树。
+
+## 应用消费者验证范围
+
+以下记录来自应用声明和真实消费者回归，描述当前实测边界，不是标准 API 的使用前提，也不把局部消费者证据外推为所有应用或真实业务运行已验收。
+
+标准声明和Python/CLI共用一套机制，领域能力的支持范围分别声明：
+
+| 能力 | 已验证消费者及边界 |
+|---|---|
+| 完整组件选择 | TYM的model/data/graph/typhoon；Shell仍按原业务限制排除graph。MCV shadow资源筛选与GFS试点job筛选属于局部消费者 |
+| 配置变量通道 | MCV base/oper的有效覆盖、Shell字面值和ecFlow/takler引用；TYM Fortran参数、GFS flags/设置仍保留领域格式 |
+| 有序资源、context/outputs与初始化 | MCV/GFS oper及RA2的覆盖/回落、三层来源、完整/分步/CLI、冲突和中断恢复。显式initializer继续使用 |
+| 可选凭证 | MCV base→oper组合与RA2 CTS条件；0600和公开报告保护由公共阶段处理，字段/编码留应用，未统一迁移静态历史账户 |
+| 可选观测 | MCV base/oper仅ecFlow forecast及五个prepare/bckg wrapper的shadow；GFS base仅ecFlow+inline Execution data试点。GFS oper/RA2明确拒绝，不创建运行身份或统一状态机 |
+
+观测默认关闭，关闭不要求SDK或目标配置；启用只选择已声明输入，不授予运行资格。同目录启停按本轮结果和任务引用判定，旧文件可以保留，但不能替代当前必需源输入。RA2的CTS动作flag关闭仍保留上传任务族，不等同于整体上传关闭。生成、原生预处理、SDK夹具与现场业务证据应分别登记。
