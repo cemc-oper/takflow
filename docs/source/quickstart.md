@@ -12,11 +12,13 @@
 
 要求 Python >= 3.10。
 
+只使用框架库时可安装发布包：
+
 ```bash
 pip install takflow
 ```
 
-或从源码安装最新开发版本：
+本页的端到端命令使用仓库内独立的 toyflow 包；从源码安装框架和该示例：
 
 ```bash
 git clone https://github.com/cemc-oper/takflow.git
@@ -24,6 +26,7 @@ git clone https://github.com/cemc-oper/takflow.git
 # git clone http://e.mc.met.cma/codingcorp/cemc-takler/takflow.git
 cd takflow
 pip install .
+pip install -e examples/toyflow
 ```
 
 ## 端到端流程
@@ -97,15 +100,16 @@ output_path = result.output_path
 
 ### 4. 构建命令行接口
 
-用 `takflow.toolkit` 的原子能力拼出应用的 4 步生成管线：
+安装 toyflow 后，在仓库根目录执行其四步 CLI：
 
-```python
-from takflow.toolkit import copy_resources_to_output, render_jobs_from_directory
-
-# resource copy / job generate / config generate / workflow generate
+```bash
+toyflow resource copy --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
+toyflow config generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
+toyflow job generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
+toyflow workflow generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
 ```
 
-对应文件：`examples/toyflow/src/toyflow/cli.py`。详见 [构建 CLI](guide/cli.md)。
+这些命令由 `takflow.toolkit` 的资源、配置、作业和流程生成能力组成。完整实现见 `examples/toyflow/src/toyflow/cli.py`，参数与产物说明见 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)；标准 Application 的命令契约见[构建 CLI](guide/cli.md)。
 
 ## 生成的流程结构
 

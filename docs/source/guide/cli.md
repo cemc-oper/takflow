@@ -40,4 +40,4 @@ JSON 在 stdout 返回 `schema_version: 1`、`status: success|failed`、`result:
 
 ## 发布与迁移
 
-参见[迁移公告](cli-migration.md)。TYM 默认根命令已由 TC-07 切换到公共实现；standard 子命令仅作临时转发别名，0.4.0 移除。当前发布状态仍为未发布 R1 候选，依赖配套见迁移公告。
+参见[迁移公告](cli-migration.md)。TYM 默认根命令已由 TC-07 切换到公共实现；standard 子命令仅作临时转发别名，0.4.0 移除。发布阶段、配套版本与迁移状态以迁移公告为准，本页不另维护容易过期的状态快照。

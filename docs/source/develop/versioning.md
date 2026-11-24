@@ -10,7 +10,7 @@ jobspec vendor 同步流程。
 |---|---|---|
 | takflow Python 包 | takflow 仓库 git tag，经 `setuptools_scm` 写入包版本；运行时读取 `takflow.__version__` | 按公共 Python API 和消费者影响独立发布，不与 jobspec 机械同步 bump |
 | orvix jobspec 契约 | orvix `spec/jobspec/VERSION`；takflow 保存只读 vendor 副本 | 由 orvix 按契约兼容性 bump，takflow 通过 pin 同步 |
-| vendor 来源 pin | takflow `src/takflow/spec/jobspec/ORVIX_VERSION` | 记录只读副本对应的 orvix git ref，不是语义化版本 |
+| vendor 来源 pin | takflow `src/takflow/spec/jobspec/ORVIX_VERSION` | 记录只读副本对应的 orvix 40 位完整 commit，不是语义化版本、tag 或短 SHA |
 
 当前 jobspec 契约版本和完整 pin 只在
 [jobspec 契约页的 vendor 快照](../reference/jobspec-schema.md)展示，权威值始终是上述包内文件。
@@ -46,9 +46,13 @@ takflow 使用独立包版本表达 Python API、toolkit、后端适配和生成
 1. 在 orvix 中修改 schema / 解析器 / 后端 / 对拍向量，按规则 bump `spec/jobspec/VERSION`，
    `make regen-golden` 重新生成 golden 基线并跑通 golden 测试（见 orvix 的
    `docs/source/develop/adding-directive.md`）。
-2. orvix 合并（并发布/打 tag）后，在本仓库升 pin 同步：
-   `python scripts/sync_jobspec.py --orvix-ref <新版 orvix ref>`。
-   该命令覆盖 vendor 副本并更新 `ORVIX_VERSION`，人工确认差异后随 PR 评审。
+2. orvix 合并（并发布/打 tag）后，先把目标 ref 解析为完整 commit，再在本仓库升 pin 同步：
+   ```bash
+   git -C <orvix-repo> rev-parse '<tag-or-ref>^{commit}'
+   python scripts/sync_jobspec.py --orvix-ref <40位完整commit>
+   ```
+   同步脚本会把输入 ref 原样写入 `ORVIX_VERSION`，而 CI 只接受 40 位完整 commit；不要直接传 tag 或短 SHA。该命令覆盖 vendor 副本并更新 pin，人工确认差异后随 PR 评审。
+   如果输出含 `(stale)`，表示上游已删除的本地副本仍存在；同步脚本不会删除它们，流程尚未完成。必须在变更中显式处理这些删除并复核，再用 `--check` 确认，不能把同步命令返回 0 当作完成。
 3. 若新键需要从应用层配置生成，在同一 PR 更新 `TaskResource` → `ResourceSpec`
    的编译逻辑与相关文档，并分别评审 Python API 和 jobspec 兼容影响。
 4. 核对 [jobspec 契约页](../reference/jobspec-schema.md)的当前快照与 vendor

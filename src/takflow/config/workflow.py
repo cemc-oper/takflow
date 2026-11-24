@@ -70,11 +70,14 @@ class BaseWorkflowConfig(BaseModel):
     workload : WorkloadType
         Workload config (slurm or shell). Apps may override the union type.
     scheduling : SchedulingConfig or None
-        Time scheduling; ecFlow mode only.
+        Time scheduling; consumed by the application suite builder where supported
+        (for example ecFlow/takler definition backends).
     cycles : dict[str, CycleConfig] or None
-        Forecast cycle configs; ecFlow mode only.
+        Forecast cycle configs; consumed by the application suite builder where
+        supported (for example ecFlow/takler definition backends).
     housekeep : HousekeepConfig or None
-        Cleanup config; ecFlow mode only.
+        Cleanup config for definition-style workflows; Shell runners do not
+        automatically mount cleanup unless the application provides it.
     """
 
     project_base_dir: str

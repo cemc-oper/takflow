@@ -44,11 +44,11 @@ pip install -e .
 pip install -e examples/toyflow
 ```
 
-也可以不安装，直接用 `PYTHONPATH` 运行（下面命令以此为例）：
+也可以在已安装第三方依赖的环境中不安装 takflow 和 toyflow，直接通过 `PYTHONPATH` 使用两份源码（下面命令以此为例）：
 
 ```bash
 cd framework/takflow/examples/toyflow
-export PYTHONPATH=$PWD/src
+export PYTHONPATH="$PWD/src:$PWD/../../src"
 
 # 1. 复制静态资源（scripts/、ecflow/include/）
 python -m toyflow.cli resource copy --config-file config/toyflow.yaml \
@@ -102,8 +102,8 @@ python -m toyflow.cli credential generate --config-file config/toyflow.yaml \
 
 1. 复制本目录，把包名 `toyflow` 改成你的应用名。
 2. 在 `config.py` 里替换成你的领域字段（功能开关、组件配置、任务资源）。
-3. 在 `flow.py` 里搭你的节点树；扩展点走 `hooks.py` 的注册表，
-   业务扩展包（相当于 `mcv-oper-workflow`）只需 import 时注册 hook。
+3. 在 `flow.py` 里搭你的节点树；扩展点走 `hooks.py` 的注册表。
+   toyflow 这套旧 CLI 的业务扩展包可在 import 时注册 hook；标准 `Application` 必须在扩展 initializer 中逐轮注册，见[流程与钩子](../../docs/source/guide/flow-and-hooks.md)。
 4. 替换 `resources/` 里的作业模板和静态脚本。
 5. CLI 基本不用动——`cli.py` 已经是从 `takflow.toolkit` 拼好的通用形态。
 

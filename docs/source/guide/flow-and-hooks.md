@@ -102,5 +102,6 @@ context = EngineHookContext(node=fm_main, engine=engine, kwargs={})
 EngineHookRegistry.get_instance().execute(EngineHookPoint.AFTER_FORECAST, context)
 ```
 
-这也是 `mcv-oper-workflow` 等"业务扩展包"的接入方式：扩展包的 CLI 先 import 自己的 hooks 模块
-触发注册，再调用基础包的流程构建函数。
+toyflow 及仍使用旧应用 CLI 的扩展包可以在 **import 时**通过装饰器注册：扩展包的 CLI 先 import 自己的 hooks 模块，再调用基础包的流程构建函数。
+
+标准 `Application` 使用每轮构建隔离的注册表，不能依赖 import-only 注册。扩展必须在 `Application.registries` 中声明所用注册表，并在每个 `ApplicationExtension.initialize` 调用中显式注册 hook；模块缓存不会替代这一步。详见[标准 Application 扩展](application.md)。

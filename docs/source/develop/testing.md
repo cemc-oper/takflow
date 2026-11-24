@@ -68,10 +68,12 @@ uv venv --python /usr/bin/python3 --system-site-packages /tmp/native-ecflow
 uv pip install --python /tmp/native-ecflow/bin/python -e . pytest
 /tmp/native-ecflow/bin/python scripts/run_contract_tests.py native
 
+# build/twine 不在 dev 依赖组中，安装到本次使用的 .venv
+uv pip install --python .venv/bin/python build twine
 # build 默认先创建 sdist，再从它构建 wheel
-python -m build
-twine check dist/*
-python -m venv /tmp/takflow-wheel-smoke
+.venv/bin/python -m build
+.venv/bin/python -m twine check dist/*
+.venv/bin/python -m venv /tmp/takflow-wheel-smoke
 /tmp/takflow-wheel-smoke/bin/python -m pip install dist/takflow-*.whl examples/toyflow
 ```
 
@@ -93,9 +95,10 @@ native 包需要匹配的 Python ABI 和 Ubuntu build，CI 升级版本时需重
 同步：
 
 ```bash
-python scripts/sync_jobspec.py --orvix-ref <新版 orvix ref>
+git -C /path/to/pinned-orvix-source rev-parse '<tag-or-ref>^{commit}'
+python scripts/sync_jobspec.py --orvix-ref <40位完整commit>
 ```
 
-CI 的 conformance job 会用 `scripts/sync_jobspec.py --check` 校验 vendor 副本与
-pin 完全一致，不一致即红。本地提交 orvix 改动前也可用
+同步脚本原样保存输入 ref，CI 的 conformance job 只接受完整 commit，并用
+`scripts/sync_jobspec.py --check` 校验 vendor 副本与 pin 完全一致，不一致即红。输出含 `(stale)` 时，上游删除对应的本地副本仍需在变更中显式处理并复核；同步脚本不会自动删除它们，不能把返回 0 当作同步完成。本地提交 orvix 改动前也可用
 `python scripts/sync_jobspec.py --check --worktree` 预检未提交的工作树。

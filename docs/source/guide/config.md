@@ -24,12 +24,12 @@ workload:
   default_serial_queue: serial
   default_parallel_queue: normal
 
-scheduling:                                  # ecflow 模式有效
+scheduling:                                  # 由应用 builder 消费；toyflow 的 ecflow/takler 均使用
   scheduling_type: RepeatDate
   start_date: 20250716
   end_date: 20250720
 
-cycles:                                      # ecflow 模式有效
+cycles:                                      # 由应用 builder 消费；toyflow 的 ecflow/takler 均使用
   "00":
     cycle_label: "00"
     time: "00:00"
@@ -65,8 +65,8 @@ post_resource:
 | `workflow_mode` | `shell` / `ecflow` / `takler` | 输出模式 |
 | `script_invoke_mode` | `external` / `inline` | 作业脚本是外部引用还是内联 |
 | `workload` | `SlurmWorkload` / `ShellWorkload` | 工作负载配置(判别联合) |
-| `scheduling` | `SchedulingConfig` \| None | ecFlow 时间调度 |
-| `cycles` | `dict[str, CycleConfig]` \| None | 预报启动循环配置 |
+| `scheduling` | `SchedulingConfig` \| None | 时间调度配置；是否消费由应用 suite builder 决定（toyflow 的 ecFlow/takler 均消费） |
+| `cycles` | `dict[str, CycleConfig]` \| None | 时次循环配置；是否消费由应用 suite builder 决定（toyflow 的 ecFlow/takler 均消费） |
 | `housekeep` | `HousekeepConfig` \| None | 清理配置 |
 
 ### ecFlow 业务脚本执行边界
@@ -239,6 +239,7 @@ GFS 的路径/default partition alias 与 partition/tasks_per_node 归一化由�
 |---|---|
 | `CONFIG_DATE_INVALID` / `CONFIG_DATE_ORDER` | 日期不存在/格式错误，或起止倒序 |
 | `CONFIG_RESOURCE_POSITIVE` | 高层申请资源非正 |
+| `CONFIG_RESOURCE_BLANK` | `queue`、`time`、`memory`、默认队列等声明了非空白约束的资源字符串为空或仅含空白 |
 | `CONFIG_RESOURCE_ALIAS_CONFLICT` | 同时填写 `project` 和 `wckey` 的非 None 值，须选择其中一个名称 |
 | `CONFIG_UNKNOWN_FIELD` / `CONFIG_REQUIRED` | 未知字段或必填字段缺失 |
 | `CONFIG_TYPE` / `CONFIG_CHOICE` / `CONFIG_RANGE` | 类型/选择/已声明边界错误 |

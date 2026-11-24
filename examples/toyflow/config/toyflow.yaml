@@ -24,12 +24,12 @@ workload:
   default_serial_queue: serial
   default_parallel_queue: normal
 
-scheduling:                      # ecflow 模式有效
+scheduling:                      # 由应用 builder 消费；toyflow 的 ecflow/takler 均使用
   scheduling_type: RepeatDate
   start_date: 20250716
   end_date: 20250720
 
-cycles:                          # ecflow 模式有效
+cycles:                          # 由应用 builder 消费；toyflow 的 ecflow/takler 均使用
   "00":
     cycle_label: "00"
     time: "00:00"
