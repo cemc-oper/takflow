@@ -37,24 +37,38 @@ pip install .
 
 ## 快速上手
 
+标准应用通过 `Application` 声明配置、资源和领域 suite builder，再由标准构建消费同一个有效上下文：
+
 ```python
-from takflow.config import BaseWorkflowConfig, load_config_from_file
-from takflow.flow import WorkflowEngine
-from takflow.backends.ecflow import EcflowBackend
+from pathlib import Path
+
+from takflow.application import Application, ApplicationBrand
+from takflow.build import build
+from takflow.config import BaseWorkflowConfig
 
 
 class MyConfig(BaseWorkflowConfig):
-    """通用字段(目录、模式、workload、调度)全部继承,只加领域字段。"""
+    """通用字段由框架继承，这里只添加领域字段。"""
 
 
-config = load_config_from_file("config/my_config.yaml", config_class=MyConfig)
+def create_suite(config, engine):
+    suite = engine.Suite(config.workflow_name)
+    suite.add_family("main").add_task("forecast")
+    return suite
 
-engine = WorkflowEngine(EcflowBackend())
-suite = engine.Suite(config.workflow_name)
-suite.add_family("main").add_task("forecast")
+
+application = Application(
+    config_type=MyConfig,
+    resources=Path("src/my_workflow/resources"),
+    suite_builder=create_suite,
+    brand=ApplicationBrand("my-workflow", "0.1.0"),
+)
+
+with application.prepare("config/my_config.yaml", output_repo_base="build") as context:
+    result = build(context)
 ```
 
-完整的端到端最小应用见 [`examples/toyflow/`](examples/toyflow/README.md)。
+应用的资源目录还需提供配置、作业模板和静态脚本。完整的底层 API 与旧 CLI 示例见 [`examples/toyflow/`](examples/toyflow/README.md)；标准应用路径见[设计总览](docs/source/guide/overview.md)和[应用声明](docs/source/guide/application.md)。
 
 ## 文档
 

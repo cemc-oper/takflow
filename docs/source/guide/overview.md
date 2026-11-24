@@ -1,6 +1,6 @@
 # 设计总览与职责边界
 
-本页从**一次构建**解释 takflow 的整体设计，帮助读者先建立使用模型，再进入各专题页面。包目录和七层技术架构见[架构设计](../develop/architecture.md)；完整示例见[快速上手](../quickstart.md)。
+本页从**一次构建**解释 takflow 的整体设计，帮助读者先建立使用模型，再进入各专题页面。包目录和七层技术架构见[架构设计](../develop/architecture.md)；底层 API 与旧 CLI 示例见[toyflow 快速上手](../quickstart.md)，真实标准应用见 {ref}`MCV S1 参考 <mcv-s1-reference>`。
 
 takflow 面向工作流生成器应用，不直接替代业务应用、调度器或作业提交工具。新应用的主路径是：
 
@@ -69,7 +69,7 @@ Application 声明 + YAML + 资源层 + 扩展
 | `workflow` | 生成 ecFlow/takler definition 或 Shell runner |
 | `report` | 仅在完整构建成功后原子发布 `generation_manifest.json` |
 
-完整 `build` 与 `run_stage` 共用阶段实现，但分步调用不补跑前置阶段，也不发布完整成功清单。详见[标准构建管线](build.md)和[命令行契约](cli.md)。
+完整 `build` 与 `run_stage` 共用阶段实现，但分步调用不补跑前置阶段，也不发布完整成功清单。详见[标准构建](build.md)和[标准命令契约](cli.md)。
 
 ### 4. 检查与运行
 
@@ -126,6 +126,25 @@ orvix 拥有语言无关的 jobspec 契约；takflow 保存只读 vendor 副本�
 | 应用扩展 | 有序资源层、显式初始化、领域 hook、额外模板输出和局部上下文 | 接管或重排标准阶段，隐式合并品牌、最终配置类型或全局规则 |
 | 运行环境 | Shell/ecFlow/takler 控制、orvix 转换与提交、调度器分配资源、业务程序执行 | 证明某次生成配置在科学和业务上正确 |
 
+## 术语与事实归属
+
+下表统一本指南的核心术语，并指定契约细节的归属页。其他页面只保留与自身主题相关的摘要和链接，不再平行维护同一套规则。
+
+| 术语或事实 | 本指南中的含义 | 归属页 |
+|---|---|---|
+| 标准应用路径 | 以 `Application` 声明、`prepare()` 的有效上下文、标准构建和公共 CLI 组织应用 | [应用声明](application.md) |
+| 标准构建 | `build` / `run_stage` 的六阶段、结果、失败恢复和成功清单 | [标准构建](build.md) |
+| 有效上下文 | 一次 `prepare()` 固定的配置、路径、资源选择、品牌和领域上下文 | [应用声明](application.md) |
+| 资源层 | 脚本、模板、include、machine 等静态输入的有序来源 | [资源层](resource-layers.md) |
+| 作业资源 | 节点数、队列、墙钟等 `TaskResource` / `ResourceSpec` 申请参数 | [作业资源](jobspec.md) |
+| 工作流后端 | ecFlow / takler 的节点树实现及其能力差异 | [后端能力矩阵](backends.md) |
+| 资源载体 | orvix / slsubmit6 等提交与取消命令通道，不是工作流后端 | [资源载体](backends.md) |
+| 低层生成服务 | `takflow.generation` 的模式分发、输出路径和保存编排 | [生成服务 API](../reference/generation.rst) |
+| 独立产物检查 | 对已有 definition、job、Shell 和清单执行所选检查 | [产物检查](generation-checks.md) |
+| 旧 Python 适配 | 旧复制、配置渲染等入口的历史返回和副作用 | [旧接口适配](legacy-adapters.md) |
+
+真实消费者的实测边界统一见[开发测试](../develop/testing.md)；版本窗口和迁移历史见[CLI 迁移](cli-migration.md)及开发记录，不混入当前契约的定义。
+
 ## 标准路径与历史入口
 
 新应用优先使用 `Application.prepare()`、`takflow.build` 和公共 CLI。`takflow.flow` 与 `takflow.jobspec` 是这条主路径中的领域能力；`takflow.generation` 是标准 workflow 阶段复用的低层生成编排入口。
@@ -134,6 +153,6 @@ orvix 拥有语言无关的 jobspec 契约；takflow 保存只读 vendor 副本�
 
 ## 阅读下一步
 
-- 第一次构建应用：进入[快速上手](../quickstart.md)，随后阅读[应用声明](application.md)。
+- 第一次构建应用：阅读[应用声明](application.md)和[标准构建](build.md)，再用[toyflow 快速上手](../quickstart.md)对照底层 API；toyflow 的旧 CLI 不是标准入口。
 - 已了解示例、需要补齐领域能力：依次阅读[配置](config.md)、[资源层](resource-layers.md)、[流程与钩子](flow-and-hooks.md)和[作业资源](jobspec.md)。
-- 需要生成和验收产物：阅读[标准构建](build.md)、[CLI](cli.md)和[产物检查](generation-checks.md)。
+- 需要生成和验收产物：阅读[标准构建](build.md)、[标准命令契约](cli.md)和[产物检查](generation-checks.md)。

@@ -1,5 +1,7 @@
 # 可选 Sledra 接入
 
+本页说明旧 definition manifest 导出与 Execution 环境值接口。两种观测能力都默认关闭；应用的实际接入与实测范围见[开发测试](../develop/testing.md)。
+
 `BaseWorkflowConfig.observability.enabled` 默认为 `false`。默认或显式关闭时，takflow 不读取 Sledra 契约、不导入 `jsonschema`，也不生成清单。原工作流定义、作业脚本和资源生成方式不变。
 
 旧模式 `mode: legacy-v1` 启用时安装 `takflow[observability]`，并让 `spec_dir` 指向已发布的 Sledra `share/sledra/spec/1.0.0` 绝对目录。takflow 读取其中的 `definition_manifest.schema.json`，核对 1.0.0 契约摘要并校验导出的清单。缺失或不兼容会在保存流程定义前报 `ObservabilityConfigError`。未指定 mode 的既有配置仍使用该模式。
@@ -16,7 +18,7 @@ observability:
 
 `examples/toyflow/src/toyflow/generate.py` 展示了接入位置：在 `save_suite` 前校验并生成静态清单，成功后保存 `definition_manifest.json`。配置中的 `application_revision` 和 `config_revision` 由应用提供，映射版本由应用代码维护。inline 和 external 脚本模式都可以导出，模式会写入清单扩展字段。生成期不登记 Run 或 Attempt，也不调用 recorder；实际发起和任务尝试属于后续集成阶段。
 
-## Execution 公共配置（P3-01）
+## Execution 公共配置
 
 新版必须显式选择 `execution-v2`，同样默认关闭：
 
@@ -55,6 +57,5 @@ partition-timezone；这些值由根的 `sledra.json` 保存，无需在每个�
 根必须位于业务清理目录之外，新旧根隔离；目标权限、实际路径与符号链接关系由部署检查确认。
 关闭观测不会删除、迁移已记录历史。
 
-P3-01 只交付公共配置和环境值接口。应用的源模板装配、稳定 task／参数映射及生成依赖检查
-在对应接入阶段验证；设置本配置本身不证明任意应用已接入，GFS 装配留待 P3-02。
-独立 Bash 接入仍直接使用 Sledra，无需安装 takflow。
+这些公共配置和环境值接口不证明任意应用已接入。应用的源模板装配、稳定 task／参数映射及生成依赖检查
+需要分别验证，具体消费者范围见[开发测试](../develop/testing.md)。独立 Bash 接入仍直接使用 Sledra，无需安装 takflow。

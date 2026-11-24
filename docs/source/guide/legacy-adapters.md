@@ -1,6 +1,6 @@
 # 旧接口适配
 
-本页集中说明尚未切换到标准 Application/build 生命周期的旧 Python 适配入口。新应用不要据此另建一套并行管线；标准行为见[标准构建](build.md)，命令与版本窗口见[CLI 迁移](cli-migration.md)，公共入口边界见[公共 API 与兼容策略](public-api.md)。
+本页是旧复制与配置渲染 Python 接口的行为归属页，集中说明尚未切换到标准 Application/build 生命周期的适配入口。新应用不要据此另建一套并行管线；标准行为见[标准构建](build.md)，命令与版本窗口见[CLI 迁移](cli-migration.md)，公共入口边界见[公共 API 与兼容策略](public-api.md)。
 
 这些接口保留历史返回、权限和渲染行为，不发布标准成功清单，也不代表对应旧应用已经完成标准迁移。
 

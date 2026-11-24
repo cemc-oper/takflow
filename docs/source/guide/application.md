@@ -1,6 +1,6 @@
 # 应用声明与有效上下文
 
-`takflow.application` 提供应用声明、一次配置加载和有作用域的有效上下文。资源复制、模板写出、作业/流程保存和完整成功清单由[标准管线](build.md)消费同一上下文，公共命令见 [CLI 契约](cli.md)。`prepare` 不写生成文件。
+`takflow.application` 提供应用声明、一次配置加载和有作用域的有效上下文。资源复制、模板写出、作业/流程保存和完整成功清单由[标准构建](build.md)消费同一上下文，公共命令见 [CLI 契约](cli.md)。`prepare` 不写生成文件。
 
 本页聚焦配置、路径、上下文和扩展生命周期。脚本、模板、include、组件和 machine 的声明与选择集中在[资源层、组件与 machine](resource-layers.md)。
 
@@ -29,7 +29,7 @@ with application.prepare(
 
 必需声明是 `config_type`、`resources` 和显式 `brand`。默认只声明 ecFlow 支持，
 definition 模式要求 `suite_builder`，shell 模式要求 `shell_template`。
-可选凭证通过 `credential_enabled=False` 或接收有效 config 的布尔判定函数显式选择，TYM 等未启用的应用无需空 handler；
+可选凭证通过 `credential_enabled=False` 或接收有效 config 的布尔判定函数显式选择，未启用的应用无需空 handler；
 凭证文件输入及生成/缺失/skipped 结果由标准构建处理。观测选择沿用有效 config.observability。
 `supported_modes` 必须反映实际消费者能力；公共模型接受 takler 不代表应用已支持它。
 接口直接引用 Python 对象，允许入口分布在多层包中，不要求统一文件名或动态插件发现。
@@ -91,15 +91,10 @@ components、machine、variables、两个 build_info 行以及领域贡献。保
 `include_raw`、`invoke_script`、`include_machine`、`render_orvix_resource_block`、`render_slurm_resource_block`、stdout/stderr，
 领域贡献不可覆写。底层 config 及嵌套领域对象仍是 Python 模型，按只读契约消费。
 
-标准管线与分步构建在 config 和 job 模板中注册 `render_orvix_resource_block`、`render_slurm_resource_block`。前者支持三种 workflow 模式，后者服务于 ecFlow 和 Shell 的历史 Slurm 入口。低层 `render_jobs_from_directory` 注册相同的 helper，`render_single_job_file` 会在调用方的 Jinja 环境中补上缺失的注册。直接调用 Jinja 的应用可自行向 `env.globals` 注册 `takflow.toolkit.job.RESOURCE_TEMPLATE_HELPERS` 并提供 `config` 上下文，或从 Python 调用渲染函数。Python 函数省略 `workflow_mode` 时输出具体值。字段、节点覆盖和模板回退见[作业资源](jobspec.md)。
+资源指令 helper 的注册时机、直接 Jinja 入口、参数和模板回退规则统一见[作业资源](jobspec.md)。
 
 `ApplicationExtension(name, initialize=None, registries=(), resource_layers=(),
-context=None, outputs=())` 只提供局部初始化、数据和规则。名称唯一；同一个构建各扩展
-初始化一次，在配置加载前按声明顺序执行。初始化器应每次显式注册函数，不能依赖仅导入
-模块触发 decorator，因为 Python 会缓存 import。列出所有会修改的领域注册表；框架
-对每个表只隔离一次，credential registry 自动纳入。退出后原注册恢复；首错保留原异常。
-`BaseHookRegistry.isolated()` 同样可单独使用；优先级、同优先级顺序及领域 Hook 调用时点保持。
-全局单例注册表不支持并发构建，不在这里承诺完整 oper 扩展组合已经验收。
+context=None, outputs=())` 只提供局部初始化、数据和规则，名称必须唯一。资源与输出的选择见[资源层](resource-layers.md)；初始化顺序、注册表隔离和恢复见{ref}`初始化的注册表所有权 <registry-ownership>`。
 
 不接受 resource/config/job/workflow 整套 handler 注册，也不提供阶段接管开关。
 业务构图、科学配置、组件判定、变量值、模板、Shell runner 调用序列与领域 Hook 内容由应用维护。
@@ -111,15 +106,13 @@ Jinja 环境、复制、写出、凭证组合、作业生成、清单、完整/�
 不由扩展隐式合并。应用工厂可用 `dataclasses.replace(base, config_type=OperConfig,
 extensions=(*base.extensions, oper_extension), ...)` 明确选择最终类型与规则；品牌、变量
 和凭证选择无需变化时沿用 base。配置继承、具体变量和凭证字段由应用维护，不自动建立
-多个模型、品牌或变量字典的合并协议。MCV/GFS oper 当前均沿用 base 品牌；MCV
-凭证选择读取最终 config.enable_credential，base 和 oper 片段按已声明优先级组合，
-GFS oper 当前关闭凭证能力。
+多个模型、品牌或变量字典的合并协议。
 
 品牌、变量、可选层及 outputs 选择器读取同一个已验证 config；credential_enabled
-在凭证阶段读取该对象。Application.context 先执行，再按扩展顺序执行 context；
+在凭证阶段读取该对象。可选层与额外输出的选择和来源规则见[资源层](resource-layers.md)。
+Application.context 先执行，再按扩展顺序执行 context；
 每项贡献接收相同基础 BuildContext，不读取前一贡献临时合并后的 domain_context。
 所有贡献成功后才形成最终模板上下文，config、job、额外模板与凭证模板共用它。
-outputs 的选择发生在 context 贡献之前，接收 config；实际渲染时可使用最终合并的领域数据。
 
 保留键或贡献之间重名使用 APPLICATION_CONTEXT_CONFLICT，诊断不含冲突值。
 machine 变量沿用 APPLICATION_VARIABLE_CONFLICT；OUTPUT_REPO_BASE 必须与有效
@@ -132,8 +125,7 @@ machine 变量沿用 APPLICATION_VARIABLE_CONFLICT；OUTPUT_REPO_BASE 必须与�
 或内容摘要；这同样适用于写出后因后续碰撞而失败的部分结果。原始配置、canonical
 覆盖值、domain_context 和凭证 mapping 不写入这些报告。应用仍负责把敏感模板声明为
 0600 并避免把敏感字段放入公开产物或品牌。实际异常对象保留给调用者，公开 CLI 和
-错误消息使用受控诊断。MCV shadow 和 GFS base Execution 的实际贡献可使用这些接口；
-GFS oper 的观测拒绝边界仍由应用判定。
+错误消息使用受控诊断。
 
 ## 品牌
 
@@ -147,15 +139,12 @@ GFS oper 的观测拒绝边界仍由应用判定。
 
 `context_suite_builder(context, engine)` 是 `suite_builder(config, engine)` 的可选替代，二者互斥。新增字段位于声明末尾，不改变既有位置参数；原签名继续工作。需要输出/组件路径的应用可直接从本轮 `BuildContext.paths` 构图，无需把运行上下文塞回配置、使用全局变量或重新推导布局。仅 definition 模式调用，Shell 仍由声明的模板生成。
 
-TYM 的 create_suite 接受显式 paths，并把同一 BuildPaths 传给原有 derived 领域函数；完整 config/flow 和 Node 建树组织保留。旧 config/engine 领域入口若未提供 paths，使用 Application.prepare 解析同一上下文，不保留第二套路径公式。
-
-未启用 observability 时，准备报告记录 APPLICATION_OBSERVABILITY_DISABLED，完整清单保留这一可选能力选择；它不授予任何运行资格。
-
+(registry-ownership)=
 ## 初始化的注册表所有权
 
 每次 prepare 先隔离公共 credential 注册表、Application.registries 与各 Extension.registries，再按 extensions 顺序初始化，最后加载/校验配置并构造上下文。同一个注册表重复出现在声明中时只进入一次作用域。初始化函数每次显式注册已有函数，导入缓存不会代替注册；非 credential 的领域注册表必须全部列入声明，credential 注册表由框架自动处理。
 
-作用域内从空注册表开始，调用者的外来注册不会参与本轮构建。正常退出或初始化、校验、上下文及构建失败时恢复原表，KeyboardInterrupt/SystemExit 也不遗留本轮注册。Python 调用保留原异常或公共 BuildError.original，CLI 使用既有受控错误和中断退出码；作用域恢复不回滚生成文件。MCV/GFS 的真实消费者回归位于 test-suite/tests/test_oper_initialization.py，框架必测还验证重复声明、部分初始化及基础异常。该保证适用于顺序调用，不承诺共享单例的并发隔离。
+作用域内从空注册表开始，调用者的外来注册不会参与本轮构建。正常退出或初始化、校验、上下文及构建失败时恢复原表，KeyboardInterrupt/SystemExit 也不遗留本轮注册。Python 调用保留原异常或公共 BuildError.original，CLI 使用既有受控错误和中断退出码；作用域恢复不回滚生成文件。`BaseHookRegistry.isolated()` 同样可单独使用；优先级、同优先级顺序及领域 Hook 调用时点保持。该保证适用于顺序调用，不承诺共享单例的并发隔离。
 
 消费者验证范围与可选能力的实测边界见[开发测试](../develop/testing.md)，不作为阅读本页契约的前置条件。
 

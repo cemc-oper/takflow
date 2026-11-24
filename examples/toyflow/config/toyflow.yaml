@@ -13,7 +13,7 @@ run_base_dir: /path/to/toyflow/run
 output_repo_base_dir: /path/to/toyflow/output
 
 workflow_name: toyflow
-workflow_mode: ecflow            # shell / ecflow / takler
+workflow_mode: ecflow            # toyflow 支持 ecflow / takler；shell 需应用自行实现 runner
 script_invoke_mode: external     # external / inline
 
 workload:

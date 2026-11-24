@@ -1,5 +1,7 @@
 # 标准命令契约
 
+本页说明标准应用路径的完整构建、分步生成、独立检查、结构化结果与退出码。Python 阶段语义见[标准构建](build.md)；toyflow 的应用自有四步 CLI 是旧入口示例，不适用本页的标准结果与成功清单契约。
+
 本契约执行 [TC-12 决策](../develop/standard-cli-decision.md)。应用 CLI 可通过 `create_cli(application, name=...)` 绑定 Application、无参工厂或显式引用；通用入口运行生成命令需要 `--application module:attribute`。不提供自动发现。
 
 ```bash

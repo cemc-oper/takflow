@@ -1,10 +1,10 @@
 # 后端与资源载体
 
+本页说明工作流后端的能力差异，以及 orvix/slsubmit6 等资源载体如何把作业提交到目标环境。后端和载体是正交维度；领域节点树见[流程与钩子](flow-and-hooks.md)，作业资源字段见[jobspec](jobspec.md)。
+
 ## 选择后端
 
-`takflow` 通过 `backends/` 提供具体后端实现。应用通常把领域 suite builder 交给
-`takflow.generation`，由生成服务按 `workflow_mode` 选择后端和默认后缀（对应 toyflow 的
-`src/toyflow/generate.py`）：
+标准应用在 `Application` 中声明 suite builder，由标准构建的 workflow 阶段通过 `takflow.generation` 按 `workflow_mode` 选择后端和默认后缀。直接使用低层生成服务时，应用显式调用同一入口（toyflow 的 `src/toyflow/generate.py` 是这种旧入口的薄适配）：
 
 ```python
 from takflow.generation import generate_workflow
@@ -13,7 +13,7 @@ result = generate_workflow(config, suite_builder=create_suite)
 output_path = result.output_path  # ecFlow: .def；takler: .json
 ```
 
-需要直接使用低层 API 时，仍可自行实例化 `WorkflowEngine(EcflowBackend())` 或
+需要绕过生成服务、直接使用后端的低层 API 时，仍可自行实例化 `WorkflowEngine(EcflowBackend())` 或
 `WorkflowEngine(TaklerBackend())` 并调用 `save_suite()`；后端能力边界不变。
 
 ## 后端能力矩阵

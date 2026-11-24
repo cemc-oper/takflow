@@ -1,6 +1,8 @@
-# 配置
+# 配置模型、加载与诊断
 
-`takflow` 从 YAML 文件加载工作流规范。`BaseWorkflowConfig` 定义了通用字段，业务应用通过子类化添加领域字段。
+本页说明公共 YAML 字段、领域配置子类、独立 loader，以及安全加载、覆盖和结构化诊断。标准应用由 `Application.prepare()` 统一执行加载与校验，生命周期和路径基准见[应用声明](application.md)；本页保留独立入口的兼容边界。
+
+`takflow` 从 YAML 文件加载工作流规范。`BaseWorkflowConfig` 定义通用字段，业务应用通过子类化添加领域字段。
 
 ## 通用 YAML 结构
 
@@ -13,7 +15,7 @@ run_base_dir: /path/to/toyflow/run
 workflow_repo_base_dir: /path/to/resources   # 可选,默认使用应用包内 resources/
 output_repo_base_dir: /path/to/toyflow/output # 可选
 workflow_name: toyflow
-workflow_mode: ecflow                        # shell / ecflow / takler
+workflow_mode: ecflow                        # toyflow 支持 ecflow / takler；公共模型另接受 shell
 script_invoke_mode: external                 # external / inline
 
 workload:
@@ -147,8 +149,7 @@ workload:
 
 ## 在应用中定义配置
 
-应用子类化 `BaseWorkflowConfig`，添加领域字段，然后使用 `load_config_from_file` 加载 YAML
-（对应 toyflow 的 `src/toyflow/config.py`）：
+应用子类化 `BaseWorkflowConfig` 添加领域字段。独立使用低层入口时，可用 `load_config_from_file` 加载 YAML；标准应用通常把该类交给 `Application.config_type`，由 `prepare()` 统一加载，不再自行读取第二份配置。下面示例对应 toyflow 的 `src/toyflow/config.py`：
 
 ```python
 from pydantic import BaseModel

@@ -1,5 +1,7 @@
 # 流程与钩子
 
+本页说明应用如何用后端无关 API 构建领域节点树，以及如何定义和执行领域 hook。suite builder 如何纳入标准应用见[应用声明](application.md)，具体操作的可移植范围见[后端能力矩阵](backends.md)。
+
 ## 定义运行流程
 
 运行流程通过 `takflow.flow` 中的抽象 API 定义，与后端无关（对应 toyflow 的 `src/toyflow/flow.py`）：
@@ -95,13 +97,11 @@ def add_verify_task(context: EngineHookContext) -> None:
     verify.add_trigger("forecast == complete")
 ```
 
-hook 在 **import 时** 通过装饰器注册；流程构建代码在相应位置执行：
+这个 toyflow／旧应用入口示例在 **import 时**通过装饰器注册 hook；扩展包的 CLI 先 import 自己的 hooks 模块，再调用基础包的流程构建函数。流程构建代码在相应位置执行：
 
 ```python
 context = EngineHookContext(node=fm_main, engine=engine, kwargs={})
 EngineHookRegistry.get_instance().execute(EngineHookPoint.AFTER_FORECAST, context)
 ```
-
-toyflow 及仍使用旧应用 CLI 的扩展包可以在 **import 时**通过装饰器注册：扩展包的 CLI 先 import 自己的 hooks 模块，再调用基础包的流程构建函数。
 
 标准 `Application` 使用每轮构建隔离的注册表，不能依赖 import-only 注册。扩展必须在 `Application.registries` 中声明所用注册表，并在每个 `ApplicationExtension.initialize` 调用中显式注册 hook；模块缓存不会替代这一步。详见[标准 Application 扩展](application.md)。

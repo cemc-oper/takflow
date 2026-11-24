@@ -1,8 +1,8 @@
-# 标准管线、分步生成与成功清单
+# 标准构建、分步生成与成功清单
 
-`takflow.build` 消费 [Application.prepare](application.md) 的同一有效上下文，不重新读取配置。
-完整构建和分步调用共享阶段实现；不执行 machine、业务程序、引擎 load 或调度提交。
-本页说明当前标准构建契约，公共 CLI 见[命令契约](cli.md)。资源层选择见[资源层、组件与 machine](resource-layers.md)；旧复制和配置接口见[旧接口适配](legacy-adapters.md)，生产入口和布局迁移见[CLI 迁移](cli-migration.md)。
+`takflow.build` 消费 [Application.prepare](application.md) 的同一有效上下文，不重新读取配置。完整构建和分步调用共享阶段实现。
+本页说明完整构建、分步调用、写出、失败恢复与成功清单；不执行 machine、业务程序、引擎 load 或调度提交。
+公共 CLI 见[标准命令契约](cli.md)。资源层选择见[资源层、组件与 machine](resource-layers.md)；旧复制和配置接口见[旧接口适配](legacy-adapters.md)，生产入口和布局迁移见[CLI 迁移](cli-migration.md)。
 
 ## 调用和结果
 
@@ -40,7 +40,7 @@ prepare 的加载/校验失败继续使用配置校验异常；这时尚未开�
 
 `BuildError` 的公开消息及 `result.as_dict()` 为受控展示；`original` 和 `__cause__` 保留捕获到的同一原异常。
 默认日志/CLI 不应打印可能含敏感值的异常正文或 traceback。
-标准管线作用域中的公共 Hook 错误日志不含异常正文，旧入口的默认日志行为保持。
+标准构建作用域中的公共 Hook 错误日志不含异常正文，旧入口的默认日志行为保持。
 
 ## 默认阶段
 
@@ -106,17 +106,13 @@ reference摘要仅为构建时观察，不冻结运行时内容；陈旧文件�
 
 共享 ECF_SCRIPT_CMD 的 cat 文件参数采用 Shell 引用，普通路径的原字节保持，带空格/引号的有效路径经过真实原生预处理验证。
 
-## 配置选择与 takler 配置编码
+## takler 配置编码
 
-资源层可用 `ResourceLayer.config_field` 从同一已验证配置选择扩展根；`credential_enabled` 可按该配置判定，不额外加载配置。`required_machine_fragments` 检查本轮来源并保留业务脚本延后加载的作用域。
-
-MCV 的真实 takler 作业通过 Shell source 外部 config.sh，该文件不会再经过运行期 Jinja；因此标准 config 阶段将 takler 与 Shell 一样编码成 Shell 字面值。ecFlow 仍保留 suite 可 alter 的变量引用。此修正有真实 takler 定义与生成作业加载回归，不增加应用名分支。
+takler 与 Shell 的运行配置不会再经过运行期 Jinja，因此标准 config 阶段将二者编码为 Shell 字面值；需要运行时加载配置的应用（如 MCV）由生成的作业通过 Shell source 读取。ecFlow 仍保留 suite 可 alter 的变量引用。该编码不增加应用名分支，真实消费者的配置通道验证见[开发测试](../develop/testing.md)。
 
 ## 额外配置产物与后续阶段
 
-可选资源层、额外模板输出和 machine 必需片段的选择由 Application.prepare 固定，
-具体声明见[资源层、组件与 machine](resource-layers.md)。resource 阶段先验证每个选定层的 required_inputs；
-该来源要求不能由别的层或磁盘旧产物满足，随后继续使用同一复制、覆盖与来源记录机制。
+额外模板输出和必需来源由 Application.prepare 固定，声明与选择规则见[资源层、组件与 machine](resource-layers.md)。resource 阶段在复制前验证选定层的 required_inputs；该要求不能由其他层或磁盘旧产物满足。
 
 job/workflow 除主配置外，还要求本轮声明中 required=True 的额外配置产物已经存在且可读。
 因此删除必需设置文件后，单步会在 job.input/workflow.input 报错并使旧成功清单失效，

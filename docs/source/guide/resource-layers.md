@@ -1,6 +1,6 @@
 # 资源层、组件与 machine
 
-本页所称“资源层”是脚本、模板、include、machine 和其他静态输入的有序来源，不是 `TaskResource` 所描述的节点数、队列和墙钟；后者见[作业资源描述](jobspec.md)。
+本页说明静态输入的来源、覆盖、组件筛选、额外输出和 machine 选择。本页所称“资源层”是脚本、模板、include、machine 和其他静态输入的有序来源，不是 `TaskResource` 所描述的节点数、队列和墙钟；后者见[作业资源描述](jobspec.md)。
 
 `Application.prepare()` 根据有效配置选定资源层、组件、额外输出和 machine，并把结果固定在 `BuildContext`。`resource` 阶段只消费这些选择，不重新读取配置或从旧输出猜测来源。应用声明与路径生命周期见[应用上下文](application.md)，实际复制与写出见[标准构建](build.md)。
 
@@ -21,15 +21,15 @@
 required_machine_fragments 同样接受该形式。每个选择器在一次 prepare 中只调用一次，
 读取同一个已验证配置；base 的默认资源 factory 先按需调用一次并解析成有效目录，
 因此层选择器能从 config.workflow_repo_base_dir 构造其子目录。现有 config_field
-字段仍按表中规则解析，不增加第二次 YAML 加载或领域模型校验。
+字段仍按表中规则解析，不增加第二次 YAML 加载或领域模型校验。outputs 的选择发生在
+context 贡献之前，接收 config；实际渲染时可使用最终合并的领域数据。
 
 资源层按 `base → Application.resource_layers → 各 ApplicationExtension.resource_layers`
 的声明顺序选择并解析。每项贡献解析完成后再调用下一项贡献的选择器，因此后续扩展
 能从前面 `config_field` 的有效绝对根（包含包默认）派生观测子目录。一个选择器返回的
 tuple 内各层随后依次解析；该选择器执行期间不能读取其尚未返回的层的解析结果。
 依赖 oper 根的独立观测层应声明在 oper 贡献之后，未启用时返回空 tuple；框架不替应用
-推断启用条件。MCV 的 shadow 按 ecFlow 与 observability.enabled 选择资源条目，
-GFS base 的 Execution 试点使用 base 后的 execution 层；GFS oper 仍拒绝观测模式。
+推断启用条件。
 
 `config_field` 必须使用规范字段名，历史字符串 alias 由原配置模型校验；Python
 canonical overrides 在校验前替换 alias 值。YAML 根相对 YAML 所在目录，mapping/model
@@ -85,7 +85,6 @@ BuildContext.required_machine_fragments；完整与单步构建读取同一结�
 
 `required_machine_fragments=("env/forecast_mpi.sh", ...)` 声明业务脚本将在原位置 source 的片段。资源阶段先检查本轮所选 machine 的有序来源，再复制并登记引用；输出目录中的陈旧文件不能代替缺少的来源。默认目录检查存在性与摘要，显式外部目录仅登记引用，留到目标环境读取。框架不执行或提前 source，不改变业务 cwd/作用域，不自动把片段正文嵌进父作业。片段内容、加载位置和库/MPI 参数继续由消费者维护。
 
-MCV oper、GFS oper及独立RA2已使用同一资源层、显式初始化和公共构建服务。MCV通过配置声明上传必需输入，GFS oper另按实际任务的ECF引用检查最终模板；目录/领域规则留应用。`ApplicationExtension`不新增整套handler接管口。
+`required_resource_inputs` 为相对文件名元组或接收有效 config 的纯判定函数，用于声明选定业务能力的必需脚本/模板。资源阶段从同一有序来源验证输入，缺失即失败，输出目录里的旧 job 不作替代。未启用相应能力时，判定函数可返回空元组，继续沿用基础资源。
 
-
-`required_resource_inputs` 为相对文件名元组或接收有效 config 的纯判定函数，用于声明选定业务能力的必需脚本/模板。资源阶段从同一有序来源验证输入，缺失即失败，输出目录里的旧 job 不作替代。MCV oper 只在上传启用时声明其上传 job 模板和脚本；稀疏 oper 不启用上传时仍可回落基础资源。
+真实消费者的选择、覆盖和初始化验证范围见[开发测试](../develop/testing.md)。

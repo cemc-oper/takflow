@@ -1,24 +1,20 @@
-# 快速上手
+# 快速上手：toyflow
 
-本页用一个最小应用 [toyflow](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)
-走通 takflow 的完整链路：配置子类化 → 节点树 → hook → 4 步 CLI → 生成 ecFlow `.def`。
+本页用最小应用 [toyflow](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow) 走通配置、领域构图、hook、低层生成服务和应用自有四步 CLI，最终生成 ecFlow `.def`。业务主线只有 `obs → main → post`，便于对照源码理解各领域内容如何进入生成物。
 
-`toyflow` 是一个玩具天气预报系统的工作流生成器，角色相当于 `mcv-workflow` 的袖珍版：
-节点树只有 `obs → main → post` 三个任务，但 takflow 的每一层都真实用到。
+> **示例边界**：toyflow 演示底层 API 和旧应用入口，没有声明标准 `Application`，也不运行 `build(context)` 或发布 `generation_manifest.json`。新应用的主路径是 `Application.prepare()` → `build(context)`，请先阅读[设计总览](guide/overview.md)，再以[应用声明](guide/application.md)和[标准构建](guide/build.md)组织代码。
 
-完整业务包的声明、资源与标准构建示例见 {ref}`MCV S1 真实应用参考 <mcv-s1-reference>`。
+完整业务包的标准应用示例见 {ref}`MCV S1 真实应用参考 <mcv-s1-reference>`。
 
 ## 安装
 
-要求 Python >= 3.10。
-
-只使用框架库时可安装发布包：
+要求 Python >= 3.10。只使用框架库时可安装发布包：
 
 ```bash
 pip install takflow
 ```
 
-本页的端到端命令使用仓库内独立的 toyflow 包；从源码安装框架和该示例：
+本页的端到端命令使用仓库内独立的 toyflow 包。从源码安装框架和该示例：
 
 ```bash
 git clone https://github.com/cemc-oper/takflow.git
@@ -29,78 +25,56 @@ pip install .
 pip install -e examples/toyflow
 ```
 
+以下命令均在仓库根目录执行。不安装两个源码包的等价运行方式见 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)。
+
 ## 端到端流程
 
-### 1. 定义配置
+### 1. 加载领域配置
 
-子类化 `BaseWorkflowConfig`，只声明领域字段；通用字段（目录、模式、workload、调度）全部继承：
+`toyflow.config.ToyflowConfig` 子类化 `BaseWorkflowConfig`，只增加功能开关、预报配置和任务资源等领域字段；目录、模式、workload 和调度等通用字段由框架提供。
 
 ```python
-from takflow.config import BaseWorkflowConfig, load_config_from_file
-from takflow.jobspec import TaskResource
+from toyflow.config import ToyflowConfig, load_config_from_file
 
-
-class ToyflowConfig(BaseWorkflowConfig):
-    enable_obs: bool = True
-    enable_main: bool = True
-    enable_post: bool = True
-    # 预报任务的资源需求(serial/parallel 高层模型,生成时编译为 #ORVIX 指令)
-    # forecast: ForecastConfig = ...
-    post_resource: TaskResource = TaskResource(job_type="serial")
-
-
-config = load_config_from_file("config/toyflow.yaml", config_class=ToyflowConfig)
+config = load_config_from_file(
+    "examples/toyflow/config/toyflow.yaml",
+    config_class=ToyflowConfig,
+)
+print(config.forecast.resource)
 ```
 
-对应文件：`examples/toyflow/src/toyflow/config.py`。详见 [配置](guide/config.md)。
+这里使用 toyflow 旧入口的独立 loader；标准应用把配置类型交给 `Application`，由 `prepare()` 统一加载、覆盖和校验。完整 YAML、领域模型和两种加载路径见[配置](guide/config.md)。
 
 ### 2. 定义运行流程
 
-用 `takflow.flow` 中与后端无关的 API 搭节点树，并把领域构建留在应用自己的
-suite builder 中：
+toyflow 的 suite builder 接收有效配置和后端无关的 `WorkflowEngine`，返回根 `Node`。其核心入口可概括为：
 
 ```python
-from takflow.flow import WorkflowEngine
-from takflow.backends.runtime import common_setting, set_runtime
+from toyflow.flow import ToyflowSystem
 
 
-def create_suite(config, engine: WorkflowEngine):
-    suite = engine.Suite(config.workflow_name)
-
-    set_runtime(suite, config.workload, engine=engine)
-    suite.add_variables(common_setting(engine=engine))
-
-    fm_obs = suite.add_family("obs")
-    fm_obs.add_task("prepare")
-    # ... main / post ...
-    return suite
+def create_suite(config, engine):
+    return ToyflowSystem(config, engine).build_suite()
 ```
 
-对应文件：`examples/toyflow/src/toyflow/flow.py`。详见 [流程与钩子](guide/flow-and-hooks.md)。
+`ToyflowSystem` 负责节点、依赖、调度和领域 hook；`set_runtime()` 负责提交载体，`render_orvix_resource_block()` 负责作业资源指令。完整构图和 hook 示例见[流程与钩子](guide/flow-and-hooks.md)，后端可移植范围见[后端能力矩阵](guide/backends.md)。
 
-### 3. 通过生成服务输出
+### 3. 通过低层生成服务保存定义
 
-`takflow.generation` 根据 `workflow_mode` 选择后端和默认后缀，并编排 builder、
-保存前后回调与 definition 保存。同一套节点树可在公共支持子集上输出 ecFlow `.def`
-或 takler JSON（能力差异见[后端能力矩阵](guide/backends.md)）：
+toyflow 自己的 `generate_workflow()` 是薄适配入口：通用模式分发、输出路径和保存编排委托 `takflow.generation`，应用保留 suite builder 与可选观测清单的保存回调。
 
 ```python
-from takflow.generation import generate_workflow
+from toyflow.generate import generate_workflow
 
-result = generate_workflow(config, suite_builder=create_suite)
-output_path = result.output_path
+output_path = generate_workflow(
+    config,
+    output_repo_base="/tmp/toyflow_output",
+)
 ```
 
-输出仓库按显式 `output_repo_base` 参数、config 字段的顺序解析；definition 也可用
-`output=` 指定独立路径。shell 模式改为传入应用自己的 `shell_renderer`，不会创建后端
-或引擎。
+toyflow 支持 ecFlow `.def` 和 takler JSON，不支持 Shell runner。低层接口见[生成服务 API](reference/generation.rst)；标准应用的 workflow 阶段也复用这套编排，但由同一 `BuildContext` 提供输入，不需要应用再次加载配置。
 
-对应文件：`examples/toyflow/src/toyflow/generate.py`。详见
-[生成服务 API](reference/generation.rst) 和 [后端与资源载体](guide/backends.md)。
-
-### 4. 构建命令行接口
-
-安装 toyflow 后，在仓库根目录执行其四步 CLI：
+### 4. 运行 toyflow 的四步 CLI
 
 ```bash
 toyflow resource copy --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
@@ -109,7 +83,7 @@ toyflow job generate --config-file examples/toyflow/config/toyflow.yaml --output
 toyflow workflow generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
 ```
 
-这些命令由 `takflow.toolkit` 的资源、配置、作业和流程生成能力组成。完整实现见 `examples/toyflow/src/toyflow/cli.py`，参数与产物说明见 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)；标准 Application 的命令契约见[构建 CLI](guide/cli.md)。
+这些命令由 `takflow.toolkit` 和 `takflow.generation` 组成，属于 toyflow 自己的旧 CLI。它们不会自动补跑前置步骤，也不会发布标准成功清单。完整实现见 `examples/toyflow/src/toyflow/cli.py`；标准应用的完整构建、分步命令、结果和退出码见[标准命令契约](guide/cli.md)。
 
 ## 生成的流程结构
 
@@ -125,8 +99,10 @@ toyflow/
 └── post/plot                # 后处理绘图（serial 作业，trigger: main/forecast）
 ```
 
+打开 `/tmp/toyflow_output/toyflow.def` 和 `/tmp/toyflow_output/jobs/main/forecast.ecf`，可以对照源码检查节点、变量和资源指令的来源。完整产物树见 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)。
+
 ## 下一步
 
-- [examples/toyflow/README.md](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)
-  逐文件讲解每一层在 toyflow 中的落点，是跟着做的最佳材料。
-- 真实应用可参考 `mcv-workflow` / `mcv-oper-workflow`（内部仓库）。
+- **构建新应用**：依次阅读[设计总览](guide/overview.md)、[应用声明](guide/application.md)、[资源层](guide/resource-layers.md)和[标准构建](guide/build.md)，不要把 toyflow 旧 CLI 当作标准入口。
+- **逐文件研究本示例**：阅读 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)，查看文件职责、产物树和可选凭证/观测能力。
+- **参考真实标准应用**：进入 {ref}`MCV S1 真实应用参考 <mcv-s1-reference>`。
