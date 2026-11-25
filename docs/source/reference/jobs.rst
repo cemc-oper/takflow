@@ -7,6 +7,8 @@ takflow.jobs.render
 -------------------
 
 选择模板、生成日志路径并写出作业。旧代码中的目录渲染、单文件渲染和日志路径函数都从此处导入。
+独立渲染默认使用 ``takflow vunknown`` 文件头。应用可以在渲染调用外使用
+``takflow.build_info.build_info_scope(lines)`` 指定文件头，退出作用域后恢复外层品牌。
 
 .. automodule:: takflow.jobs.render
    :members:

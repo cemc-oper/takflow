@@ -6,21 +6,20 @@ injected into every generated file.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
 
 _scoped_lines: ContextVar[Mapping[str, str] | None] = ContextVar("takflow_build_info", default=None)
-_build_info_provider: Callable[[], dict[str, str]] | None = None
 
 
 @contextmanager
 def build_info_scope(lines: Mapping[str, str]):
-    """Supply explicit build headers without replacing the legacy provider."""
+    """Use explicit build headers and restore the previous scope on exit."""
     token = _scoped_lines.set(dict(lines))
     try:
         yield
@@ -60,19 +59,11 @@ def get_build_info_lines(build_info: BuildInfo, tool_name: str) -> dict[str, str
     }
 
 
-def set_build_info_provider(provider: Callable[[], dict[str, str]]) -> None:
-    """Register the fallback header provider for standalone job rendering."""
-    global _build_info_provider
-    _build_info_provider = provider
-
-
 def _current_build_info_lines() -> dict[str, str]:
     scoped = _scoped_lines.get()
     if scoped is not None:
         return dict(scoped)
-    if _build_info_provider is not None:
-        return _build_info_provider()
     return get_build_info_lines(get_build_info("unknown"), "takflow")
 
 
-__all__ = ["BuildInfo", "get_build_info", "get_build_info_lines", "build_info_scope", "set_build_info_provider"]
+__all__ = ["BuildInfo", "get_build_info", "get_build_info_lines", "build_info_scope"]

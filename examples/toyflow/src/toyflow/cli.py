@@ -14,17 +14,13 @@ from pathlib import Path
 
 import click
 
-from takflow.build_info import set_build_info_provider
+from takflow.build_info import build_info_scope
 from takflow.jobs.render import render_jobs_from_directory
 from takflow.toolkit import copy_resources_to_output, render_credential
 
 from toyflow.config import ToyflowConfig, load_config_from_file
 from toyflow.generate import generate_workflow, render_config, toyflow_build_info_lines
 from toyflow.util import get_output_repo_base_dir, get_workflow_repo_base_dir
-
-# 为独立作业渲染提供 toyflow 文件头。
-set_build_info_provider(toyflow_build_info_lines)
-
 
 def _load_config(config_file: str) -> ToyflowConfig:
     # 先 import hooks，触发 @register_engine_hook / @register_credential_hook
@@ -113,11 +109,12 @@ def job_generate(config_file: str, output_repo_base: str, workflow_repo_base: st
     output_repo_base = get_output_repo_base_dir(config, output_repo_base)
     workflow_repo_base = get_workflow_repo_base_dir(config, workflow_repo_base)
 
-    render_jobs_from_directory(
-        config=config,
-        repo_base=str(workflow_repo_base),
-        output_repo_base=str(output_repo_base),
-    )
+    with build_info_scope(toyflow_build_info_lines()):
+        render_jobs_from_directory(
+            config=config,
+            repo_base=str(workflow_repo_base),
+            output_repo_base=str(output_repo_base),
+        )
 
 
 # ── workflow ─────────────────────────────────────────────

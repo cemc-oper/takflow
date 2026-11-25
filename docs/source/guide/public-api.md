@@ -59,7 +59,7 @@ observability 校验能力的依赖和启用条件见[可观测性](observabilit
 ### 2.2 兼容 facade 与历史入口
 
 - 调度、引擎通用设置和脚本命令的兼容入口由 `takflow.toolkit.util` 和 `takflow.toolkit` 提供。
-- 原先通过 `takflow.toolkit.job` 或 `takflow.toolkit` 导入的作业渲染函数改从 `takflow.jobs.render` 导入。资源头及模板 helper 改从 `takflow.jobs.headers` 导入。独立渲染的旧品牌提供者 `set_build_info_provider` 归入 `takflow.build_info`。[作业渲染入口](../reference/jobs.rst)
+- 原先通过 `takflow.toolkit.job` 或 `takflow.toolkit` 导入的作业渲染函数改从 `takflow.jobs.render` 导入。资源头及模板 helper 改从 `takflow.jobs.headers` 导入。旧 `set_build_info_provider` 已移除，独立作业渲染通过 `takflow.build_info.build_info_scope` 指定品牌。[作业渲染入口](../reference/jobs.rst)
 - `takflow.flow.register_hook` 是 `create_hook_decorator` 的现有兼容别名，不因推荐名称存在而
   直接删除。
 - 包根部和已列出模块之间的 re-export 都是公共入口。调整其实现位置时，应保留导入路径或按

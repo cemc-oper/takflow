@@ -11,9 +11,9 @@ from takflow.build import BuildError, build
 from takflow.build_info import build_info_scope
 from takflow.config import BaseWorkflowConfig, ConfigValidationError
 from takflow.toolkit.credential import register_credential_hook, render_credential_template
-from takflow.build_info import _current_build_info_lines
 
 from test_build import application, data, put, resources
+from test_build_info import render_header
 
 
 SECRET = 'TC10_4_SYNTHETIC_PRIVATE_BODY'
@@ -21,8 +21,9 @@ SECRET = 'TC10_4_SYNTHETIC_PRIVATE_BODY'
 
 @pytest.fixture(autouse=True)
 def outer_brand():
-    with build_info_scope(ApplicationBrand('foreign-domain', '1.0').lines()):
-        yield
+    lines = ApplicationBrand('foreign-domain', '1.0').lines()
+    with build_info_scope(lines):
+        yield f'# {lines["info"]}'
 
 
 def assert_private(result, paths):
@@ -39,7 +40,7 @@ def assert_private(result, paths):
 
 
 @pytest.mark.parametrize('enabled', [False, True])
-def test_composed_choices_and_extension_data_share_effective_config(tmp_path, resources, enabled):
+def test_composed_choices_and_extension_data_share_effective_config(tmp_path, resources, enabled, outer_brand):
     calls = []
 
     class OperConfig(BaseWorkflowConfig):
@@ -96,7 +97,6 @@ def test_composed_choices_and_extension_data_share_effective_config(tmp_path, re
                   outputs=(TemplateOutput('config/public.j2', 'config/public.sh'),),
                   extensions=(ApplicationExtension('oper', initialize=initialize, context=oper, outputs=outputs),))
     raw = data(tmp_path / 'out', credential_selected=not enabled)
-    previous_brand = dict(_current_build_info_lines())
     with app.prepare(raw, overrides={'credential_selected': enabled, 'private_value': SECRET,
                                     'workflow_name': 'effective-name'}) as context:
         assert isinstance(context.config, OperConfig)
@@ -109,6 +109,8 @@ def test_composed_choices_and_extension_data_share_effective_config(tmp_path, re
             'validate', 'brand', 'variables', 'base-context', 'oper-context', 'oper-outputs', 'credential'])
         public = context.paths.config_dir / 'public.sh'
         assert public.read_text() == '# effective-name effective-name composed-domain\n'
+        job = context.paths.jobs_dir / 'on/task.ecf'
+        assert job.read_text().splitlines()[1] == f'# {context.build_info["info"]}'
         private = [context.paths.config_dir / name for name in ('private.sh', 'credential.sh')]
         assert all(path.exists() is enabled for path in private)
         if enabled:
@@ -118,12 +120,12 @@ def test_composed_choices_and_extension_data_share_effective_config(tmp_path, re
             assert_private(result, private)
         else:
             assert SECRET not in result.manifest_path.read_text()
-    assert dict(_current_build_info_lines()) == previous_brand
+    assert render_header(tmp_path).splitlines()[1] == outer_brand
     assert raw['credential_selected'] is not enabled and 'private_value' not in raw
 
 
 @pytest.mark.parametrize('conflict', ['config', 'brand', 'variables', 'include_raw', 'stdout', 'application', 'extension'])
-def test_extension_context_conflicts_restore_brand_without_exposing_values(tmp_path, resources, conflict):
+def test_extension_context_conflicts_restore_brand_without_exposing_values(tmp_path, resources, conflict, outer_brand):
     app = application(resources)
     first = ApplicationExtension('first', context=lambda context: {'shared': SECRET})
     if conflict in ('application', 'extension'):
@@ -131,13 +133,12 @@ def test_extension_context_conflicts_restore_brand_without_exposing_values(tmp_p
         extensions = (first,) if conflict == 'application' else (first, ApplicationExtension('second', context=lambda context: {'shared': SECRET}))
     else:
         extensions = (ApplicationExtension('conflict', context=lambda context: {conflict: SECRET}),)
-    previous_brand = dict(_current_build_info_lines())
     with pytest.raises(ConfigValidationError) as caught:
         with replace(app, extensions=extensions).prepare(data(tmp_path / 'out')):
             pytest.fail('conflicting context entered the prepared scope')
     assert caught.value.diagnostics[0].code == 'APPLICATION_CONTEXT_CONFLICT'
     assert SECRET not in str(caught.value) + json.dumps([d.as_dict() for d in caught.value.diagnostics])
-    assert dict(_current_build_info_lines()) == previous_brand
+    assert render_header(tmp_path).splitlines()[1] == outer_brand
     assert not (tmp_path / 'out').exists()
 
 
