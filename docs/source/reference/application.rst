@@ -11,3 +11,6 @@
 
 注册隔离见 :meth:`takflow.flow.hook.BaseHookRegistry.isolated`，
 品牌作用域见 :func:`takflow.build_info.build_info_scope`。
+
+.. automodule:: takflow.build_info
+   :members:

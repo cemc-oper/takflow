@@ -34,8 +34,9 @@ from takflow.flow.generate import GenerationContext, GenerationResult, generate_
 from takflow.spec.jobspec import contract_version
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
 from takflow.jobs.render import render_jobs_from_directory
-from takflow.toolkit.credential import CredentialHookPoint, get_credential_registry, render_credential
-from takflow.toolkit.resource import _copy_resource_layers
+from takflow.config.credentials import CredentialHookPoint, get_credential_registry, render_credential
+from takflow.build.assets import _copy_resource_layers
+from takflow.build.runtime_config import render_runtime_config
 
 
 STAGES = ("resource", "config", "credential", "job", "workflow", "report")
@@ -326,29 +327,7 @@ class _Pipeline:
             self.include_machine(fragment)
 
     def config(self):
-        context = self.context
-        planned = [(context.application.config_template, context.paths.config_file, "config", 0o644, True)]
-        planned.extend((item.template, self.root / item.output, "extra", item.mode, item.required) for item in context.outputs)
-        seen = set()
-        for _, path, role, _, _ in planned:
-            if path in seen:
-                self.fail("BUILD_OUTPUT_COLLISION", path, "multiple configured artifacts share a destination")
-            seen.add(path)
-            self.reserve(path, role)
-        for template, path, role, mode, required in planned:
-            text = self.render(template, required=required)
-            if text is None:
-                self.result.stages[STAGES.index("config")].skipped_outputs.append(str(path))
-                continue
-            if role == "config":
-                lines = []
-                for name, value in self.variables.items():
-                    encoded = (f"%{name}%" if context.config.workflow_mode == "ecflow"
-                               else shlex.quote(value))
-                    lines.append(f"export {name}={encoded}")
-                text = "\n".join(lines) + "\n" + text
-            self.write(path, text, role, mode)
-            self.record(path, role, source={"template": self.template_sources[template]})
+        render_runtime_config(self, self.result.stages[STAGES.index("config")].skipped_outputs)
 
     def credential(self):
         enabled = self.context.application.credential_enabled
@@ -368,7 +347,7 @@ class _Pipeline:
         before = file_state(path)
         try:
             render_credential(str(self.credential_file), self.context.config, str(self.root), dict(self.context.build_info),
-                              environment=self.environment, file_mode=0o600)
+                              environment=self.environment)
         except (ConfigValidationError, GenerationCheckError):
             raise
         except Exception as error:
@@ -501,15 +480,16 @@ class _Pipeline:
                        config_fingerprint={"scope": "public-generation-options", "sha256": hashlib.sha256(json.dumps(public_inputs, sort_keys=True).encode()).hexdigest()},
                        resource_layers=[{"name": layer.name, "root": str(layer.root)} for layer in self.context.paths.resource_layers])
         payload["implementation_sha256"] = {
-            name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
+            name: hashlib.sha256((Path(__file__).resolve().parents[1] / name).read_bytes()).hexdigest()
             for name in ("application/declaration.py", "application/inputs.py", "application/context.py",
-                         "application/prepare.py", "build.py", "flow/generate.py", "checks.py", "_files.py",
+                         "application/prepare.py", "build/pipeline.py",
+                         "build/assets.py", "build/runtime_config.py", "flow/generate.py", "checks.py", "_files.py",
                          "flow/backends/ecflow/_job_paths.py",
                          "flow/node.py", "flow/hook.py", "flow/backend.py", "flow/scheduling.py",
                          "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py",
-                         "toolkit/resource.py", "toolkit/credential.py", "flow/backends/ecflow/serializer/attributes.py")
+                         "config/credentials.py", "flow/backends/ecflow/serializer/attributes.py")
         }
-        spec = Path(__file__).parent / "spec"
+        spec = Path(__file__).resolve().parents[1] / "spec"
         payload["versions"]["orvix_pin"] = (spec / "jobspec/ORVIX_VERSION").read_text().strip()
         payload["versions"]["takler_pin"] = (spec / "takler/TAKLER_VERSION").read_text().strip()
         make_parents(self.manifest, self.root)
@@ -603,6 +583,3 @@ def run_stage(context: BuildContext, stage: str, *, credential_file=None,
     if stage not in STAGES:
         raise ValueError(f"Unknown generation stage: {stage}")
     return _Pipeline(context, credential_file=credential_file, before_save=before_save, after_save=after_save).run((stage,), full=False)
-
-
-__all__ = ["build", "run_stage", "BuildResult", "StageResult", "BuildArtifact", "BuildError", "STAGES"]

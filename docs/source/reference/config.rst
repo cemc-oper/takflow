@@ -38,3 +38,9 @@ takflow.config.validation
 .. automodule:: takflow.config.validation
    :members:
    :show-inheritance:
+
+takflow.config.credentials
+--------------------------
+
+.. automodule:: takflow.config.credentials
+   :members:

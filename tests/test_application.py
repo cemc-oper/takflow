@@ -15,7 +15,7 @@ from takflow.build_info import build_info_scope
 from takflow.checks import GenerationCheckError
 from takflow.config import BaseWorkflowConfig, ConfigValidationError
 from takflow.flow.hook import BaseHookRegistry
-from takflow.toolkit.credential import get_credential_registry
+from takflow.config.credentials import get_credential_registry
 
 from test_build_info import render_header
 

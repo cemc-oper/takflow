@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -50,22 +51,22 @@ def toyflow(tmp_path, monkeypatch):
 def test_toyflow_full_pipeline(toyflow, tmp_path):
     config, output_repo_base = toyflow
 
-    from takflow.toolkit import copy_resources_to_output
     from toyflow import __version__
     from toyflow.cli import main
-    from toyflow.generate import generate_workflow, render_config
+    from toyflow.generate import copy_resources, generate_workflow, render_config
     from toyflow.util import get_resources_path
 
     resources = get_resources_path()
 
     # 1. resource copy
-    copy_resources_to_output(output_repo_base=output_repo_base, src_base=resources)
+    copy_resources(config, output_repo_base, resources)
     assert (output_repo_base / "scripts" / "main" / "run_forecast.sh").exists()
     assert (output_repo_base / "ecflow" / "include" / "common" / "head.h").exists()
 
     # 2. config generate（ecflow 模式 -> config.h）
     config_path = render_config(config=config)
     assert config_path.name == "config.h"
+    assert stat.S_IMODE(config_path.stat().st_mode) == 0o644
     assert "FORECAST_LENGTH=24" in config_path.read_text()
 
     # 3. job generate（jobs/**/*.sh.j2 -> *.ecf）
@@ -108,7 +109,7 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
     assert "/toyflow/obs/prepare == complete" in def_text
 
     # 5. credential generate（credential hook 渲染片段）
-    from takflow.toolkit import render_credential
+    from takflow.config.credentials import render_credential
     from toyflow.generate import toyflow_build_info_lines
 
     render_credential(
@@ -117,8 +118,9 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
         output_repo_base=str(output_repo_base),
         build_info_lines=toyflow_build_info_lines(),
     )
-    credential_text = (output_repo_base / "config" / "credential.sh").read_text()
-    assert "TOYFLOW_API_KEY" in credential_text
+    credential = output_repo_base / "config" / "credential.sh"
+    assert stat.S_IMODE(credential.stat().st_mode) == 0o600
+    assert "TOYFLOW_API_KEY" in credential.read_text()
 
 
 def test_toyflow_explicitly_disabled_needs_no_sledra(toyflow):
@@ -147,15 +149,14 @@ def test_toyflow_shell_mode_remains_unsupported(toyflow):
 def test_toyflow_optional_definition_manifest(toyflow, invoke_mode, tmp_path):
     from takflow.config import ObservabilityConfig
     from takflow.jobs.render import render_jobs_from_directory
-    from takflow.toolkit import copy_resources_to_output
     from takflow.observability import ObservabilityConfigError
-    from toyflow.generate import generate_workflow
+    from toyflow.generate import copy_resources, generate_workflow
     from toyflow.util import get_resources_path
 
     config, output_repo_base = toyflow
     config.script_invoke_mode = invoke_mode
     resources = get_resources_path()
-    copy_resources_to_output(output_repo_base, resources)
+    copy_resources(config, output_repo_base, resources)
     render_jobs_from_directory(config, str(resources), str(output_repo_base))
     baseline = generate_workflow(config).read_bytes()
     generated = {
@@ -178,7 +179,7 @@ def test_toyflow_optional_definition_manifest(toyflow, invoke_mode, tmp_path):
     assert (output_repo_base / "toyflow.def").read_bytes() == baseline
 
     config.observability.spec_dir = spec_dir
-    copy_resources_to_output(output_repo_base, resources)
+    copy_resources(config, output_repo_base, resources)
     render_jobs_from_directory(config, str(resources), str(output_repo_base))
     assert generate_workflow(config).read_bytes() == baseline
     assert {str(path.relative_to(output_repo_base)): path.read_bytes()

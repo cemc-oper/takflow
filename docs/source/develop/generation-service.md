@@ -226,19 +226,11 @@ test-suite 7 个用例、14 个 generate/verify 阶段全部通过。服务接�
 后续真实应用推广仍按 **GFS-POST → MCV**，每次单独做消费者 golden diff，不把 TYM 的
 验证结果外推为其他应用已经接入。
 
-## 7. toolkit 与兼容策略
+## 7. 独立生成入口
 
-以下 API 原样保留，不因新服务移动或改名：
-
-- resource：`copy_resources_to_output`、`make_scripts_executable`；
-- job 在生成服务引入时保留了原有入口。作业渲染函数由 `takflow.jobs.render` 提供，旧品牌提供者由 `takflow.build_info` 提供。[作业渲染入口](../reference/jobs.rst)
-- credential：现有渲染与共享注册表入口；
-- observability：`export_definition_manifest`、`write_definition_manifest` 等；
-- runtime 在生成服务引入时保留了原有入口。当前提交适配路径见[后端与资源载体](../guide/backends.md)。
-
-新服务不吞并 `resource/config/job/credential` 命令。可逐步转为兼容 facade 的是**各应用**
-`generate_workflow()` 的重复编排，而不是上述 takflow toolkit 原子能力。私有
-`_BACKEND_MAP`、`_DEFAULT_SUFFIX` 可在消费者接入时删除，公共入口按各应用兼容策略保留。
+静态资源和配置可使用标准构建的分步入口。独立资源复制、作业渲染、凭证和 Sledra 导出
+分别由 `takflow.build.assets`、`takflow.jobs.render`、`takflow.config.credentials` 和
+`takflow.observability` 提供。迁移旧调用时参见生成接口说明。[旧生成接口迁移](../guide/legacy-adapters.md)
 
 TF-09 曾决定保留应用 CLI 与生成服务/toolkit 的边界，不实现 `takflow.cli`，详见
 [公共 CLI 决策记录](cli-decision.md)。这是立项时的历史结论；公共 CLI 部分已由

@@ -17,5 +17,4 @@ API 参考
    generation
    backends
    observability
-   toolkit
    jobspec-schema

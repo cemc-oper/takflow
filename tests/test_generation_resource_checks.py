@@ -7,8 +7,8 @@ import stat
 import pytest
 
 from takflow.checks import GenerationCheckError, GenerationCheckReport, GenerationInputError
-from takflow.toolkit import copy_resources_to_output
-from takflow.toolkit import resource as resource_module
+from takflow.build import assets as resource_module
+from takflow.build.assets import copy_resource_entries
 
 
 def write(root, relative, content="resource\n", mode=0o640):
@@ -17,6 +17,14 @@ def write(root, relative, content="resource\n", mode=0o640):
     path.write_text(content)
     path.chmod(mode)
     return path
+
+
+def copy_selected(output, source, *, entries=None, check_report=None):
+    if entries is None:
+        entries = [(name, name, executable) for name, executable in (
+            ("scripts", True), ("utils", True), ("ecflow/include", False), ("takler/include", False)
+        ) if (source / name).exists()]
+    copy_resource_entries(output, source, entries, check_report=check_report, source_layer="fixture")
 
 
 def artifact_paths(report):
@@ -31,40 +39,36 @@ def assert_failure(error, code, stage="resource.preflight"):
     assert error.diagnostic.reason
 
 
-def test_additional_directory_mappings_preserve_legacy_copy_contract(tmp_path):
+def test_declared_mappings_copy_files_directories_and_exact_modes(tmp_path):
     source, output = tmp_path / "source", tmp_path / "output"
     files = {
         "scripts/run.sh": write(source, "scripts/run.sh", "#!/bin/sh\nexit 0\n", 0o640),
         "scripts/data.txt": write(source, "scripts/data.txt", "data\n", 0o600),
-        "include/head.h": write(source, "include/head.h", "# head\n", 0o750),
+        "ecflow/include/head.h": write(source, "include/head.h", "# head\n", 0o750),
     }
     report = GenerationCheckReport()
-    copy_resources_to_output(
+    copy_selected(
         output, source, check_report=report,
-        additional_entries=(("include", "ecflow/include", False),),
+        entries=[("scripts", "scripts", True), ("include/head.h", "ecflow/include/head.h", False)],
     )
-    expected = {"scripts/run.sh": 0o751, "scripts/data.txt": 0o600, "ecflow/include/head.h": 0o750}
+    expected = {"scripts/run.sh": 0o755, "scripts/data.txt": 0o755, "ecflow/include/head.h": 0o644}
     assert {Path(item["path"]).relative_to(output).as_posix(): int(item["mode"], 8) for item in report.artifacts} == expected
     for relative, mode in expected.items():
         target = output / relative
-        original = files[relative.replace("ecflow/", "")]
-        assert target.read_bytes() == original.read_bytes()
+        assert target.read_bytes() == files[relative].read_bytes()
         assert stat.S_IMODE(target.stat().st_mode) == mode
 
 
-@pytest.mark.parametrize("kind", ["file", "missing"])
-def test_additional_directory_mappings_reject_invalid_sources_before_copying(tmp_path, kind):
+def test_required_mapping_reports_missing_source_before_copying(tmp_path):
     source, output = tmp_path / "source", tmp_path / "output"
     write(source, "scripts/run.sh")
-    if kind == "file":
-        write(source, "include", "invalid directory\n")
-    with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, source, additional_entries=(("include", "include", False),))
-    assert_failure(caught.value, "RESOURCE_SOURCE_TYPE" if kind == "file" else "RESOURCE_SOURCE_MISSING")
+    with pytest.raises(GenerationInputError) as caught:
+        copy_selected(output, source, entries=[("scripts", "scripts", True), ("missing", "include", False)])
+    assert_failure(caught.value, "GEN_INPUT_MISSING")
     assert not output.exists()
 
 
-def test_copy_preserves_bytes_modes_return_and_reports_only_current_files(tmp_path):
+def test_copy_reports_current_files_content_modes_and_sources(tmp_path):
     src, output = tmp_path / "src", tmp_path / "output"
     inputs = {
         "scripts/run.sh": write(src, "scripts/run.sh", "#!/bin/sh\nexit 0\n"),
@@ -75,35 +79,21 @@ def test_copy_preserves_bytes_modes_return_and_reports_only_current_files(tmp_pa
     }
     stale = write(output, "scripts/stale.sh", "old\n", 0o600)
     report = GenerationCheckReport()
-    assert copy_resources_to_output(output, src, check_report=report) is None
+    copy_selected(output, src, check_report=report)
     assert artifact_paths(report) == {output / relative for relative in inputs}
     for relative, source in inputs.items():
         target = output / relative
         assert target.read_bytes() == source.read_bytes()
-        expected = stat.S_IMODE(source.stat().st_mode)
-        if relative.startswith(("scripts/", "utils/")) and relative.endswith(".sh"):
-            expected |= 0o111
+        expected = 0o755 if relative.startswith(("scripts/", "utils/")) else 0o644
         assert stat.S_IMODE(target.stat().st_mode) == expected
         recorded = next(item for item in report.artifacts if item["path"] == str(target))
         assert recorded["mode"] == oct(expected)
         assert recorded["sha256"] == hashlib.sha256(target.read_bytes()).hexdigest()
         assert recorded["role"] == "resource"
-    # The old public helper still grants execute bits to existing *.sh files.
-    assert stat.S_IMODE(stale.stat().st_mode) == 0o711
+        assert (recorded["source"], recorded["layer"]) == (str(source), "fixture")
+    assert stat.S_IMODE(stale.stat().st_mode) == 0o600
     assert stale.read_text() == "old\n"
     assert stale not in artifact_paths(report)
-    assert any(item.code == "RESOURCE_RUNTIME_REFERENCES" and item.status == "unchecked"
-               for item in report.checks)
-
-
-def test_absent_optional_subtrees_still_create_empty_output(tmp_path):
-    src, output = tmp_path / "src", tmp_path / "output"
-    src.mkdir()
-    report = GenerationCheckReport()
-    assert copy_resources_to_output(output, src, check_report=report) is None
-    assert output.is_dir()
-    assert list(output.iterdir()) == []
-    assert report.artifacts == []
 
 
 def test_disabled_subtrees_do_not_require_valid_sources_or_targets(tmp_path):
@@ -111,7 +101,7 @@ def test_disabled_subtrees_do_not_require_valid_sources_or_targets(tmp_path):
     write(src, "scripts/run.sh")
     write(src, "utils", "disabled malformed source\n")
     disabled_target = write(output, "utils", "old disabled target\n")
-    copy_resources_to_output(output, src, include_utils=False)
+    copy_selected(output, src, entries=[("scripts", "scripts", True)])
     assert disabled_target.read_text() == "old disabled target\n"
     assert (output / "scripts/run.sh").is_file()
 
@@ -119,22 +109,18 @@ def test_disabled_subtrees_do_not_require_valid_sources_or_targets(tmp_path):
 def test_missing_source_fails_without_creating_output(tmp_path):
     src, output = tmp_path / "missing", tmp_path / "output"
     with pytest.raises(GenerationInputError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert isinstance(caught.value, FileNotFoundError)
     assert_failure(caught.value, "RESOURCE_SOURCE_MISSING")
     assert not output.exists()
     assert caught.value.report.artifacts == []
 
 
-@pytest.mark.parametrize("location", ["root", "scripts"])
-def test_source_path_must_be_directory_before_output_creation(tmp_path, location):
+def test_source_path_must_be_directory_before_output_creation(tmp_path):
     src, output = tmp_path / "src", tmp_path / "output"
-    if location == "root":
-        src.write_text("file\n")
-    else:
-        write(src, "scripts", "file\n")
+    src.write_text("file\n")
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "RESOURCE_SOURCE_TYPE")
     assert not output.exists()
 
@@ -161,7 +147,7 @@ def test_output_type_conflicts_precede_every_copy(tmp_path, location):
             code = "GEN_OUTPUT_NOT_FILE"
     before = sentinel.read_bytes(), stat.S_IMODE(sentinel.stat().st_mode)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, code)
     assert (sentinel.read_bytes(), stat.S_IMODE(sentinel.stat().st_mode)) == before
     assert caught.value.report.artifacts == []
@@ -173,7 +159,7 @@ def test_recursive_or_same_tree_copy_is_rejected(tmp_path, suffix):
     original = write(src, "scripts/run.sh", "source\n")
     output = src / suffix
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "RESOURCE_COPY_OVERLAP")
     assert original.read_text() == "source\n"
     if suffix:
@@ -184,7 +170,7 @@ def test_output_under_unselected_part_of_source_root_is_safe(tmp_path):
     src = tmp_path / "src"
     write(src, "scripts/run.sh")
     output = src / "build"
-    copy_resources_to_output(output, src)
+    copy_selected(output, src)
     assert (output / "scripts/run.sh").is_file()
     assert not (output / "scripts/build").exists()
 
@@ -195,22 +181,22 @@ def test_resolved_output_alias_cannot_hide_recursive_copy(tmp_path):
     alias = tmp_path / "output-alias"
     alias.symlink_to(src / "scripts", target_is_directory=True)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(alias, src)
+        copy_selected(alias, src)
     assert_failure(caught.value, "RESOURCE_COPY_OVERLAP")
     assert not (src / "scripts/scripts").exists()
 
 
-def test_safe_source_links_keep_copytree_following_semantics(tmp_path):
+def test_source_links_within_the_layer_are_copied(tmp_path):
     src, output = tmp_path / "src", tmp_path / "output"
-    external_file = write(tmp_path, "external/shared.sh", "shared\n")
-    external_tree = tmp_path / "external-tree"
+    external_file = write(src, "shared/shared.sh", "shared\n")
+    external_tree = src / "shared-tree"
     write(external_tree, "nested/tool.sh", "tool\n", 0o600)
     scripts = src / "scripts"
     scripts.mkdir(parents=True)
     (scripts / "linked.sh").symlink_to(external_file)
     (scripts / "linked-tree").symlink_to(external_tree, target_is_directory=True)
     report = GenerationCheckReport()
-    copy_resources_to_output(output, src, check_report=report)
+    copy_selected(output, src, check_report=report)
     assert (output / "scripts/linked.sh").read_text() == "shared\n"
     assert not (output / "scripts/linked.sh").is_symlink()
     assert (output / "scripts/linked-tree/nested/tool.sh").read_text() == "tool\n"
@@ -223,7 +209,7 @@ def test_source_directory_link_cycle_fails_before_copy(tmp_path):
     write(src, "scripts/sub/run.sh")
     (src / "scripts/sub/back").symlink_to(src / "scripts", target_is_directory=True)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "RESOURCE_SOURCE_CYCLE")
     assert not output.exists()
 
@@ -234,8 +220,8 @@ def test_source_link_to_output_cannot_reintroduce_recursion(tmp_path):
     sentinel = write(output, "sentinel", "old\n")
     (src / "scripts/output-link").symlink_to(output, target_is_directory=True)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
-    assert_failure(caught.value, "RESOURCE_COPY_OVERLAP")
+        copy_selected(output, src)
+    assert_failure(caught.value, "GEN_PATH_ESCAPE")
     assert list(output.iterdir()) == [sentinel]
 
 
@@ -245,8 +231,8 @@ def test_source_file_link_cannot_read_an_output_overwritten_by_another_copy(tmp_
     sentinel = write(output, "scripts/a.sh", "old\n")
     (src / "scripts/b.sh").symlink_to(sentinel)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
-    assert_failure(caught.value, "RESOURCE_COPY_OVERLAP")
+        copy_selected(output, src)
+    assert_failure(caught.value, "GEN_PATH_ESCAPE")
     assert sentinel.read_text() == "old\n"
     assert not (output / "scripts/b.sh").exists()
 
@@ -263,7 +249,7 @@ def test_destination_links_cannot_write_outside_output_root(tmp_path, link_kind)
         (output / "scripts").mkdir()
         (output / "scripts/run.sh").symlink_to(sentinel)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "GEN_PATH_ESCAPE")
     assert sentinel.read_text() == "external old\n"
 
@@ -275,7 +261,7 @@ def test_existing_hardlink_to_source_is_rejected_without_chmod(tmp_path):
     target.parent.mkdir(parents=True)
     os.link(source, target)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "RESOURCE_COPY_OVERLAP")
     assert stat.S_IMODE(source.stat().st_mode) == 0o640
 
@@ -287,7 +273,7 @@ def test_destination_aliases_cannot_overwrite_two_artifacts_at_one_location(tmp_
     sentinel = write(output, "scripts/b.sh", "old\n", 0o600)
     (output / "scripts/a.sh").symlink_to(sentinel)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "RESOURCE_OUTPUT_COLLISION")
     assert sentinel.read_text() == "old\n"
     assert stat.S_IMODE(sentinel.stat().st_mode) == 0o600
@@ -302,7 +288,7 @@ def test_cross_file_hardlinks_cannot_modify_a_later_resource_input(tmp_path):
     earlier_target.parent.mkdir(parents=True)
     os.link(later_source, earlier_target)
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "RESOURCE_COPY_OVERLAP")
     assert later_source.read_text() == "b\n"
     assert not (output / "scripts/b.sh").exists()
@@ -315,7 +301,7 @@ def test_existing_hardlinked_outputs_cannot_alias_two_planned_files(tmp_path):
     sentinel = write(output, "scripts/a.sh", "old\n")
     os.link(sentinel, output / "scripts/b.sh")
     with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
+        copy_selected(output, src)
     assert_failure(caught.value, "RESOURCE_OUTPUT_COLLISION")
     assert sentinel.read_text() == "old\n"
 
@@ -339,7 +325,7 @@ def test_permission_failure_is_preflight_and_preserves_existing_files(tmp_path, 
         code = "GEN_OUTPUT_NOT_WRITABLE"
     try:
         with pytest.raises(GenerationCheckError) as caught:
-            copy_resources_to_output(output, src)
+            copy_selected(output, src)
         assert_failure(caught.value, code)
         assert sentinel.read_text() == "old\n"
         assert caught.value.report.artifacts == []
@@ -348,101 +334,61 @@ def test_permission_failure_is_preflight_and_preserves_existing_files(tmp_path, 
         sentinel.parent.chmod(0o755)
 
 
-def test_postcopy_content_failure_reports_written_file_and_stops_next_tree(tmp_path, monkeypatch):
-    src, output = tmp_path / "src", tmp_path / "output"
-    write(src, "scripts/run.sh", "original\n")
-    write(src, "utils/tool.sh")
-    original_copy = resource_module.shutil.copy2
-
-    def corrupt(source, target):
-        result = original_copy(source, target)
-        Path(target).write_text("corrupted\n")
-        return result
-
-    monkeypatch.setattr(resource_module.shutil, "copy2", corrupt)
-    with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
-    assert_failure(caught.value, "RESOURCE_CONTENT_MISMATCH", "resource.check")
-    assert (output / "scripts/run.sh").read_text() == "corrupted\n"
-    assert artifact_paths(caught.value.report) == {output / "scripts/run.sh"}
-    assert not (output / "utils").exists()
-
-
-def test_postcopy_permission_failure_retains_actual_mode(tmp_path, monkeypatch):
-    src, output = tmp_path / "src", tmp_path / "output"
-    write(src, "scripts/run.sh")
-    monkeypatch.setattr(resource_module, "make_scripts_executable", lambda path: None)
-    with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
-    assert_failure(caught.value, "RESOURCE_PERMISSION_MISMATCH", "resource.check")
-    assert caught.value.report.artifacts[0]["mode"] == "0o640"
-
-
-def test_copy_failure_records_only_files_completed_by_this_invocation(tmp_path, monkeypatch):
+def test_copy_failure_preserves_original_and_completed_outputs(tmp_path, monkeypatch):
     src, output = tmp_path / "src", tmp_path / "output"
     write(src, "scripts/a.sh")
     write(src, "scripts/b.sh")
     stale = write(output, "scripts/stale.sh", "old\n")
     original_copy = resource_module.shutil.copy2
-    completed = []
+    error = OSError("simulated copy failure")
+    report = GenerationCheckReport()
 
     def fail_second(source, target):
-        if completed:
-            raise OSError("simulated copy failure")
-        result = original_copy(source, target)
-        completed.append(Path(target))
-        return result
+        if source.name == "b.sh":
+            raise error
+        return original_copy(source, target)
 
     monkeypatch.setattr(resource_module.shutil, "copy2", fail_second)
-    with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
-    assert_failure(caught.value, "RESOURCE_COPY_FAILED", "resource.copy")
-    assert artifact_paths(caught.value.report) == set(completed)
-    assert stale not in artifact_paths(caught.value.report)
+    with pytest.raises(OSError) as caught:
+        copy_selected(output, src, check_report=report)
+    assert caught.value is error
+    assert any(item.code == "RESOURCE_COPY_FAILED" and item.stage == "resource.copy" for item in report.checks)
+    assert artifact_paths(report) == {output / "scripts/a.sh"}
     assert stale.read_text() == "old\n"
 
 
-def test_partial_file_disappearing_does_not_mask_primary_copy_failure(tmp_path, monkeypatch):
-    src, output = tmp_path / "src", tmp_path / "output"
-    write(src, "scripts/a.sh")
-    write(src, "scripts/b.sh")
-    original_copy = resource_module.shutil.copy2
-    completed = []
-
-    def delete_completed_then_fail(source, target):
-        if completed:
-            completed[0].unlink()
-            raise OSError("primary copy failure")
-        result = original_copy(source, target)
-        completed.append(Path(target))
-        return result
-
-    monkeypatch.setattr(resource_module.shutil, "copy2", delete_completed_then_fail)
-    with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
-    assert_failure(caught.value, "RESOURCE_COPY_FAILED", "resource.copy")
-    report = caught.value.report
-    assert next(item for item in report.checks if item.status == "failed").code == "RESOURCE_COPY_FAILED"
-    assert report.artifacts == []
-    assert any(item.code == "RESOURCE_ARTIFACT_UNAVAILABLE" and item.status == "unchecked"
-               for item in report.checks)
-
-
-def test_source_selection_change_is_reported_with_actual_outputs(tmp_path, monkeypatch):
+def test_permission_failure_records_the_written_partial_file(tmp_path, monkeypatch):
     src, output = tmp_path / "src", tmp_path / "output"
     write(src, "scripts/run.sh")
-    original_copytree = resource_module.shutil.copytree
-    introduced = False
+    target = output / "scripts/run.sh"
+    original_chmod = Path.chmod
+    error = OSError("simulated chmod failure")
+    report = GenerationCheckReport()
 
-    def add_file_before_copy(source, target, **kwargs):
-        nonlocal introduced
-        if not introduced:
-            introduced = True
-            write(src, "scripts/new.txt", "appeared after preflight\n")
-        return original_copytree(source, target, **kwargs)
+    def fail(path, mode, **kwargs):
+        if path == target:
+            raise error
+        return original_chmod(path, mode, **kwargs)
 
-    monkeypatch.setattr(resource_module.shutil, "copytree", add_file_before_copy)
-    with pytest.raises(GenerationCheckError) as caught:
-        copy_resources_to_output(output, src)
-    assert_failure(caught.value, "RESOURCE_SOURCE_CHANGED", "resource.check")
-    assert artifact_paths(caught.value.report) == {output / "scripts/run.sh", output / "scripts/new.txt"}
+    monkeypatch.setattr(Path, "chmod", fail)
+    with pytest.raises(OSError) as caught:
+        copy_selected(output, src, check_report=report)
+    assert caught.value is error
+    item, = report.artifacts
+    assert (item["path"], item["role"], item["mode"]) == (str(target), "resource_partial", "0o640")
+
+
+def test_copy_uses_the_validated_selection_when_the_source_gains_files(tmp_path, monkeypatch):
+    src, output = tmp_path / "src", tmp_path / "output"
+    write(src, "scripts/run.sh")
+    original_copy = resource_module.shutil.copy2
+    report = GenerationCheckReport()
+
+    def add_file_before_copy(source, target):
+        write(src, "scripts/new.txt", "appeared after preflight\n")
+        return original_copy(source, target)
+
+    monkeypatch.setattr(resource_module.shutil, "copy2", add_file_before_copy)
+    copy_selected(output, src, check_report=report)
+    assert artifact_paths(report) == {output / "scripts/run.sh"}
+    assert not (output / "scripts/new.txt").exists()

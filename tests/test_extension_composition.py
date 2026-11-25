@@ -10,7 +10,7 @@ from takflow.application import ApplicationBrand, ApplicationExtension, Template
 from takflow.build import BuildError, build
 from takflow.build_info import build_info_scope
 from takflow.config import BaseWorkflowConfig, ConfigValidationError
-from takflow.toolkit.credential import register_credential_hook, render_credential_template
+from takflow.config.credentials import register_credential_hook, render_credential_template
 
 from test_build import application, data, put, resources
 from test_build_info import render_header

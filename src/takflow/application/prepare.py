@@ -18,7 +18,7 @@ from takflow.build_info import build_info_scope
 from takflow.checks import preflight_generation
 from takflow.config import BaseWorkflowConfig, validate_config
 from takflow.config.validation import apply_config_overrides, load_config_data
-from takflow.toolkit.credential import get_credential_registry
+from takflow.config.credentials import get_credential_registry
 
 if TYPE_CHECKING:
     from takflow.application.declaration import Application

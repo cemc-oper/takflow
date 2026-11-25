@@ -17,7 +17,7 @@ takflow 按职责分为七层，上层应用（如 `mcv-workflow`）只与其中
   - `flow/scheduling.py` 和 `flow/backend.py` → 调度、通用设置和任务脚本命令
   - `jobs/render.py`、`jobs/scripts.py`、`jobs/headers.py` → 模板渲染、脚本调用和资源头
   - `jobs/submission/` → direct、orvix、slsubmit6 提交和取消命令及节点资源声明
-- **工具层 `toolkit/`** 为应用提供可复用的静态资源复制、配置和凭证渲染能力。
+- **应用声明和构建** 在 `application/` 准备有效配置和资源层，在 `build/` 生成整套产物。凭证钩子与渲染位于 `config/credentials.py`。
 - **契约层 `spec/jobspec/`**：语言无关的作业运行资源契约的 vendor 只读副本
   （唯一 owner 是 `orvix`，本仓库 pin + 消费侧对拍校验），外加 Python 渲染器
   harness。详见 [jobspec 契约](../reference/jobspec-schema.md)。
@@ -34,7 +34,8 @@ src/takflow/
 │   ├── generate.py         # 模式分发、路径和保存回调
 │   └── backends/           # ecFlow .def 及 takler flow 后端
 ├── jobs/                   # 作业渲染、脚本、资源头和提交适配
-└── toolkit/                # 工具层（resource / config / credential）
+├── application/            # 应用声明和准备流程
+└── build/                  # 资源复制、配置与阶段执行
 ```
 
 ## 与运行时工具的关系

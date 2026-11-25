@@ -9,6 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+!/src/takflow/build/
 develop-eggs/
 dist/
 downloads/

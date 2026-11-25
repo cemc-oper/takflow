@@ -83,7 +83,7 @@ toyflow job generate --config-file examples/toyflow/config/toyflow.yaml --output
 toyflow workflow generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
 ```
 
-这些命令由 `takflow.toolkit` 和 `takflow.flow.generate` 组成，属于 toyflow 自己的旧 CLI。它们不会自动补跑前置步骤，也不会发布标准成功清单。完整实现见 `examples/toyflow/src/toyflow/cli.py`；标准应用的完整构建、分步命令、结果和退出码见[标准命令契约](guide/cli.md)。
+toyflow 的独立命令使用 `takflow.build.assets`、`takflow.jobs.render`、`takflow.flow.generate` 和 `takflow.config.credentials`。按上面的顺序调用资源、配置、作业和流程命令。标准应用的完整构建、分步命令、结果和退出码参见标准命令契约。[标准命令契约](guide/cli.md)
 
 ## 生成的流程结构
 

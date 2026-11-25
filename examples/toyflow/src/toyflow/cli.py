@@ -9,18 +9,18 @@
     toyflow credential generate --config-file config/toyflow.yaml \
         --credential-file config/credential.yaml
 """
-from importlib.resources import files
 from pathlib import Path
 
 import click
 
 from takflow.build_info import build_info_scope
+from takflow.config.credentials import render_credential
 from takflow.jobs.render import render_jobs_from_directory
-from takflow.toolkit import copy_resources_to_output, render_credential
 
 from toyflow.config import ToyflowConfig, load_config_from_file
-from toyflow.generate import generate_workflow, render_config, toyflow_build_info_lines
+from toyflow.generate import copy_resources, generate_workflow, render_config, toyflow_build_info_lines
 from toyflow.util import get_output_repo_base_dir, get_workflow_repo_base_dir
+
 
 def _load_config(config_file: str) -> ToyflowConfig:
     # 先 import hooks，触发 @register_engine_hook / @register_credential_hook
@@ -54,16 +54,7 @@ def resource_copy(config_file: str, output_repo_base: str, workflow_repo_base: s
     output_repo_base = get_output_repo_base_dir(config, output_repo_base)
     workflow_repo_base = get_workflow_repo_base_dir(config, workflow_repo_base)
 
-    if config.workflow_mode == "ecflow":
-        copy_resources_to_output(
-            output_repo_base=Path(output_repo_base),
-            src_base=Path(str(files("takflow").joinpath("resources"))),
-            include_scripts=False, include_utils=False, include_takler=False,
-        )
-    copy_resources_to_output(
-        output_repo_base=Path(output_repo_base),
-        src_base=Path(workflow_repo_base),
-    )
+    copy_resources(config, output_repo_base, workflow_repo_base)
     click.echo(f"Copied resources from: {workflow_repo_base}")
     click.echo(f"Copied resources to: {output_repo_base}")
 

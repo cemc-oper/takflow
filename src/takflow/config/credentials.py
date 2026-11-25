@@ -7,16 +7,15 @@ collects and writes the final ``config/credential.sh``.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from contextvars import ContextVar
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, TYPE_CHECKING
 
-import yaml
 from jinja2 import Environment, FileSystemLoader
 
+from takflow.config.validation import load_config_data
 from takflow.flow.hook import BaseHookRegistry, create_hook_decorator
 
 if TYPE_CHECKING:
@@ -91,9 +90,9 @@ def render_credential(
     config: "BaseWorkflowConfig",
     output_repo_base: str,
     build_info_lines: Dict[str, str],
-    *, environment: Environment | None = None, file_mode: int | None = None,
+    *, environment: Environment | None = None,
 ) -> None:
-    """Render and merge ``config/credential.sh`` from all registered hooks.
+    """Write ``config/credential.sh`` at mode 0600 from all registered hooks.
 
     Parameters
     ----------
@@ -106,12 +105,7 @@ def render_credential(
     build_info_lines : dict
         ``{"warning": ..., "info": ...}`` header lines (app-branded).
     """
-    if file_mode is None:
-        with open(credential_file, "r") as f:
-            credential = yaml.safe_load(f)
-    else:
-        from takflow.config import load_config_data
-        credential = load_config_data(credential_file)
+    credential = load_config_data(credential_file)
 
     parts = [
         "#!/usr/bin/env bash",
@@ -142,13 +136,9 @@ def render_credential(
     parts.append('echo "END: credential.sh"')
 
     output_path = Path(output_repo_base) / "config" / "credential.sh"
-    if file_mode is None:
-        output_path.parent.mkdir(exist_ok=True, parents=True)
-        output_path.write_text("\n".join(parts))
-        os.chmod(output_path, 0o700)
-    else:
-        from takflow._files import write_text
-        write_text(output_path, "\n".join(parts) + "\n", file_mode, Path(output_repo_base))
+    from takflow._files import write_text
+
+    write_text(output_path, "\n".join(parts) + "\n", 0o600, Path(output_repo_base))
 
     logger.info(f"Generated credential.sh at {output_path}")
 

@@ -10,7 +10,7 @@ takflow **不实现 `takflow.cli`，不增加公共 console script，也不建�
 各应用继续拥有自己的 entry point、命令组、历史选项、提示文本和异常展示；框架共享边界保持为：
 
 - `takflow.flow.generate`：definition/shell 分发、输出路径与保存编排；
-- `takflow.toolkit`：resource/job/credential 等原子生成能力；
+- `takflow.build.assets`、`takflow.jobs.render` 和 `takflow.config.credentials` 提供独立生成能力。
 - `takflow.config` / `takflow.flow` / `takflow.flow.backends` 提供配置、建树与后端公共 API。
 
 本结论关闭 TF-09，不派生公共 CLI 实现任务，也不要求统一历史选项、删除应用命令或迁移全部应用。

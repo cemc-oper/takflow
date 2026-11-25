@@ -1,8 +1,8 @@
 """takflow — unified workflow-generation framework.
 
 Provides the generic layer shared by the domain applications: the ``jobspec``
-contract, flow/backend abstraction, hooks, config base, and the
-job/resource/credential/util toolkit. See ``docs/source/develop/architecture.md``
+contract, flow/backend abstraction, hooks, application builds and job rendering.
+See ``docs/source/develop/architecture.md``
 in the takflow repository.
 """
 

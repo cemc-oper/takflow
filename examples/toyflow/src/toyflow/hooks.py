@@ -19,7 +19,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from takflow.flow.hook import BaseHookRegistry, create_hook_decorator
-from takflow.toolkit.credential import (
+from takflow.config.credentials import (
     CredentialContext,
     CredentialHookPoint,
     register_credential_hook,

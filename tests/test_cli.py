@@ -166,7 +166,7 @@ def test_controlled_failures_and_partial_results(tmp_path, resources, monkeypatc
     elif failure == "template":
         (resources / "config/config.sh.j2").unlink()
     else:
-        import takflow.build as module
+        from takflow.build import pipeline as module
         original = module.write_text
         def fail(path, text, mode, root):
             original(path, text, mode, root)
@@ -325,7 +325,7 @@ def test_template_diagnostic_keeps_source_and_reason(tmp_path, resources, format
 
 
 def test_manifest_publication_failure_on_cli(tmp_path, resources, monkeypatch):
-    from takflow import build as build_module
+    from takflow.build import pipeline as build_module
     app = application(resources)
     path = configuration(tmp_path)
     manifest = tmp_path / "output/generation_manifest.json"

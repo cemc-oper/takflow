@@ -55,7 +55,7 @@ machine 由公共选择管理，拒绝手工ResourceEntry复制整个machine树�
 
 凭证由credential_enabled选择，关闭时skipped，不要求空handler；启用时未给文件、输入缺失及无注册贡献分别诊断。
 复用credential toolkit组合局部贡献，标准路径使用严格环境和0600，写入前/期间即受保护。
-单独凭证步骤不放宽已有父目录权限。旧render_credential默认0700和None返回保持。
+单独凭证步骤保留已有父目录权限。`takflow.config.credentials.render_credential` 以 `0600` 写出凭证文件。
 
 作业复用目录 renderer、include_raw、invoke_script 和资源指令 helper，统一写入 jobs/，权限为 0755。
 标准Environment只渲染最终有效模板，禁用组件不读模板正文；inline先准备脚本，external正确引用路径。

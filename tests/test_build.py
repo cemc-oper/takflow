@@ -17,9 +17,9 @@ from takflow.application import (
 from takflow.artifact_checks import check_artifacts
 from takflow.build import build, run_stage, BuildError, STAGES
 from takflow.config import BaseWorkflowConfig
-from takflow.toolkit.credential import register_credential_hook, render_credential_template, CredentialHookPoint
-import takflow.build as build_module
-import takflow.toolkit.resource as resource_module
+from takflow.config.credentials import register_credential_hook, render_credential_template, CredentialHookPoint
+import takflow.build.pipeline as build_module
+import takflow.build.assets as resource_module
 
 
 SENTINEL = "credential-body-must-not-enter-reports"

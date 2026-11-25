@@ -49,7 +49,8 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.jobs.submission` | `set_runtime` 为节点绑定提交命令、取消命令和资源 |
 | `takflow.jobs.submission.variables/direct/orvix/slsubmit6` | 资源变量声明与编码、各载体的提交和取消命令。[后端与资源载体](backends.md) |
 | `takflow.observability` | Execution 运行环境、任务映射和静态 definition manifest 导出 |
-| `takflow.toolkit.resource/credential` | 资源复制、凭证钩子和凭证渲染入口 |
+| `takflow.build.assets` | `copy_resource_entries` 按路径映射独立复制资源 |
+| `takflow.config.credentials` | 凭证钩子注册与片段渲染，写出 `0600` 凭证配置 |
 | `takflow.build_info` | `BuildInfo`、`get_build_info`、`get_build_info_lines`、`build_info_scope` |
 
 可选依赖不改变默认导入契约：没有 takler 包时可以导入 `takflow` 和

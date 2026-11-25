@@ -1,22 +1,12 @@
-"""Generic resource-copy logic.
-
-Copies the static resource subtrees (``scripts/``, ``utils/``,
-``ecflow/include/``, ``takler/include/``) from a source resource directory into
-an output repo. App-specific resource *location* (e.g. a package's ``resources``
-dir) is resolved by the caller and passed as ``src_base``.
-"""
+"""Plan and copy declared static workflow resources in layer order."""
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
-import stat
 from pathlib import Path
-from typing import NoReturn
 from collections.abc import Callable
 
 from takflow.checks import (
-    GenerationCheckError,
     GenerationCheckReport,
     GenerationInputError,
     check_input_file,
@@ -24,7 +14,7 @@ from takflow.checks import (
     check_relative_path,
 )
 
-_CopyFile = tuple[Path, Path, str | None, int]
+_CopyFile = tuple[Path, Path, int]
 
 
 def _check_directory(path: Path, report: GenerationCheckReport, *, source: bool) -> None:
@@ -64,16 +54,14 @@ def _copy_plan(
     trees: list[tuple[Path, Path, bool]],
     report: GenerationCheckReport,
     *,
-    keep: Callable[[Path], bool] | None = None,
-    standard: bool = False,
-    directories: list[Path] | None = None,
-    destinations: set[Path] | None = None,
+    keep: Callable[[Path], bool] | None,
+    directories: list[Path],
+    destinations: set[Path],
 ) -> list[list[_CopyFile]]:
     """Check every selected source/target before the first output mutation.
 
-    copytree follows source links, so follow them here too, rejecting directory
-    cycles and paths that would copy a tree into itself. An unrelated build
-    directory beneath the resource root remains valid.
+    Resolve source links within their resource root. Reject directory cycles
+    and overlapping selected trees before copying.
     """
     stage = "resource.preflight"
     _check_directory(src_base, report, source=True)
@@ -81,8 +69,6 @@ def _copy_plan(
     for _, dst, _ in trees:
         check_relative_path(output, dst.relative_to(output), stage=stage,
                             report=report, object=str(dst))
-    if destinations is None:
-        destinations = {dst.resolve() for _, dst, _ in trees}
     planned_targets: set[Path] = set()
 
     def walk(src: Path, dst: Path, executable: bool, ancestors: set[Path], files):
@@ -93,17 +79,17 @@ def _copy_plan(
         if any(_overlap(real_source, target) for target in destinations):
             report.fail("RESOURCE_COPY_OVERLAP", stage, str(src),
                         "selected source and destination trees overlap")
-        if src.is_dir() or not standard:
+        if src.is_dir():
             _check_directory(src, report, source=True)
         else:
             check_input_file(src, stage=stage, report=report)
         check_relative_path(output, dst.relative_to(output), stage=stage,
                             report=report, object=str(dst))
-        if src.is_dir() or not standard:
+        if src.is_dir():
             _check_directory(dst, report, source=False)
         else:
             check_output_path(dst, stage=stage, report=report)
-        if directories is not None and src.is_dir():
+        if src.is_dir():
             directories.append(dst)
         for child in sorted(src.iterdir()) if src.is_dir() else [src]:
             if keep is not None and not keep(child.relative_to(src_base)):
@@ -111,8 +97,7 @@ def _copy_plan(
             target = dst / child.name
             if not src.is_dir():
                 target = dst
-            if standard:
-                check_relative_path(src_base, child.relative_to(src_base), stage=stage, report=report)
+            check_relative_path(src_base, child.relative_to(src_base), stage=stage, report=report)
             if child.is_dir():
                 walk(child, target, executable, ancestors | {real_source}, files)
                 continue
@@ -128,13 +113,7 @@ def _copy_plan(
                 report.fail("RESOURCE_COPY_OVERLAP", stage, str(child),
                             "resource input refers to a selected output tree")
             planned_targets.add(real_target)
-            mode = stat.S_IMODE(child.stat().st_mode)
-            if executable and child.suffix == ".sh":
-                mode |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-            if standard:
-                mode = 0o755 if executable else 0o644
-            digest = None if standard else hashlib.sha256(child.read_bytes()).hexdigest()
-            files.append((child, target, digest, mode))
+            files.append((child, target, 0o755 if executable else 0o644))
 
     plans = []
     for src, dst, executable in trees:
@@ -154,7 +133,7 @@ def _check_copy_targets(plans: list[list[_CopyFile]], report: GenerationCheckRep
     source_ids = set()
     targets = set()
     for files in plans:
-        for source, target, _, _ in files:
+        for source, target, _ in files:
             metadata = source.stat()
             source_ids.add((metadata.st_dev, metadata.st_ino))
             targets.add(target)  # successive layers can write the same named target
@@ -181,134 +160,11 @@ def _check_copy_targets(plans: list[list[_CopyFile]], report: GenerationCheckRep
         target_ids.add(identity)
 
 
-def _check_copied_files(
-    files: list[tuple[Path, Path, str, int]], report: GenerationCheckReport,
-) -> None:
-    stage = "resource.check"
-    # Only files selected from this invocation's sources are recorded. A stale
-    # output subtree can remain present without becoming a current artifact.
-    for _, target, _, _ in files:
-        if target.is_file():
-            report.artifact(target, "resource", stage=stage)
-    for _, target, digest, mode in files:
-        if not target.is_file():
-            report.fail("RESOURCE_OUTPUT_MISSING", stage, str(target),
-                        "copied resource file is missing")
-        if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
-            report.fail("RESOURCE_CONTENT_MISMATCH", stage, str(target),
-                        "copied resource content differs from the checked source")
-        if stat.S_IMODE(target.stat().st_mode) != mode:
-            report.fail("RESOURCE_PERMISSION_MISMATCH", stage, str(target),
-                        "copied resource permissions differ from the existing copy contract")
-    report.passed("RESOURCE_ARTIFACTS", stage, "resources",
-                  "this invocation's copied file contents and permissions checked")
-
-
-def _fail_after_copy(
-    report: GenerationCheckReport, code: str, stage: str, subject: Path,
-    reason: str, copied: list[Path],
-) -> NoReturn:
-    # Record the primary failure first. Reporting files can itself fail after
-    # concurrent deletion or a permission error; that must not replace it.
-    try:
-        report.fail(code, stage, str(subject), reason)
-    except GenerationCheckError:
-        for target in copied:
-            try:
-                report.artifact(target, "resource", stage=stage)
-            except (GenerationCheckError, OSError):
-                report.unchecked("RESOURCE_ARTIFACT_UNAVAILABLE", stage, str(target),
-                                 "previously copied file could not be recorded after failure")
-        raise
-
-
-def make_scripts_executable(directory: Path) -> None:
-    """Mark every ``*.sh`` under ``directory`` executable (ugo+x)."""
-    for path in directory.rglob("*.sh"):
-        mode = os.stat(path).st_mode
-        os.chmod(path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-
-
-def copy_resources_to_output(
-    output_repo_base: Path,
-    src_base: Path,
-    include_scripts: bool = True,
-    include_utils: bool = True,
-    include_ecflow: bool = True,
-    include_takler: bool = True,
-    *,
-    check_report: GenerationCheckReport | None = None,
-    additional_entries: tuple[tuple[str, str, bool], ...] = (),
-) -> None:
-    """Copy static resource subtrees from ``src_base`` into ``output_repo_base``.
-
-    Parameters
-    ----------
-    output_repo_base : Path
-        Target directory (OUTPUT_REPO_BASE).
-    src_base : Path
-        Source resource directory (e.g. an app's packaged ``resources`` dir).
-    include_scripts, include_utils, include_ecflow, include_takler : bool
-        Which subtrees to copy.
-    check_report : GenerationCheckReport, optional
-        Collect preflight checks and files copied by this invocation. Dynamic
-        and target-host references inside resource text are not evaluated.
-    additional_entries : tuple, optional
-        Extra (source, destination, executable) directory mappings relative to
-        the declared roots. Explicit mappings require their directories. They use this
-        helper's existing source-permission and ``*.sh`` executable-bit semantics.
-    """
-    report = check_report if check_report is not None else GenerationCheckReport()
-    output_repo_base = Path(output_repo_base)
-    src_base = Path(src_base)
-    trees = []
-    for enabled, relative, executable in (
-        (include_scripts, "scripts", True),
-        (include_utils, "utils", True),
-        (include_ecflow, "ecflow/include", False),
-        (include_takler, "takler/include", False),
-    ):
-        source = src_base / relative
-        if enabled and source.exists():
-            trees.append((source, output_repo_base / relative, executable))
-        elif enabled:
-            report.unchecked("RESOURCE_SUBTREE_ABSENT", "resource.preflight", str(source),
-                             "optional resource subtree is absent")
-    for source, destination, executable in additional_entries:
-        src = check_relative_path(src_base, source, stage="resource.preflight", report=report)
-        dst = check_relative_path(output_repo_base, destination, stage="resource.preflight", report=report)
-        trees.append((src, dst, executable))
-    plans = _copy_plan(src_base, output_repo_base, trees, report)
-    _check_copy_targets(plans, report)
-    output_repo_base.mkdir(parents=True, exist_ok=True)
-    for (src, dst, executable), files in zip(trees, plans):
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        copied: list[Path] = []
-
-        def copy_file(source, target):
-            result = shutil.copy2(source, target)
-            copied.append(Path(target))
-            return result
-
-        try:
-            shutil.copytree(src, dst, dirs_exist_ok=True, copy_function=copy_file)
-            if executable:
-                make_scripts_executable(dst)
-        except (OSError, shutil.Error):
-            _fail_after_copy(report, "RESOURCE_COPY_FAILED", "resource.copy", src,
-                             "resource subtree could not be copied", copied)
-        if set(copied) != {target for _, target, _, _ in files}:
-            _fail_after_copy(report, "RESOURCE_SOURCE_CHANGED", "resource.check", src,
-                             "resource file selection changed after preflight", copied)
-        _check_copied_files(files, report)
-    report.unchecked("RESOURCE_RUNTIME_REFERENCES", "resource.check", str(output_repo_base),
-                     "dynamic and target-host references inside copied files were not evaluated")
-
-
 def copy_resource_entries(
     output_repo_base: Path, src_base: Path,
     entries: list[tuple[str, str, bool]], *,
-    keep: Callable[[Path], bool], check_report: GenerationCheckReport,
+    keep: Callable[[Path], bool] | None = None,
+    check_report: GenerationCheckReport | None = None,
     check_target: Callable[[Path], None] | None = None,
     source_layer: str | None = None,
 ) -> None:
@@ -318,13 +174,14 @@ def copy_resource_entries(
     caller resolves optional/required entries across layers. Original copy
     exceptions and partial invocation artifacts survive failures.
     """
+    report = check_report if check_report is not None else GenerationCheckReport()
     _copy_resource_layers(output_repo_base, [(source_layer, src_base, entries)], keep=keep,
-                          check_report=check_report, check_target=check_target)
+                          check_report=report, check_target=check_target)
 
 
 def _copy_resource_layers(
     output_repo_base: Path, layers: list[tuple[str | None, Path, list[tuple[str, str, bool]]]], *,
-    keep: Callable[[Path], bool], check_report: GenerationCheckReport,
+    keep: Callable[[Path], bool] | None, check_report: GenerationCheckReport,
     check_target: Callable[[Path], None] | None = None,
     after_layer: Callable[[], None] | None = None,
 ) -> None:
@@ -343,14 +200,14 @@ def _copy_resource_layers(
     layer_plans = []
     for name, root, trees in layer_trees:
         directories = []
-        groups = _copy_plan(root, output_repo_base, trees, check_report, keep=keep, standard=True,
+        groups = _copy_plan(root, output_repo_base, trees, check_report, keep=keep,
                             directories=directories, destinations=destinations)
         layer_plans.append((name, directories, groups))
     all_groups = [files for _, _, groups in layer_plans for files in groups]
     _check_copy_targets(all_groups, check_report, tuple(path for _, dirs, _ in layer_plans for path in dirs))
     if check_target is not None:
         for files in all_groups:
-            for _, target, _, _ in files:
+            for _, target, _ in files:
                 check_target(target)
     for name, directories, groups in layer_plans:
         _copy_entry_plan(output_repo_base, directories, groups, check_report, name)
@@ -365,7 +222,7 @@ def _copy_entry_plan(output_repo_base: Path, directories: list[Path], plans: lis
     for directory in directories:
         make_parents(directory / ".directory", output_repo_base)
     for files in plans:
-        for source, target, _, mode in files:
+        for source, target, mode in files:
             before = file_state(target)
             try:
                 make_parents(target, output_repo_base)
@@ -386,4 +243,4 @@ def _copy_entry_plan(output_repo_base: Path, directories: list[Path], plans: lis
             check_report.artifacts[-1]["layer"] = source_layer
 
 
-__all__ = ["copy_resources_to_output", "make_scripts_executable", "copy_resource_entries"]
+__all__ = ["copy_resource_entries"]

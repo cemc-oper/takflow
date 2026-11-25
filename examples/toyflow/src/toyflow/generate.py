@@ -1,17 +1,13 @@
-"""toyflow 生成步骤的实现（config generate / workflow generate）。
-
-``resource copy`` 使用 ``takflow.toolkit``，``job generate`` 使用
-``takflow.jobs.render``。应用使用 ``takflow.flow.generate`` 编排流程生成，并提供配置渲染和 manifest 回调。
-"""
+"""toyflow 静态资源、配置和流程定义的生成步骤。"""
 from __future__ import annotations
 
-import os
-import stat
+from importlib.resources import files
 from pathlib import Path
 from typing import Optional, Union
 
 from jinja2 import Environment, FileSystemLoader
 
+from takflow.build.assets import copy_resource_entries
 from takflow.build_info import get_build_info, get_build_info_lines
 from takflow.flow.generate import generate_workflow as generate_workflow_service
 from takflow.observability import (
@@ -26,6 +22,22 @@ import toyflow
 from toyflow.config import ToyflowConfig
 from toyflow.flow import create_suite
 from toyflow.util import get_output_repo_base_dir, get_workflow_repo_base_dir
+
+
+def copy_resources(config: ToyflowConfig, output_root: Path, resource_root: Path) -> None:
+    """复制公用 ecFlow include 和 toyflow 声明的静态资源。"""
+    if config.workflow_mode == "ecflow":
+        public = Path(str(files("takflow").joinpath("resources")))
+        copy_resource_entries(output_root, public, [("ecflow/include", "ecflow/include", False)])
+    entries = [
+        (path, path, executable)
+        for path, executable in (
+            ("scripts", True), ("utils", True), ("ecflow/include", False), ("takler/include", False),
+        )
+        if (resource_root / path).exists()
+    ]
+    copy_resource_entries(output_root, resource_root, entries)
+    output_root.mkdir(parents=True, exist_ok=True)
 
 
 def toyflow_build_info_lines() -> dict[str, str]:
@@ -57,8 +69,7 @@ def render_config(
     output_file_path.parent.mkdir(exist_ok=True, parents=True)
     output_file_path.write_text(rendered)
 
-    mode = os.stat(output_file_path).st_mode
-    os.chmod(output_file_path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    output_file_path.chmod(0o644)
     return output_file_path
 
 
