@@ -16,6 +16,8 @@ import pytest
 from takflow.backends.ecflow import EcflowBackend
 from takflow.checks import GenerationCheckReport, check_definition_output
 from takflow.flow import WorkflowEngine
+from takflow.jobs.submission import set_runtime
+from takflow.jobs.submission.variables import ecflow_resource_variables, set_resource_variables
 from test_build import resources
 from test_runtime_local_carrier import assert_command_argv
 
@@ -85,7 +87,6 @@ def test_native_ecflow_preprocesses_job_without_running_it(tmp_path):
 
 @pytest.mark.parametrize("carrier", ["orvix", "slsubmit6", "direct"])
 def test_native_ecflow_commands_use_current_try(tmp_path, carrier):
-    from takflow.backends.runtime import set_runtime
     from takflow.config import ShellWorkload, SlurmWorkload
 
     suite, output, _, _ = _save_suite(tmp_path)
@@ -361,7 +362,6 @@ def test_native_orvix_resource_variables_and_application_default(tmp_path):
 
     from jinja2 import Environment
 
-    from takflow.backends.runtime import set_runtime
     from takflow.config import SlurmWorkload
     from takflow.toolkit.job import _render_workflow_orvix_resource_block
 
@@ -451,7 +451,6 @@ def test_native_pipeline_retains_machine_updates_without_regenerating_ecf(tmp_pa
 
 @pytest.mark.parametrize("fallback", [None, False, True])
 def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
-    from takflow.backends.runtime import ecflow_resource_variables, set_resource_variables, set_runtime
     from takflow.config import SlurmWorkload
     from takflow.jobspec import TaskResource
     from takflow.toolkit.job import render_orvix_resource_block, render_slurm_resource_block

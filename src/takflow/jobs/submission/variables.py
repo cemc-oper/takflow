@@ -1,4 +1,4 @@
-"""Resource declarations at a single workflow node, independently of its carrier."""
+"""Shared resource variables for node declarations and job headers."""
 from __future__ import annotations
 
 import re
@@ -81,3 +81,6 @@ def configure_slurm_node(node: Node, workload: SlurmWorkload, resource: TaskReso
     if resource.job_type == "parallel" and resource.queue is None:
         resource = resource.model_copy(update={"queue": workload.default_parallel_queue})
     set_resource_variables(node, resource)
+
+
+__all__ = ["ecflow_resource_variables", "set_resource_variables"]

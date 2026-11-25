@@ -65,7 +65,8 @@ takler 的三个显式不支持路径在 `test_takler_current_contract.py` 中�
 `set_runtime` 即可（对应 toyflow `flow.py` 的 `setup()`）：
 
 ```python
-from takflow.backends.runtime import set_resource_variables, set_runtime
+from takflow.jobs.submission import set_runtime
+from takflow.jobs.submission.variables import set_resource_variables
 
 set_runtime(suite, config.workload, engine=engine)
 set_resource_variables(task, tr)
@@ -83,3 +84,16 @@ ecFlow 的两种载体使用相同的 `TaskResource` 输入。takler 的调度�
 - **本地任务**省略载体或选择 `direct` 时直接执行 job，选择 `orvix` 时通过 ORVIX 的 local 后端提交。
 
 下级任务可继承提交和取消命令。队列、时限、内存、并行规模及 requeue 可以声明在 suite、family 或 task 上。[资源字段与回退](jobspec.md)
+
+## 迁移提交入口
+
+模块重组后，应用和框架需要配套更新以下导入。
+
+| 原入口 | 新入口 |
+|---|---|
+| `takflow.backends.runtime.set_runtime` 及各载体的 `set_runtime` | `takflow.jobs.submission.set_runtime`，按 workload 选择载体 |
+| `takflow.backends.runtime` 的 `set_resource_variables`、`ecflow_resource_variables` | `takflow.jobs.submission.variables` |
+| `takflow.backends.runtime`、`takflow.toolkit.util` 和 `takflow.toolkit` 的 `shell_job` | `takflow.jobs.submission.direct.shell_job` |
+| `takflow.backends.runtime.orvix.orvix_job` | `takflow.jobs.submission.orvix.orvix_job` |
+| `takflow.backends.runtime.slsubmit` 的 `slsubmit6_serial_job`、`slsubmit6_parallel_job` | `takflow.jobs.submission.slsubmit6` |
+| `takflow.backends.runtime.orvix` 的 `to_orvix_directives`、`render_resource_block`、`MARKER` | `takflow.jobspec` |

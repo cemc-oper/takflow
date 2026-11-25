@@ -1,20 +1,10 @@
-"""Runtime carrier adapters: translate generic resource models to scheduler-specific runtime variables.
-
-Supported carriers:
-- ``orvix``: writes ``#ORVIX`` directives into scripts, sets orvix submit/kill commands.
-- ``slsubmit6``: sets ecFlow variables ``%QUEUE%``/``%NODES%``/``%WCKEY%`` and slsubmit6 commands.
-"""
+"""Common workflow engine settings, script commands, and scheduling."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict
 
-from takflow.backends.runtime.orvix import orvix_job
-from takflow.backends.runtime.orvix import set_runtime as set_orvix_runtime
-from takflow.backends.runtime.resources import ecflow_resource_variables, set_resource_variables
-from takflow.backends.runtime.slsubmit import set_runtime as set_slsubmit_runtime
-
 if TYPE_CHECKING:
-    from takflow.config import SchedulingConfig, WorkloadType
+    from takflow.config import SchedulingConfig
     from takflow.flow import Node, WorkflowEngine
 
 
@@ -93,74 +83,9 @@ def set_scheduling(
         raise ValueError(f"scheduler type is not supported: {scheduling_type}")
 
 
-# ---------------------------------------------------------------------------
-# Carrier-aware job submission commands
-# ---------------------------------------------------------------------------
-
-
-def shell_job(engine: "WorkflowEngine") -> Dict[str, str]:
-    """Return shell-mode job submission/kill commands."""
-    if _is_ecflow(engine):
-        return {
-            "ECF_JOB_CMD": '"%ECF_JOB%" 1> "%ECF_JOBOUT%" 2>&1',
-            "ECF_KILL_CMD": "kill -15 %ECF_RID%",
-        }
-    from takler.tasks.shell.constant import DEFAULT_TAKLER_SHELL_KILL_CMD
-
-    return {
-        "TAKLER_SHELL_JOB_CMD": "{{ TAKLER_JOB | shquote }} 1> {{ TAKLER_JOBOUT | shquote }} 2>&1",
-        "TAKLER_SHELL_KILL_CMD": DEFAULT_TAKLER_SHELL_KILL_CMD,
-    }
-
-
-def set_runtime(
-    node: "Node",
-    workload_config: "WorkloadType",
-    engine: "WorkflowEngine",
-    task_resource=None,
-):
-    """Configure runtime/submission variables on ``node``.
-
-    With no task_resource, install the carrier at this scope (including an
-    intentional carrier switch). A Slurm task_resource selects job resources
-    under that carrier. Use set_resource_variables for local declarations
-    that also inherit the parent queue, including in a parallel family.
-    Dispatches to the carrier-specific implementation based on
-    ``workload_config.submit_carrier``.
-    """
-    if workload_config.workload_type == "shell":
-        # Host-local task. Under the orvix carrier submit it through the
-        # orvix local backend (orvix_job pins ORVIX_SCHEDULER=local on the
-        # node); otherwise run it directly.
-        carrier = getattr(workload_config, "submit_carrier", "direct")
-        if carrier == "orvix":
-            node.add_variables(orvix_job(engine, "local"))
-        elif carrier == "direct":
-            node.add_variables(shell_job(engine))
-        else:
-            raise ValueError(f"shell workload does not support submit carrier: {carrier}")
-        return
-
-    if workload_config.workload_type != "slurm":
-        raise ValueError(f"workload type is not supported: {workload_config}")
-
-    carrier = workload_config.submit_carrier
-
-    if carrier == "orvix":
-        set_orvix_runtime(node, workload_config, engine, task_resource)
-    elif carrier == "slsubmit6":
-        set_slsubmit_runtime(node, workload_config, engine, task_resource)
-    else:
-        raise ValueError(f"submit carrier is not supported: {carrier}")
-
-
 __all__ = [
     "common_setting",
-    "ecflow_resource_variables",
     "script_cmd_var_name",
     "script_cmd_value",
-    "set_resource_variables",
-    "set_runtime",
     "set_scheduling",
-    "shell_job",
 ]

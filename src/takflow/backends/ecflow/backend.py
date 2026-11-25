@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Union
 
 from takflow.flow import Node, NodeType, WorkflowBackend
-from takflow.backends.runtime.resources import ecflow_resource_variables
+from takflow.jobs.submission.variables import ecflow_resource_variables
 from takflow.backends.ecflow.serializer import (
     Clock,
     DState,

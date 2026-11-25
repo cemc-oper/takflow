@@ -83,7 +83,8 @@ Jinja2 作业模板在第一条可执行语句之前调用 `render_orvix_resourc
 ecFlow 和 takler 在创建 job 时从 task 向上查找最近的节点值，再采用模板回退。Shell 源作业直接包含本次有效资源。串行模板省略并行规模。
 
 ```python
-from takflow.backends.runtime import set_resource_variables, set_runtime
+from takflow.jobs.submission import set_runtime
+from takflow.jobs.submission.variables import set_resource_variables
 from takflow.jobspec import TaskResource
 
 set_runtime(suite, config.workload, engine)
@@ -97,7 +98,7 @@ ecFlow 在声明资源的 suite、family 或 task 上写入标量。常用变量
 
 源作业或其 include 包含所选载体的完整指令，例如 ORVIX 的 `#ORVIX memory=%MEMORY%` 或原生 Slurm 的 `#SBATCH --mem=%MEMORY%`。创建作业时，ecFlow 从 task 向上查找标量，再采用模板回退，例如 `%WALLTIME:06:00:00%`。可选字段在两处都无值时，生成的作业中会省略整行。已加载定义可直接用 `family.add_variable("MEMORY", "8G")` 首次声明内存，用 `task.add_variable("MEMORY", "4G")` 覆盖，用 `task.delete_variable("MEMORY")` 恢复继承。再删除 family 上的声明，下一次创建的作业就会恢复模板回退或省略该行。
 
-日志文件名可以同时含有 ecFlow 和 Slurm 的占位符。通过 takflow 的节点 API 传入原始路径即可。在原生 ecFlow Python API 中，可用 `node.add_variable(ecflow_resource_variables({"JOB_OUTPUT": "/log dir/%A_%a.%j.out"}))` 写入所需的百分号转义。该函数由 `takflow.backends.runtime` 导出，只返回传入的标量。删除日志覆盖后，默认路径中的 `%ECF_JOBOUT%` 会随本次尝试重新展开。升级已有产物时，用同一次构建生成的定义和源作业配套加载。
+日志文件名可以同时含有 ecFlow 和 Slurm 的占位符。通过 takflow 的节点 API 传入原始路径即可。在原生 ecFlow Python API 中，可用 `node.add_variable(ecflow_resource_variables({"JOB_OUTPUT": "/log dir/%A_%a.%j.out"}))` 写入所需的百分号转义。该函数由 `takflow.jobs.submission.variables` 导出，只返回传入的标量。删除日志覆盖后，默认路径中的 `%ECF_JOBOUT%` 会随本次尝试重新展开。升级已有产物时，用同一次构建生成的定义和源作业配套加载。
 
 ecFlow 在没有 requeue 回退的 ORVIX 模板中按 `REQUEUE` 选择公共 include。使用标准 Application 时启用 `use_public_resources` 并将输出的 `ecflow/include` 加入 `ECF_INCLUDE`。原生 Slurm 模板可以使用 `%include <common/requeue.h>`，只有有效 False 产生 `#SBATCH --no-requeue`。takler 用第二轮 Jinja 处理缺失值与布尔值。
 

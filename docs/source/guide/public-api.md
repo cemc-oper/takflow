@@ -43,7 +43,9 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.checks` | `GenerationCheckReport`、诊断/异常、能力预检、本地路径/文件及已生成定义/脚本检查；[生成检查](generation-checks.md)明确阶段与未检查边界 |
 | `takflow.backends.ecflow` / `takflow.backends.takler` | `EcflowBackend` / `TaklerBackend`；能力差异以矩阵为准，takler 是可选运行时依赖 |
 | `takflow.backends.ecflow.serializer` | 已文档化的纯 Python ecFlow 低层 serializer；新应用优先使用 `EcflowBackend` |
-| `takflow.backends.runtime` | `set_runtime`、`set_scheduling`、`common_setting`、脚本变量和 shell job helpers |
+| `takflow.backends.runtime` | `set_scheduling`、`common_setting` 和脚本命令变量 |
+| `takflow.jobs.submission` | `set_runtime` 为节点绑定提交命令、取消命令和资源 |
+| `takflow.jobs.submission.variables/direct/orvix/slsubmit6` | 资源变量声明与编码、各载体的提交和取消命令。[后端与资源载体](backends.md) |
 | `takflow.toolkit` | resource/job/credential 的可复用生成入口及已导出的 observability helpers |
 | `takflow.toolkit.job/resource/credential/observability` | 已文档化的模板渲染、资源复制、credential hook 和静态 definition manifest 入口 |
 | `takflow.build_info` | `BuildInfo`、`get_build_info`、`get_build_info_lines`、`build_info_scope` |
@@ -54,8 +56,7 @@ observability 校验能力的依赖和启用条件见[可观测性](observabilit
 
 ### 2.2 兼容 facade 与历史入口
 
-- `takflow.toolkit.util` 是 `takflow.backends.runtime` helpers 的兼容 re-export facade；
-  `takflow.toolkit` 根部的相关 re-export 同样保留。facade 必须委托同一实现并保持行为一致。
+- 调度、引擎通用设置和脚本命令的兼容入口由 `takflow.toolkit.util` 和 `takflow.toolkit` 提供。
 - `takflow.flow.register_hook` 是 `create_hook_decorator` 的现有兼容别名，不因推荐名称存在而
   直接删除。
 - 包根部和已列出模块之间的 re-export 都是公共入口。调整其实现位置时，应保留导入路径或按

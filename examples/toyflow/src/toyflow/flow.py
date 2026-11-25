@@ -22,9 +22,9 @@ from takflow.backends.runtime import (
     common_setting,
     script_cmd_var_name,
     script_cmd_value,
-    set_runtime,
     set_scheduling,
 )
+from takflow.jobs.submission import set_runtime
 
 from toyflow.config import ToyflowConfig
 from toyflow.hooks import (

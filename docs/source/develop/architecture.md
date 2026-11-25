@@ -11,10 +11,11 @@ takflow 按职责分为七层，上层应用（如 `mcv-workflow`）只与其中
   takler JSON；后端差异见[能力矩阵](../guide/backends.md)。
 - **生成编排层 `generation.py`**：统一 definition/shell 模式分发、输出路径解析和保存
   前后回调顺序；应用注入领域 builder/renderer，shell 分支不创建后端或引擎。
-- **转换层 `backends/`**：把抽象定义转换为具体运行形式：
+- **转换层 `backends/` 与 `jobs/submission/`** 将抽象定义和资源转换为运行设置。
   - `backends/ecflow/` → ecFlow `.def`
   - `backends/takler/` → takler flow
-  - `backends/runtime/` → `#ORVIX` / `slsubmit6` 运行时提交描述
+  - `backends/runtime/` → 调度、通用设置和任务脚本命令
+  - `jobs/submission/` → direct、orvix、slsubmit6 提交和取消命令及节点资源声明
 - **工具层 `toolkit/`**：为上层应用构建 CLI 提供可复用能力（渲染作业模板、复制静态资源、
   渲染凭证文件）。
 - **契约层 `spec/jobspec/`**：语言无关的作业运行资源契约的 vendor 只读副本
@@ -33,7 +34,8 @@ src/takflow/
 ├── backends/               # 转换层
 │   ├── ecflow/             # ecFlow .def 后端（含折叠进来的 light-ecflow 序列化器）
 │   ├── takler/             # takler 后端
-│   └── runtime/            # orvix / slsubmit6 运行时载体
+│   └── runtime/            # 调度、通用设置和任务脚本命令
+├── jobs/submission/        # 提交载体和节点资源变量
 └── toolkit/                # 工具层（job / resource / credential / util）
 ```
 
@@ -41,7 +43,7 @@ src/takflow/
 
 - **orvix**（Go，HPC 作业提交层）：消费 `#ORVIX` 指令与 jobspec schema，
   把作业脚本翻译为 `#SBATCH`（slurm）/ `#DSUB`（donau）等并提交。
-  takflow 通过 `backends/runtime/orvix` 生成它的输入。
+  takflow 的 `jobspec` 提供指令渲染，`jobs/submission/orvix.py` 提供提交和取消命令。
 - **takler**（Python 工作流调度器）：ecFlow 之外的另一个引擎后端，
   由 `backends/takler` 输出其 flow 定义。
 

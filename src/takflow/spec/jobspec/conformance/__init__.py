@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from typing import Dict
 
+from takflow.jobspec import to_orvix_directives
 from takflow.jobspec.model import ResourceSpec
-from takflow.backends.runtime.orvix import to_orvix_directives
 
 #: Schedulers exercised by the conformance harness.
 SCHEDULERS = ("slurm", "donau", "local")

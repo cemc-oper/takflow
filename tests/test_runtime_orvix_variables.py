@@ -3,15 +3,14 @@
 import pytest
 
 from takflow.backends.ecflow.backend import EcflowBackend
-from takflow.backends.runtime import set_runtime
 from takflow.config import SlurmWorkload
 from takflow.flow import WorkflowEngine
+from takflow.jobs.submission import set_runtime
+from takflow.jobs.submission.variables import ecflow_resource_variables, set_resource_variables
 from takflow.jobspec import TaskResource
 
 
 def test_ecflow_resource_edits_contain_only_supplied_scalars():
-    from takflow.backends.runtime import ecflow_resource_variables
-
     assert ecflow_resource_variables({
         "QUEUE": "normal", "WCKEY": "project", "APPLICATION": None, "MEMORY": "0",
         "NODES": 4, "TASKS_PER_NODE": 64, "REQUEUE": False, "JOB_NAME": "trial forecast",
@@ -88,8 +87,6 @@ def test_unset_task_resources_preserve_inherited_or_script_defaults(tmp_path):
 
 @pytest.mark.parametrize("carrier", ["orvix", "slsubmit6"])
 def test_carrier_scope_and_explicit_local_declarations(tmp_path, carrier):
-    from takflow.backends.runtime import set_resource_variables
-
     engine = WorkflowEngine(EcflowBackend())
     suite = engine.Suite("suite")
     set_runtime(suite, SlurmWorkload(project="forecast", submit_carrier=carrier), engine)

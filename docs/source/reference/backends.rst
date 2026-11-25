@@ -35,8 +35,28 @@ takflow.backends.takler
 takflow.backends.runtime
 ------------------------
 
-运行时资源载体适配器：把通用资源模型翻译为调度器相关的运行时变量/指令。
+工作流调度、通用设置和任务脚本命令。
 
 .. automodule:: takflow.backends.runtime
    :members:
    :show-inheritance:
+
+takflow.jobs.submission
+-----------------------
+
+绑定提交命令、取消命令和节点资源。迁移旧导入时参见 :doc:`../guide/backends`。
+
+.. automodule:: takflow.jobs.submission
+   :members:
+
+.. automodule:: takflow.jobs.submission.variables
+   :members:
+
+.. automodule:: takflow.jobs.submission.direct
+   :members:
+
+.. automodule:: takflow.jobs.submission.orvix
+   :members:
+
+.. automodule:: takflow.jobs.submission.slsubmit6
+   :members:

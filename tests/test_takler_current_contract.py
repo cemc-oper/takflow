@@ -17,11 +17,12 @@ from takler.server.scheduler import Scheduler  # noqa: E402
 from takler.tasks.shell.shell_render import ShellRender  # noqa: E402
 from takler.tasks.shell.shell_script_task import ShellScriptTask  # noqa: E402
 
-from takflow.backends.runtime import set_runtime  # noqa: E402
-from takflow.backends.runtime.slsubmit import slsubmit6_parallel_job, slsubmit6_serial_job  # noqa: E402
 from takflow.backends.takler.backend import TaklerBackend  # noqa: E402
 from takflow.config import ShellWorkload, SlurmWorkload  # noqa: E402
 from takflow.flow import WorkflowEngine  # noqa: E402
+from takflow.jobs.submission import set_runtime  # noqa: E402
+from takflow.jobs.submission.slsubmit6 import slsubmit6_parallel_job, slsubmit6_serial_job  # noqa: E402
+from takflow.jobs.submission.variables import set_resource_variables  # noqa: E402
 from takflow.jobspec import TaskResource  # noqa: E402
 from takflow.jobspec.model import ResourceSpec  # noqa: E402
 from takflow.jobspec.render import render_resource_block  # noqa: E402
@@ -351,7 +352,6 @@ def test_unsupported_attributes_fail_with_stable_errors():
 
 
 def test_shared_resource_header_follows_takler_parent_edits(tmp_path):
-    from takflow.backends.runtime import set_resource_variables
     from takflow.toolkit.job import render_orvix_resource_block
 
     engine = WorkflowEngine(TaklerBackend())

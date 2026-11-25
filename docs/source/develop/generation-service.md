@@ -235,7 +235,7 @@ test-suite 7 个用例、14 个 generate/verify 阶段全部通过。服务接�
   `generate_output_log_data`、`set_build_info_provider`；
 - credential：现有渲染与共享注册表入口；
 - observability：`export_definition_manifest`、`write_definition_manifest` 等；
-- runtime：`takflow.backends.runtime` 及 `takflow.toolkit.util` 的既有兼容 facade。
+- runtime 在生成服务引入时保留了原有入口。当前提交适配路径见[后端与资源载体](../guide/backends.md)。
 
 新服务不吞并 `resource/config/job/credential` 命令。可逐步转为兼容 facade 的是**各应用**
 `generate_workflow()` 的重复编排，而不是上述 takflow toolkit 原子能力。私有

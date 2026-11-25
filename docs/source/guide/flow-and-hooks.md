@@ -9,7 +9,8 @@
 ```python
 from takflow.flow import WorkflowEngine
 from takflow.backends.ecflow import EcflowBackend
-from takflow.backends.runtime import common_setting, set_runtime, set_scheduling
+from takflow.backends.runtime import common_setting, set_scheduling
+from takflow.jobs.submission import set_runtime
 
 engine = WorkflowEngine(EcflowBackend())
 

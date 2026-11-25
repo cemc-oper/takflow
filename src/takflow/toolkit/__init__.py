@@ -29,7 +29,6 @@ from takflow.toolkit.util import (
     script_cmd_var_name,
     script_cmd_value,
     set_scheduling,
-    shell_job,
 )
 
 __all__ = [
@@ -52,7 +51,6 @@ __all__ = [
     "script_cmd_var_name",
     "script_cmd_value",
     "set_scheduling",
-    "shell_job",
     "ObservabilityConfigError",
     "TaskMapping",
     "execution_environment",
