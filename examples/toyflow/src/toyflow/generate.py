@@ -14,7 +14,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from takflow.build_info import get_build_info, get_build_info_lines
 from takflow.flow.generate import generate_workflow as generate_workflow_service
-from takflow.toolkit.observability import (
+from takflow.observability import (
     ObservabilityConfigError,
     TaskMapping,
     export_definition_manifest,

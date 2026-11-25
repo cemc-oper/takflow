@@ -48,8 +48,8 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.flow.backends.ecflow.serializer` | 纯 Python ecFlow 低层 serializer。新应用优先使用 `EcflowBackend` |
 | `takflow.jobs.submission` | `set_runtime` 为节点绑定提交命令、取消命令和资源 |
 | `takflow.jobs.submission.variables/direct/orvix/slsubmit6` | 资源变量声明与编码、各载体的提交和取消命令。[后端与资源载体](backends.md) |
-| `takflow.toolkit` | resource/credential 的可复用生成入口及已导出的 observability helpers |
-| `takflow.toolkit.resource/credential/observability` | 已文档化的资源复制、credential hook 和静态 definition manifest 入口 |
+| `takflow.observability` | Execution 运行环境、任务映射和静态 definition manifest 导出 |
+| `takflow.toolkit.resource/credential` | 资源复制、凭证钩子和凭证渲染入口 |
 | `takflow.build_info` | `BuildInfo`、`get_build_info`、`get_build_info_lines`、`build_info_scope` |
 
 可选依赖不改变默认导入契约：没有 takler 包时可以导入 `takflow` 和

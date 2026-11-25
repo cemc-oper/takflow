@@ -12,8 +12,7 @@ from takflow.config import (
     ObservabilityConfig,
     load_config_from_file,
 )
-from takflow.toolkit import execution_environment
-from takflow.toolkit.observability import export_definition_manifest
+from takflow.observability import execution_environment, export_definition_manifest
 
 
 def settings(**overrides):
@@ -57,7 +56,7 @@ def test_unknown_mode_is_rejected():
 def test_new_mode_has_no_legacy_export_or_host_filesystem_requirement(
     monkeypatch, tmp_path
 ):
-    from takflow.toolkit import observability
+    from takflow import observability
 
     def reject_legacy(*args):
         pytest.fail("Execution must not load the legacy schema")
@@ -116,7 +115,7 @@ class Block:
             raise AssertionError(fullname)
 sys.meta_path.insert(0, Block())
 from takflow.config import ObservabilityConfig
-from takflow.toolkit import execution_environment
+from takflow.observability import execution_environment
 config = ObservabilityConfig(**SETTINGS)
 assert execution_environment(config)['SLEDRA_MODE'] == 'execution-v2'
 """.replace("SETTINGS", repr(settings()))

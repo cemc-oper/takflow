@@ -11,7 +11,7 @@ import pytest
 from takflow.flow.backends.ecflow import EcflowBackend
 from takflow.config import ObservabilityConfig
 from takflow.flow import WorkflowEngine
-from takflow.toolkit.observability import (
+from takflow.observability import (
     ObservabilityConfigError,
     TaskMapping,
     expand_task_parameters,

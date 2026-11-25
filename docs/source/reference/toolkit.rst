@@ -1,7 +1,7 @@
 takflow.toolkit — 工具层
 ========================
 
-为应用提供静态资源复制、配置和凭证渲染及可选观测导出。作业渲染入口见 :doc:`jobs`。
+为应用提供静态资源复制、配置和凭证渲染。作业渲染入口见 :doc:`jobs`。
 
 takflow.toolkit.resource
 ------------------------
@@ -23,15 +23,6 @@ takflow.toolkit.credential
 --------------------------
 
 .. automodule:: takflow.toolkit.credential
-   :members:
-   :show-inheritance:
-
-takflow.toolkit.observability
------------------------------
-
-可选 Sledra 配置、任务映射和定义导出接口；启用方式见 :doc:`../guide/observability`。
-
-.. automodule:: takflow.toolkit.observability
    :members:
    :show-inheritance:
 

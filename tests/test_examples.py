@@ -148,7 +148,7 @@ def test_toyflow_optional_definition_manifest(toyflow, invoke_mode, tmp_path):
     from takflow.config import ObservabilityConfig
     from takflow.jobs.render import render_jobs_from_directory
     from takflow.toolkit import copy_resources_to_output
-    from takflow.toolkit.observability import ObservabilityConfigError
+    from takflow.observability import ObservabilityConfigError
     from toyflow.generate import generate_workflow
     from toyflow.util import get_resources_path
 

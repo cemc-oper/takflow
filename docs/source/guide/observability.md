@@ -39,7 +39,7 @@ observability:
 应用适配器从公共函数获取需要装配的值：
 
 ```python
-from takflow.toolkit import execution_environment
+from takflow.observability import execution_environment
 
 values = execution_environment(config.observability)
 # 新版启用：SLEDRA_MODE、SLEDRA_BIN、SLEDRA_BASH_LIBRARY、SLEDRA_ROOT。

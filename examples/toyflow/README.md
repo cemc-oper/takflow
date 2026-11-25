@@ -12,7 +12,7 @@
 | `src/toyflow/config.py` | 定义 `ForecastConfig` 和 `ToyflowConfig` | 配置模型与旧 loader |
 | `src/toyflow/flow.py` | 用 `create_suite(config, engine)` 构建节点、trigger、变量和调度 | `takflow.flow`、后端 runtime helpers |
 | `src/toyflow/hooks.py` | 定义应用 hook 点并注入 `main/verify`；渲染 toyflow 凭证片段 | 通用 registry 与 credential hook |
-| `src/toyflow/generate.py` | 适配配置渲染、definition 保存和可选观测清单 | `takflow.flow.generate`、observability toolkit |
+| `src/toyflow/generate.py` | 适配配置渲染、definition 保存和可选观测清单 | `takflow.flow.generate`、`takflow.observability` |
 | `src/toyflow/cli.py` | 组合应用自有的 resource/config/job/workflow/credential 命令 | 旧 toolkit 生成入口 |
 | `src/toyflow/resources/` | 提供配置、作业模板、include 和业务脚本 | Jinja 渲染与资源复制 |
 

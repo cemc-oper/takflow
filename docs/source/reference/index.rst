@@ -16,5 +16,6 @@ API 参考
    flow
    generation
    backends
+   observability
    toolkit
    jobspec-schema
