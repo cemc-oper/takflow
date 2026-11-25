@@ -61,7 +61,7 @@ machine 由公共选择管理，拒绝手工ResourceEntry复制整个machine树�
 标准Environment只渲染最终有效模板，禁用组件不读模板正文；inline先准备脚本，external正确引用路径。
 已启用的 ecFlow task 指向本地 jobs 目录时，完整 build 要求本轮已渲染相应 job。分步 workflow 可以消费已准备的输出。
 
-流程继续调用takflow.generation.generate_workflow。
+流程继续调用takflow.flow.generate.generate_workflow。
 definition回调仍为builder → before_save → save → after_save，异常保留原异常与已写文件。
 标准definition为0644、shell runner为run_workflow.sh/0755，原生JSON不插注释品牌头。
 before_save/after_save为已有保存扩展点，不用整套handler替换默认阶段。

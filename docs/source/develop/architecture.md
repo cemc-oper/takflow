@@ -9,7 +9,7 @@ takflow 按职责分为七层，上层应用（如 `mcv-workflow`）只与其中
 - **抽象层 `flow/`**：与后端无关的流程定义 API（`WorkflowEngine`、`Node`、
   `WorkflowBackend`、Hook 注册表），同一套节点树可在公共支持子集上生成 ecFlow `.def` 或
   takler JSON；后端差异见[能力矩阵](../guide/backends.md)。
-- **生成编排层 `generation.py`**：统一 definition/shell 模式分发、输出路径解析和保存
+- **生成编排层 `flow/generate.py`**：统一 definition/shell 模式分发、输出路径解析和保存
   前后回调顺序；应用注入领域 builder/renderer，shell 分支不创建后端或引擎。
 - **引擎后端与作业生成** 根据流程定义和资源生成引擎定义、作业与运行设置。
   - `flow/backends/ecflow/` → ecFlow `.def`
@@ -31,8 +31,8 @@ src/takflow/
 ├── jobspec/                # 任务资源 Python 模型
 ├── flow/                   # 抽象层（WorkflowEngine / Node / Hook）
 │   ├── scheduling.py       # 将调度规则应用到节点
+│   ├── generate.py         # 模式分发、路径和保存回调
 │   └── backends/           # ecFlow .def 及 takler flow 后端
-├── generation.py           # 生成编排层（模式分发 / 路径 / 保存回调）
 ├── jobs/                   # 作业渲染、脚本、资源头和提交适配
 └── toolkit/                # 工具层（resource / config / credential）
 ```
@@ -50,7 +50,7 @@ src/takflow/
 - **Hook 词汇表归应用**：takflow 只提供注册表机制（`BaseHookRegistry`），
   不预定义任何领域 hook 点；各应用定义自己的 `EngineHookPoint` 枚举与上下文。
 - **生成职责分层**：`config generate` 与领域 suite/shell 构建仍由应用实现；
-  `workflow generate` 的模式分发、输出路径和保存编排由 `takflow.generation` 提供，
+  `workflow generate` 的模式分发、输出路径和保存编排由 `takflow.flow.generate` 提供，
   应用 CLI 与历史选项保持独立，详见[生成服务设计](generation-service.md)。
 - **凭证渲染是共享注册表**：与 engine hook 不同，credential hook 使用 takflow 全局
   注册表，业务包与业务扩展包按优先级向同一文件贡献片段。

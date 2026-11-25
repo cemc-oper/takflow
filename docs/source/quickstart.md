@@ -61,7 +61,7 @@ def create_suite(config, engine):
 
 ### 3. 通过低层生成服务保存定义
 
-toyflow 自己的 `generate_workflow()` 是薄适配入口：通用模式分发、输出路径和保存编排委托 `takflow.generation`，应用保留 suite builder 与可选观测清单的保存回调。
+toyflow 自己的 `generate_workflow()` 是薄适配入口：通用模式分发、输出路径和保存编排委托 `takflow.flow.generate`，应用保留 suite builder 与可选观测清单的保存回调。
 
 ```python
 from toyflow.generate import generate_workflow
@@ -83,7 +83,7 @@ toyflow job generate --config-file examples/toyflow/config/toyflow.yaml --output
 toyflow workflow generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
 ```
 
-这些命令由 `takflow.toolkit` 和 `takflow.generation` 组成，属于 toyflow 自己的旧 CLI。它们不会自动补跑前置步骤，也不会发布标准成功清单。完整实现见 `examples/toyflow/src/toyflow/cli.py`；标准应用的完整构建、分步命令、结果和退出码见[标准命令契约](guide/cli.md)。
+这些命令由 `takflow.toolkit` 和 `takflow.flow.generate` 组成，属于 toyflow 自己的旧 CLI。它们不会自动补跑前置步骤，也不会发布标准成功清单。完整实现见 `examples/toyflow/src/toyflow/cli.py`；标准应用的完整构建、分步命令、结果和退出码见[标准命令契约](guide/cli.md)。
 
 ## 生成的流程结构
 

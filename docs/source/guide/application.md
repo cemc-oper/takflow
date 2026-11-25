@@ -74,7 +74,7 @@ mapping 或文件，以保证覆盖先于派生。显式 definition `output` 仍
 `BuildPaths` 提供 `output_root`、有序 `resource_layers`、`workflow_output`、`config_dir`、
 `config_file`、`jobs_dir`、`scripts_dir`、`ecflow_include` 和 `takler_include`。
 标准 config 为 `config/config.h`（ecFlow）或 `config/config.sh`，作业统一为 `jobs/`。
-现有低层 `takflow.generation` 的显式 output 原样解释规则、Context/Result、保存回调顺序不变；
+现有低层 `takflow.flow.generate` 的显式 output 原样解释规则、Context/Result、保存回调顺序不变；
 新标准路径仅在 `Application` 边界解释。
 
 ## 数据声明与领域扩展

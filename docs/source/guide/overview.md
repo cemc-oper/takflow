@@ -139,7 +139,7 @@ orvix 拥有语言无关的 jobspec 契约；takflow 保存只读 vendor 副本�
 | 作业资源 | 节点数、队列、墙钟等 `TaskResource` / `ResourceSpec` 申请参数 | [作业资源](jobspec.md) |
 | 工作流后端 | ecFlow / takler 的节点树实现及其能力差异 | [后端能力矩阵](backends.md) |
 | 资源载体 | orvix / slsubmit6 等提交与取消命令通道，不是工作流后端 | [资源载体](backends.md) |
-| 低层生成服务 | `takflow.generation` 的模式分发、输出路径和保存编排 | [生成服务 API](../reference/generation.rst) |
+| 低层生成服务 | `takflow.flow.generate` 的模式分发、输出路径和保存编排 | [生成服务 API](../reference/generation.rst) |
 | 独立产物检查 | 对已有 definition、job、Shell 和清单执行所选检查 | [产物检查](generation-checks.md) |
 | 旧 Python 适配 | 旧复制、配置渲染等入口的历史返回和副作用 | [旧接口适配](legacy-adapters.md) |
 
@@ -147,7 +147,7 @@ orvix 拥有语言无关的 jobspec 契约；takflow 保存只读 vendor 副本�
 
 ## 标准路径与历史入口
 
-新应用优先使用 `Application.prepare()`、`takflow.build` 和公共 CLI。`takflow.flow` 与 `takflow.jobspec` 是这条主路径中的领域能力；`takflow.generation` 是标准 workflow 阶段复用的低层生成编排入口。
+新应用优先使用 `Application.prepare()`、`takflow.build` 和公共 CLI。`takflow.flow` 与 `takflow.jobspec` 是这条主路径中的领域能力；`takflow.flow.generate` 是标准 workflow 阶段复用的低层生成编排入口。
 
 旧 toolkit 适配器、应用自有 CLI 和历史 handler 仍用于兼容既有消费者，但不应与标准路径拼接成另一套并行的构建生命周期。旧复制与配置接口见[旧接口适配](legacy-adapters.md)；迁移时先阅读[CLI 迁移](cli-migration.md)，公共入口及兼容边界见[公共 API 与兼容策略](public-api.md)。
 

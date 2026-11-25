@@ -3,7 +3,7 @@
 状态：**已实现（TF-07）；TYM 消费者已验证（TF-08）** · 日期：2026-11-02
 
 本文记录 TF-06 的四应用对照、TF-07 落地的公共 API 和 TF-08 真实消费者证据。
-`takflow.generation` 已接入 toyflow 与 TYM；GFS-POST、MCV 不在本次同步修改，
+`takflow.flow.generate` 已接入 toyflow 与 TYM；GFS-POST、MCV 不在本次同步修改，
 也不据此实现公共 CLI。
 
 上述为 TF-07/08 的原始接入记录。TC-03 已在同一生成服务接入[阶段检查](../guide/generation-checks.md)，并为 MCV/GFS 旧保存入口增加薄检查调用；没有把它们的领域构图或旧返回整体迁成新的默认管线。
@@ -69,7 +69,7 @@ TF-08 的目录级前置已完成。
 
 ## 3. 公共 API
 
-`takflow.generation` 暴露一个编排入口和两个小数据类型：
+`takflow.flow.generate` 暴露一个编排入口和两个小数据类型：
 
 ```python
 from collections.abc import Callable

@@ -4,10 +4,10 @@
 
 ## 选择后端
 
-标准应用在 `Application` 中声明 suite builder，由标准构建的 workflow 阶段通过 `takflow.generation` 按 `workflow_mode` 选择后端和默认后缀。直接使用低层生成服务时，应用显式调用同一入口（toyflow 的 `src/toyflow/generate.py` 是这种旧入口的薄适配）：
+标准应用在 `Application` 中声明 suite builder，由标准构建的 workflow 阶段通过 `takflow.flow.generate` 按 `workflow_mode` 选择后端和默认后缀。直接使用低层生成服务时，应用显式调用同一入口（toyflow 的 `src/toyflow/generate.py` 是这种旧入口的薄适配）：
 
 ```python
-from takflow.generation import generate_workflow
+from takflow.flow.generate import generate_workflow
 
 result = generate_workflow(config, suite_builder=create_suite)
 output_path = result.output_path  # ecFlow: .def；takler: .json

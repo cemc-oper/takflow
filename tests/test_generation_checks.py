@@ -25,7 +25,7 @@ from takflow.checks import (
 from takflow.config import BaseWorkflowConfig
 from takflow.artifact_checks import check_artifacts
 from takflow.flow import WorkflowEngine
-from takflow.generation import generate_workflow
+from takflow.flow.generate import generate_workflow
 
 
 takler_required = pytest.mark.skipif(importlib.util.find_spec("takler") is None,

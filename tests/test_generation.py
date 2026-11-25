@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import takflow.generation as generation
+import takflow.flow.generate as generation
 from takflow.config import BaseWorkflowConfig, ShellWorkload
 from takflow.flow import WorkflowEngine
-from takflow.generation import generate_workflow
+from takflow.flow.generate import GenerationContext, GenerationResult, generate_workflow
 
 
 def _config(tmp_path: Path, mode: str = "ecflow") -> BaseWorkflowConfig:
@@ -59,6 +59,7 @@ def test_definition_default_output_and_result(mode, tmp_path):
 
     suffix = ".def" if mode == "ecflow" else ".json"
     output_path = selected_output / f"demo{suffix}"
+    assert isinstance(result, GenerationResult)
     assert result.mode == mode
     assert result.output_repo_base == selected_output
     assert result.output_path == output_path
@@ -67,9 +68,13 @@ def test_definition_default_output_and_result(mode, tmp_path):
     assert not (tmp_path / "from-config").exists()
 
 
-def test_definition_explicit_output_is_used_verbatim(tmp_path):
+@pytest.mark.parametrize("absolute", [False, True], ids=["relative", "absolute"])
+def test_definition_explicit_output_is_used_verbatim(tmp_path, monkeypatch, absolute):
+    monkeypatch.chdir(tmp_path)
     config = _config(tmp_path)
-    output = tmp_path / "elsewhere" / "definition.custom"
+    output = Path("elsewhere") / "definition.custom"
+    if absolute:
+        output = tmp_path / output
 
     result = generate_workflow(
         config,
@@ -80,6 +85,7 @@ def test_definition_explicit_output_is_used_verbatim(tmp_path):
     assert result.output_path == output
     assert output.is_file()
     assert not (tmp_path / "from-config" / "demo.def").exists()
+    assert not (tmp_path / "from-config" / "elsewhere").exists()
 
 
 def test_missing_output_repo_is_an_error(tmp_path):
@@ -146,6 +152,7 @@ def test_definition_callback_order_and_context(tmp_path, monkeypatch):
     assert events == ["builder", "before_save", "save", "after_save"]
     assert contexts[0] is contexts[1]
     context = contexts[0]
+    assert isinstance(context, GenerationContext)
     assert context.config is config
     assert context.suite is result.suite
     assert context.engine is result.suite.engine

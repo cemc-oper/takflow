@@ -30,7 +30,7 @@ from takflow.config import ConfigValidationError
 from takflow.flow.backends.ecflow._job_paths import ecflow_task_templates
 from takflow.flow.backends.ecflow.serializer.attributes import _native_variable_quotes
 from takflow.flow.hook import _safe_hook_errors
-from takflow.generation import GenerationContext, GenerationResult, generate_workflow
+from takflow.flow.generate import GenerationContext, GenerationResult, generate_workflow
 from takflow.spec.jobspec import contract_version
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
 from takflow.jobs.render import render_jobs_from_directory
@@ -502,7 +502,7 @@ class _Pipeline:
                        resource_layers=[{"name": layer.name, "root": str(layer.root)} for layer in self.context.paths.resource_layers])
         payload["implementation_sha256"] = {
             name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-            for name in ("application.py", "build.py", "generation.py", "checks.py", "_files.py",
+            for name in ("application.py", "build.py", "flow/generate.py", "checks.py", "_files.py",
                          "flow/backends/ecflow/_job_paths.py",
                          "flow/node.py", "flow/hook.py", "flow/backend.py", "flow/scheduling.py",
                          "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py",

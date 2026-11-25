@@ -15,7 +15,7 @@ from takflow.application import Application, ApplicationBrand
 from takflow.build import build, run_stage
 from takflow.checks import GenerationCheckError, GenerationCheckReport, check_definition_output
 from takflow.config import BaseWorkflowConfig, load_validated_config, validate_config
-from takflow.generation import generate_workflow
+from takflow.flow.generate import generate_workflow
 from takflow.spec.jobspec import contract_version, schema_keys, schema_path
 from takflow.spec.jobspec.conformance import (
     CASES,

@@ -1,7 +1,7 @@
 """toyflow 生成步骤的实现（config generate / workflow generate）。
 
 ``resource copy`` 使用 ``takflow.toolkit``，``job generate`` 使用
-``takflow.jobs.render``。应用使用 ``takflow.generation`` 编排流程生成，并提供配置渲染和 manifest 回调。
+``takflow.jobs.render``。应用使用 ``takflow.flow.generate`` 编排流程生成，并提供配置渲染和 manifest 回调。
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Optional, Union
 from jinja2 import Environment, FileSystemLoader
 
 from takflow.build_info import get_build_info, get_build_info_lines
-from takflow.generation import generate_workflow as generate_workflow_service
+from takflow.flow.generate import generate_workflow as generate_workflow_service
 from takflow.toolkit.observability import (
     ObservabilityConfigError,
     TaskMapping,

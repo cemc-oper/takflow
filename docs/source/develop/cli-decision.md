@@ -9,7 +9,7 @@
 takflow **不实现 `takflow.cli`，不增加公共 console script，也不建立 CLI 插件注册表**。
 各应用继续拥有自己的 entry point、命令组、历史选项、提示文本和异常展示；框架共享边界保持为：
 
-- `takflow.generation`：definition/shell 分发、输出路径与保存编排；
+- `takflow.flow.generate`：definition/shell 分发、输出路径与保存编排；
 - `takflow.toolkit`：resource/job/credential 等原子生成能力；
 - `takflow.config` / `takflow.flow` / `takflow.flow.backends` 提供配置、建树与后端公共 API。
 
@@ -67,7 +67,7 @@ base/oper 的差异不是简单增加一个资源目录：
 
 ### 5.2 仅公共 `workflow generate`
 
-**不采用。** 真正重复的后端选择、路径解析和保存编排已经由 `takflow.generation` 共享；再增加 CLI 层只统一 click 声明，仍需注入 config loader、builder/renderer 和提示策略，收益不足以抵消新的兼容面。
+**不采用。** 真正重复的后端选择、路径解析和保存编排已经由 `takflow.flow.generate` 共享；再增加 CLI 层只统一 click 声明，仍需注入 config loader、builder/renderer 和提示策略，收益不足以抵消新的兼容面。
 
 ### 5.3 保留应用 CLI + 生成服务/toolkit
 
