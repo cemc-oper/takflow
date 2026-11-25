@@ -19,7 +19,8 @@ from takflow.spec.jobspec import contract_version
 _IMPLEMENTATION_FILES = (
     "application/declaration.py", "application/inputs.py", "application/context.py", "application/prepare.py",
     "build/pipeline.py", "build/assets.py", "build/runtime_config.py", "build/result.py", "build/manifest.py",
-    "config/credentials.py", "checks.py", "_files.py", "build_info.py",
+    "config/credentials.py", "_files.py", "build_info.py",
+    "checks/diagnostics.py", "checks/preflight.py", "checks/artifacts.py", "checks/_native.py",
     "flow/generate.py", "flow/node.py", "flow/hook.py", "flow/backend.py", "flow/scheduling.py",
     "flow/backends/ecflow/_job_paths.py", "flow/backends/ecflow/serializer/attributes.py",
     "jobs/render.py", "jobs/scripts.py", "jobs/headers.py",

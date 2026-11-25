@@ -33,7 +33,7 @@ takler 在单独的进程中解析定义。它将所选任务的脚本、实际�
 例如 Bash 报告语法错误时，`object` 是被检查的脚本，`reason` 保留解释器提供的行号。解释器启动失败、进程被信号终止或临时目录不可写时，该项为 `incomplete`。通过清单选择定义时，解析错误定位到实际生成的定义文件。随后运行的检查保留构建清单、原文件内容及权限。
 
 ```python
-from takflow.artifact_checks import check_artifacts
+from takflow.checks import check_artifacts
 
 result = check_artifacts(
     manifest="output/generation_manifest.json",

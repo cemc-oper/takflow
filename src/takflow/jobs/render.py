@@ -19,8 +19,8 @@ from takflow.checks import (
     check_output_path,
     check_relative_path,
     preflight_generation,
-    template_failure,
 )
+from takflow.checks.diagnostics import template_failure
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
 from takflow.jobs.scripts import _script_template_helpers
 

@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from takflow.flow.backend import WorkflowBackend
-from takflow.checks import GenerationCheckReport, check_node_name
+from takflow.checks import GenerationCheckReport
+from takflow.checks.preflight import check_node_name
 
 
 class NodeType(str, Enum):

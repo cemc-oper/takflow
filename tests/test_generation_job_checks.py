@@ -8,7 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 import pytest
 
 from takflow.checks import GenerationCheckError, GenerationCheckReport
-from takflow.artifact_checks import check_artifacts
+from takflow.checks import check_artifacts
 from takflow.config import BaseWorkflowConfig
 from takflow.jobs.render import render_jobs_from_directory, render_single_job_file
 

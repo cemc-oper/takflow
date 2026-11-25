@@ -203,7 +203,7 @@ def create_cli(application: Application | Callable[[], Application] | str | None
     @click.pass_context
     def check(context, **options):
         """Check selected artifacts without loading an application."""
-        from takflow.artifact_checks import check_artifacts
+        from takflow.checks import check_artifacts
         if not any(options[key] for key in ("parse", "expand", "shell", "integrity")):
             raise click.UsageError("select --parse-definition, --expand, --shell or --integrity")
         result = check_artifacts(**options)

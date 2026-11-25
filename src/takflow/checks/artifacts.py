@@ -1,16 +1,155 @@
-"""Read-only checks of generated files, independent of the generating application."""
+"""Check generated definitions, scripts, and recorded artifacts."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 import hashlib
+import importlib.util
 import json
+import os
 from pathlib import Path
 import re
+import shlex
+import shutil
 import stat
+import subprocess
 from tempfile import TemporaryDirectory
 
 from takflow._files import io_failure_reason
-from takflow.checks import GenerationCheckError, check_shell_output
+from takflow.checks.diagnostics import GenerationCheckError, GenerationCheckReport
+from takflow.checks.preflight import check_input_file
+
+
+def check_definition_output(
+    suite, path: str | Path, *, check_report: GenerationCheckReport | None = None,
+) -> GenerationCheckReport:
+    """Check the file just saved using its serializer/native definition contract."""
+    report = check_report if check_report is not None else GenerationCheckReport()
+    stage = "definition.output"
+    path = check_input_file(path, stage=stage, report=report)
+    report.artifact(path, "definition", stage=stage)
+    mode = suite.engine.backend_type
+    if mode == "ecflow":
+        from takflow.flow.backends.ecflow.serializer import Defs
+
+        # Branding callbacks may prepend/append full-line comments. This is a
+        # serializer comparison, deliberately not a second ecFlow parser.
+        def body(text):
+            return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#")).strip("\n")
+
+        try:
+            actual = path.read_text(encoding="utf-8")
+            expected = Defs(suite.raw).to_def()
+        except (OSError, UnicodeError):
+            report.fail("GEN_DEFINITION_INVALID", stage, str(path), "definition is not readable UTF-8 text")
+        if body(actual) != body(expected):
+            from takflow.flow.backends.ecflow.serializer.attributes import _native_variable_quotes
+            token = _native_variable_quotes.set(True)
+            try:
+                native_expected = Defs(suite.raw).to_def()
+            finally:
+                _native_variable_quotes.reset(token)
+            if body(actual) != body(native_expected):
+                report.fail("GEN_DEFINITION_INVALID", stage, str(path), "saved ecFlow body differs from the supported serializer encodings")
+        report.passed("GEN_SERIALIZER_VALID", stage, str(path), "saved ecFlow body matches the serializer; full-line branding comments excluded")
+        if importlib.util.find_spec("ecflow") is None:
+            report.unchecked("GEN_NATIVE_ECFLOW_UNAVAILABLE", stage, str(path), "native ecFlow parsing and job preprocessing were not run")
+        else:
+            import ecflow
+            try:
+                ecflow.Defs(str(path))
+            except Exception:
+                report.fail("GEN_NATIVE_ECFLOW_INVALID", stage, str(path), "native ecFlow rejected the definition")
+            report.passed("GEN_NATIVE_ECFLOW_VALID", stage, str(path), "native ecFlow definition parsing completed")
+            report.unchecked("GEN_ECFLOW_JOB_UNCHECKED", stage, str(path), "native definition parsing does not create or preprocess task jobs")
+    elif mode == "takler":
+        from takler.schema.definition import parse_definition
+        from takler.serialization.builder import build_definition
+        from takler.serialization.definition import export_definition
+
+        try:
+            parsed = parse_definition(path.read_bytes())
+            rebuilt = build_definition(parsed)
+            expected = export_definition(suite.raw).model_dump(mode="json")
+        except Exception:
+            report.fail("GEN_DEFINITION_INVALID", stage, str(path), "takler definition parse/build rejected the saved file")
+        if rebuilt.name != suite.name or json.loads(path.read_bytes()) != expected:
+            report.fail("GEN_DEFINITION_INVALID", stage, str(path), "saved takler definition differs from the current exported suite")
+        report.passed("GEN_TAKLER_DEFINITION_VALID", stage, str(path), "actual takler definition parse/build completed")
+        report.unchecked("GEN_TAKLER_JOB_UNCHECKED", stage, str(path), "definition parsing does not render, submit or schedule runtime jobs")
+    else:
+        report.fail("GEN_MODE_UNSUPPORTED", stage, "backend", "definition backend is unsupported")
+    return report
+
+
+def check_shell_output(
+    path: str | Path, *, check_report: GenerationCheckReport | None = None,
+    executable: bool = False, stage: str = "job.output", role: str = "job",
+) -> GenerationCheckReport:
+    """Run an available declared shell's syntax-only mode on concrete scripts."""
+    report = check_report if check_report is not None else GenerationCheckReport()
+    path = check_input_file(path, stage=stage, report=report, executable=executable)
+    report.artifact(path, role, stage=stage)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeError:
+        report.fail("GEN_SCRIPT_INVALID", stage, str(path), "generated script is not valid UTF-8 text")
+    except OSError as error:
+        report.unchecked("GEN_INPUT_UNREADABLE", stage, str(path), io_failure_reason("could not read the script", error))
+        return report
+    if not text.strip():
+        report.fail("GEN_SCRIPT_INVALID", stage, str(path), "generated script is empty")
+    if path.suffix == ".ecf" or "{{" in text or "{%" in text:
+        report.unchecked("GEN_RUNTIME_TEMPLATE_UNCHECKED", stage, str(path), "engine directives or runtime template placeholders require native job creation before shell syntax checks")
+    else:
+        first = text.splitlines()[0]
+        try:
+            words = shlex.split(first[2:]) if first.startswith("#!") else []
+        except ValueError:
+            words = []
+        if words and Path(words[0]).name == "env":
+            words = words[1:]
+            if words and words[0] == "-S":
+                words = words[1:]
+        if len(words) > 1:
+            report.unchecked("GEN_SHELL_OPTIONS_UNCHECKED", stage, str(path),
+                             "declared interpreter options may change parsing; no startup or command options are executed")
+            return report
+        shell = Path(words[0]).name if words else ""
+        executable_path = shutil.which(shell) if shell in {"sh", "bash", "dash", "ksh", "ksh93", "mksh"} else None
+        wrong_ksh_dialect = False
+        if executable_path is not None and shell in {"ksh", "ksh93"} and Path(executable_path).resolve().name in {"mksh", "lksh"}:
+            # Debian's ksh alternative may be mksh, which cannot parse the
+            # Ksh93 syntax used by target applications. It is not a substitute.
+            executable_path = shutil.which("ksh93")
+            wrong_ksh_dialect = executable_path is None
+        if executable_path is None:
+            if wrong_ksh_dialect:
+                report.unchecked("GEN_SHELL_DIALECT_UNAVAILABLE", stage, str(path), "installed ksh resolves to mksh/lksh; target Ksh93 syntax was not checked")
+            else:
+                report.unchecked("GEN_SHELL_UNAVAILABLE", stage, str(path), "a supported declared shell interpreter is not available; script was not executed")
+        else:
+            filename = str(path.resolve())
+            try:
+                result = subprocess.run([executable_path, "-n", filename],
+                                        env={"PATH": os.defpath, "LC_ALL": "C"},
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            except OSError as error:
+                report.unchecked("GEN_SHELL_UNAVAILABLE", stage, str(path),
+                                 io_failure_reason(f"could not start {shell} for the syntax check", error))
+                return report
+            if result.returncode:
+                # Shells may echo the entire offending line. Keep only their numeric location.
+                stderr = result.stderr.decode("utf-8", errors="replace")
+                location = re.search(r"^(?:E: )?" + re.escape(filename) +
+                                     r"(?:: (?:line |syntax error at line )?|\[)([0-9]+)\b", stderr, re.MULTILINE)
+                if result.returncode in (1, 2, 3) and (location or "syntax error" in stderr.lower()):
+                    where = f" at line {location[1]}" if location else ""
+                    report.fail("GEN_SCRIPT_SYNTAX", stage, str(path), f"{shell} rejected script syntax{where}")
+                report.unchecked("GEN_SHELL_INCOMPLETE", stage, str(path),
+                                 f"{shell} did not complete the syntax check (return code {result.returncode})")
+                return report
+            report.passed("GEN_SHELL_SYNTAX_VALID", stage, str(path), f"{shell} syntax-only check completed; business commands were not run")
+    return report
 
 
 class Unavailable(ValueError):
@@ -207,7 +346,7 @@ def check_artifacts(*, manifest=None, definition=None, mode=None, parse=False, e
         def expand_task():
             recorded = get_inventory()
             path = definition_input()
-            from takflow._native_artifacts import expand_ecflow, expand_takler
+            from takflow.checks._native import expand_ecflow, expand_takler
             try:
                 scratch = TemporaryDirectory(prefix="takflow-check-")
             except OSError as error:

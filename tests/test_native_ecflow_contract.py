@@ -571,11 +571,11 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
 def test_native_ecflow_checks_isolate_commands_includes_and_jobs(tmp_path, resources):
     from test_build import application, data, put
     from test_artifact_checks import snapshot
-    from takflow.artifact_checks import check_artifacts
+    from takflow.checks import check_artifacts
     from takflow.build import build
     import shlex
-    from takflow._native_artifacts import expand_ecflow
-    from takflow.artifact_checks import Inventory, _parse
+    from takflow.checks._native import expand_ecflow
+    from takflow.checks.artifacts import Inventory, _parse
 
     out = tmp_path / "outputs with space"
     source = out / "jobs/on/task.ecf"

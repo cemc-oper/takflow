@@ -13,7 +13,7 @@ from jinja2.sandbox import SandboxedEnvironment
 
 from takflow.flow.backends.ecflow._job_paths import ecflow_templates
 from takflow._files import io_failure_reason
-from takflow.artifact_checks import InvalidArtifact, Unavailable
+from takflow.checks.artifacts import InvalidArtifact, Unavailable
 
 
 def _search(inventory, directories, name):
@@ -151,8 +151,8 @@ def expand_takler(definition, name, inventory, work):
     # The pinned renderer constructs its Jinja environment internally. Install a
     # confined loader in a fresh interpreter so concurrent users retain their own environment.
     args = [sys.executable, "-c",
-            "import sys; sys.path.insert(0, sys.argv[1]); from takflow._native_artifacts import _worker; _worker()",
-            str(Path(__file__).resolve().parents[1])]
+            "import sys; sys.path.insert(0, sys.argv[1]); from takflow.checks._native import _worker; _worker()",
+            str(Path(__file__).resolve().parents[2])]
     request = [str(definition), name, str(inventory.path), str(work)]
     child = subprocess.run(args, input=json.dumps(request), text=True, capture_output=True)
     if child.returncode:
@@ -169,7 +169,7 @@ def expand_takler(definition, name, inventory, work):
 
 
 def _worker():
-    from takflow.artifact_checks import Inventory, _parse
+    from takflow.checks.artifacts import Inventory, _parse
     definition, name, manifest, directory = json.load(sys.stdin)
     try:
         flow = _parse(Path(definition), "takler")

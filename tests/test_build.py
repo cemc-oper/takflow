@@ -14,7 +14,7 @@ from takflow.application import (
     Application, ApplicationBrand, ApplicationExtension, ComponentSelection,
     ResourceEntry, ResourceLayer, TemplateOutput,
 )
-from takflow.artifact_checks import check_artifacts
+from takflow.checks import check_artifacts
 from takflow.build import build, run_stage, BuildError, STAGES
 from takflow.build import manifest as manifest_module
 from takflow.config import BaseWorkflowConfig

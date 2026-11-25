@@ -6,7 +6,7 @@ pytest.importorskip("takler")
 
 from test_build import application, data, resources
 from takflow.build import build
-from takflow.artifact_checks import check_artifacts
+from takflow.checks import check_artifacts
 
 
 def test_takler_pipeline_uses_real_native_json(tmp_path, resources):
@@ -22,8 +22,8 @@ def test_takler_pipeline_uses_real_native_json(tmp_path, resources):
 def test_native_takler_checks_isolate_explicit_job_paths_and_include_lookup(tmp_path, resources):
     from test_build import put
     from test_artifact_checks import snapshot
-    from takflow._native_artifacts import expand_takler
-    from takflow.artifact_checks import Inventory
+    from takflow.checks._native import expand_takler
+    from takflow.checks.artifacts import Inventory
     from takler.serialization.builder import build_definition
 
     out = tmp_path / "output"

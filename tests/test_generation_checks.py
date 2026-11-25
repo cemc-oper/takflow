@@ -23,7 +23,7 @@ from takflow.checks import (
     preflight_generation,
 )
 from takflow.config import BaseWorkflowConfig
-from takflow.artifact_checks import check_artifacts
+from takflow.checks import check_artifacts
 from takflow.flow import WorkflowEngine
 from takflow.flow.generate import generate_workflow
 

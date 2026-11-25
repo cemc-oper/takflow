@@ -19,8 +19,9 @@ from takflow._files import file_state, io_failure_reason, make_parents, write_te
 from takflow.application import BuildContext, ResourceEntry
 from takflow.checks import (
     GenerationCheckError, GenerationCheckReport, check_input_file,
-    check_output_path, check_relative_path, template_failure,
+    check_output_path, check_relative_path,
 )
+from takflow.checks.diagnostics import template_failure
 from takflow.config import ConfigValidationError
 from takflow.flow.backends.ecflow._job_paths import ecflow_task_templates
 from takflow.flow.backends.ecflow.serializer.attributes import _native_variable_quotes

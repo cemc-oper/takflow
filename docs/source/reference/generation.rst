@@ -13,4 +13,5 @@ takflow.checks — 生成检查
 
 .. automodule:: takflow.checks
    :members:
+   :imported-members:
    :show-inheritance:

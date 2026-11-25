@@ -7,7 +7,7 @@ import subprocess
 from click.testing import CliRunner
 import pytest
 
-from takflow.artifact_checks import check_artifacts
+from takflow.checks import check_artifacts
 from takflow.build import BuildError, build
 from takflow.cli import create_cli
 from test_build import application, data, put, resources
@@ -45,7 +45,7 @@ def test_default_build_leaves_shell_and_definition_checks_to_the_caller(tmp_path
     def unexpected(*args, **kwargs):
         pytest.fail("default build invoked additional checks")
     monkeypatch.setattr(Environment, "parse", unexpected)
-    monkeypatch.setattr("takflow.checks.subprocess.run", unexpected)
+    monkeypatch.setattr("takflow.checks.artifacts.subprocess.run", unexpected)
     put(resources, "jobs/on/task.sh.j2", "#!/bin/bash\nif then\n")
     with application(resources).prepare(data(tmp_path / "out", mode="shell")) as context:
         result = build(context)
@@ -95,9 +95,9 @@ def test_check_distinguishes_syntax_from_tool_failure_without_writing(tmp_path, 
     check("failed", "bash rejected script syntax at line 2")
     def cannot_start(*args, **kwargs):
         raise OSError(errno.EACCES, private)
-    monkeypatch.setattr("takflow.checks.subprocess.run", cannot_start)
+    monkeypatch.setattr("takflow.checks.artifacts.subprocess.run", cannot_start)
     check("incomplete", "could not start bash")
-    monkeypatch.setattr("takflow.checks.subprocess.run", lambda args, **kwargs:
+    monkeypatch.setattr("takflow.checks.artifacts.subprocess.run", lambda args, **kwargs:
                         subprocess.CompletedProcess(args, -9, b"", private.encode()))
     check("incomplete", "return code -9")
 
@@ -123,7 +123,7 @@ def test_temporary_directory_failure_is_incomplete(tmp_path, resources, monkeypa
     before = snapshot(result.output_root)
     def denied(**kwargs):
         raise PermissionError(errno.EACCES, "private-tool-exception")
-    monkeypatch.setattr("takflow.artifact_checks.TemporaryDirectory", denied)
+    monkeypatch.setattr("takflow.checks.artifacts.TemporaryDirectory", denied)
     checked = check_artifacts(manifest=result.manifest_path, expand=["/suite/task"], integrity=True)
     assert [c["status"] for c in checked.checks] == ["incomplete", "passed"]
     assert "temporary directory for native expansion: Permission denied" in checked.checks[0]["reason"]

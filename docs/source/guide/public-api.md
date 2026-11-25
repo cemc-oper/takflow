@@ -43,7 +43,7 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.flow.node/backend/hook` | 公共节点、后端抽象、引擎通用设置与脚本命令变量、hook 实现 |
 | `takflow.flow.scheduling` | `set_scheduling` 将重复日期或按天重复规则应用到节点 |
 | `takflow.flow.generate` | `generate_workflow`、`GenerationContext`、`GenerationResult`；统一模式分发、输出路径和保存编排，builder/renderer 与应用产物回调由应用注入 |
-| `takflow.checks` | `GenerationCheckReport`、诊断/异常、能力预检、本地路径/文件及已生成定义/脚本检查；[生成检查](generation-checks.md)明确阶段与未检查边界 |
+| `takflow.checks` | 生成诊断、能力预检、文件检查与独立的 `check_artifacts`、`CheckResult`。[生成检查](generation-checks.md) |
 | `takflow.flow.backends.ecflow` / `takflow.flow.backends.takler` | `EcflowBackend` / `TaklerBackend`。能力差异以矩阵为准，takler 是可选运行时依赖 |
 | `takflow.flow.backends.ecflow.serializer` | 纯 Python ecFlow 低层 serializer。新应用优先使用 `EcflowBackend` |
 | `takflow.jobs.submission` | `set_runtime` 为节点绑定提交命令、取消命令和资源 |
