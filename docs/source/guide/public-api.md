@@ -36,6 +36,8 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.config.validation` | 安全配置加载/原始映射校验、`load_config_data`/`apply_config_overrides`（同时由 config 根部导出）、结构化诊断和可选递归未知字段检查；[配置指南](config.md)列出兼容与严格依赖边界 |
 | `takflow.jobspec` | `TaskResource`、`task_resource_defaults`、`ResourceSpec`、`to_orvix_directives`、`render_resource_block` |
 | `takflow.jobspec.highlevel/model/render` | API 参考页列出的高层模型、扁平契约模型和指令渲染器 |
+| `takflow.jobs.render` | `render_jobs_from_directory`、`render_single_job_file`、`generate_output_log_data`。[作业渲染](../reference/jobs.rst) |
+| `takflow.jobs.headers` | `render_orvix_resource_block`、`render_slurm_resource_block`、`RESOURCE_TEMPLATE_HELPERS` |
 | `takflow.spec.jobspec` | `contract_version`、`load_schema`、`schema_keys`、`schema_path`；只读访问 vendor 资源 |
 | `takflow.flow` | `WorkflowEngine`、`Node`、`NodeType`、`WorkflowBackend`、通用 hook 基类和工厂 |
 | `takflow.flow.node/backend/hook` | 公共节点、后端抽象和 hook 实现；现有应用直接使用 `flow.hook` 的方式继续受支持 |
@@ -46,8 +48,8 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.backends.runtime` | `set_scheduling`、`common_setting` 和脚本命令变量 |
 | `takflow.jobs.submission` | `set_runtime` 为节点绑定提交命令、取消命令和资源 |
 | `takflow.jobs.submission.variables/direct/orvix/slsubmit6` | 资源变量声明与编码、各载体的提交和取消命令。[后端与资源载体](backends.md) |
-| `takflow.toolkit` | resource/job/credential 的可复用生成入口及已导出的 observability helpers |
-| `takflow.toolkit.job/resource/credential/observability` | 已文档化的模板渲染、资源复制、credential hook 和静态 definition manifest 入口 |
+| `takflow.toolkit` | resource/credential 的可复用生成入口及已导出的 observability helpers |
+| `takflow.toolkit.resource/credential/observability` | 已文档化的资源复制、credential hook 和静态 definition manifest 入口 |
 | `takflow.build_info` | `BuildInfo`、`get_build_info`、`get_build_info_lines`、`build_info_scope` |
 
 可选依赖不改变默认导入契约：没有 takler 包时可以导入 `takflow` 和
@@ -57,6 +59,7 @@ observability 校验能力的依赖和启用条件见[可观测性](observabilit
 ### 2.2 兼容 facade 与历史入口
 
 - 调度、引擎通用设置和脚本命令的兼容入口由 `takflow.toolkit.util` 和 `takflow.toolkit` 提供。
+- 原先通过 `takflow.toolkit.job` 或 `takflow.toolkit` 导入的作业渲染函数改从 `takflow.jobs.render` 导入。资源头及模板 helper 改从 `takflow.jobs.headers` 导入。独立渲染的旧品牌提供者 `set_build_info_provider` 归入 `takflow.build_info`。[作业渲染入口](../reference/jobs.rst)
 - `takflow.flow.register_hook` 是 `create_hook_decorator` 的现有兼容别名，不因推荐名称存在而
   直接删除。
 - 包根部和已列出模块之间的 re-export 都是公共入口。调整其实现位置时，应保留导入路径或按

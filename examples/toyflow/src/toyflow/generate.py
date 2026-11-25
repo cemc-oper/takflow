@@ -1,7 +1,7 @@
 """toyflow 生成步骤的实现（config generate / workflow generate）。
 
-``resource copy`` 和 ``job generate`` 使用 ``takflow.toolkit``，工作流生成
-编排使用 ``takflow.generation``；这里保留应用自己的配置渲染和 manifest 回调。
+``resource copy`` 使用 ``takflow.toolkit``，``job generate`` 使用
+``takflow.jobs.render``。应用使用 ``takflow.generation`` 编排流程生成，并提供配置渲染和 manifest 回调。
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from toyflow.util import get_output_repo_base_dir, get_workflow_repo_base_dir
 
 
 def toyflow_build_info_lines() -> dict[str, str]:
-    """toyflow 品牌的生成文件头（注入给 takflow.toolkit.job）。"""
+    """生成 toyflow 品牌的文件头。"""
     return get_build_info_lines(get_build_info(toyflow.__version__), "toyflow")
 
 

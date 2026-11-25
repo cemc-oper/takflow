@@ -64,7 +64,7 @@ def test_rendered_script_matches_committed_vector(name):
 @orvix_required
 @pytest.mark.parametrize("requeue", [None, False, True])
 def test_public_slurm_header_matches_orvix_conversion(tmp_path, requeue):
-    from takflow.toolkit.job import render_orvix_resource_block, render_slurm_resource_block
+    from takflow.jobs.headers import render_orvix_resource_block, render_slurm_resource_block
 
     fields = dict(job_type="parallel", queue="qc", nodes=3, ntasks_per_node=11, memory="48G",
                   time="02:37:00", project="weather", application="forecast group", job_name="model check",

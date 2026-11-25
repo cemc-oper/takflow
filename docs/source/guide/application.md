@@ -130,8 +130,8 @@ machine 变量沿用 APPLICATION_VARIABLE_CONFLICT；OUTPUT_REPO_BASE 必须与�
 ## 品牌
 
 `ApplicationBrand(tool_name, version, target_model=None)` 在上下文中固定本轮头部与构建时间。
-准备作用域使用 `build_info_scope`，现有公共 job renderer 优先消费该作用域的头部；
-历史 `set_build_info_provider` 继续服务旧入口，无需 import 应用 job 模块改写全局 provider。
+准备作用域使用 `build_info_scope`，作业渲染优先读取该作用域的文件头。
+`takflow.build_info.set_build_info_provider` 为独立作业渲染提供旧式默认文件头。
 作用域退出后恢复原品牌，顺序应用不会串用；JSON 等原生格式如何记录品牌由保存阶段处理，
 这里不向 JSON 注入注释。
 

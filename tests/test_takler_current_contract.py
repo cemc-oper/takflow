@@ -352,7 +352,7 @@ def test_unsupported_attributes_fail_with_stable_errors():
 
 
 def test_shared_resource_header_follows_takler_parent_edits(tmp_path):
-    from takflow.toolkit.job import render_orvix_resource_block
+    from takflow.jobs.headers import render_orvix_resource_block
 
     engine = WorkflowEngine(TaklerBackend())
     suite = engine.Suite("suite")

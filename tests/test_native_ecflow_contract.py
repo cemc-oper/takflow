@@ -363,7 +363,7 @@ def test_native_orvix_resource_variables_and_application_default(tmp_path):
     from jinja2 import Environment
 
     from takflow.config import SlurmWorkload
-    from takflow.toolkit.job import _render_workflow_orvix_resource_block
+    from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
 
     suite, output, scripts, includes = _save_suite(tmp_path)
     shutil.copytree(Path(__file__).parents[1] / "src/takflow/resources/ecflow/include", includes, dirs_exist_ok=True)
@@ -371,7 +371,7 @@ def test_native_orvix_resource_variables_and_application_default(tmp_path):
     set_runtime(suite, workload, suite.engine)
     suite.engine.save_suite(suite, output)
     env = Environment()
-    env.globals["render_orvix_resource_block"] = _render_workflow_orvix_resource_block
+    env.globals.update(RESOURCE_TEMPLATE_HELPERS)
     text = env.from_string(
         '#!/bin/sh\n{{ render_orvix_resource_block(job_type="parallel", nodes=2, '
         'ntasks_per_node=4, walltime="6:00:00", application="template-app") }}\n'
@@ -453,7 +453,7 @@ def test_native_pipeline_retains_machine_updates_without_regenerating_ecf(tmp_pa
 def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
     from takflow.config import SlurmWorkload
     from takflow.jobspec import TaskResource
-    from takflow.toolkit.job import render_orvix_resource_block, render_slurm_resource_block
+    from takflow.jobs.headers import render_orvix_resource_block, render_slurm_resource_block
 
     engine = WorkflowEngine(EcflowBackend())
     suite = engine.Suite("suite")

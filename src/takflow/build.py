@@ -32,8 +32,9 @@ from takflow._job_paths import ecflow_task_templates
 from takflow.flow.hook import _safe_hook_errors
 from takflow.generation import GenerationContext, GenerationResult, generate_workflow
 from takflow.spec.jobspec import contract_version
+from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
+from takflow.jobs.render import render_jobs_from_directory
 from takflow.toolkit.credential import CredentialHookPoint, get_credential_registry, render_credential
-from takflow.toolkit.job import RESOURCE_TEMPLATE_HELPERS, render_jobs_from_directory
 from takflow.toolkit.resource import _copy_resource_layers
 
 
@@ -503,7 +504,8 @@ class _Pipeline:
             name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
             for name in ("application.py", "build.py", "generation.py", "checks.py", "_files.py", "_job_paths.py",
                          "flow/node.py", "flow/hook.py",
-                         "toolkit/job.py", "toolkit/resource.py", "toolkit/credential.py", "backends/ecflow/serializer/attributes.py")
+                         "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py",
+                         "toolkit/resource.py", "toolkit/credential.py", "backends/ecflow/serializer/attributes.py")
         }
         spec = Path(__file__).parent / "spec"
         payload["versions"]["orvix_pin"] = (spec / "jobspec/ORVIX_VERSION").read_text().strip()

@@ -1,14 +1,7 @@
 takflow.toolkit — 工具层
 ========================
 
-为上层应用构建 CLI 提供可复用能力：渲染作业模板、复制静态资源、渲染配置与凭证文件、构建信息头和可选观测导出。
-
-takflow.toolkit.job
--------------------
-
-.. automodule:: takflow.toolkit.job
-   :members:
-   :show-inheritance:
+为应用提供静态资源复制、配置和凭证渲染及可选观测导出。作业渲染入口见 :doc:`jobs`。
 
 takflow.toolkit.resource
 ------------------------

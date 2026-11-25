@@ -1,11 +1,11 @@
-"""Tests for template_filter (feature-toggle-aware rendering) in takflow.toolkit.job."""
+"""Tests for feature-toggle-aware job template selection."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from takflow.config import BaseWorkflowConfig
 from takflow.config.workload import ShellWorkload
-from takflow.toolkit import render_jobs_from_directory
+from takflow.jobs.render import render_jobs_from_directory
 
 
 def _minimal_config() -> BaseWorkflowConfig:

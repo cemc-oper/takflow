@@ -1,13 +1,14 @@
 """Execute business invocations and verify the parent job receives the script status."""
 
 import os
+import shlex
 import shutil
 import subprocess
 
 import pytest
 
 from takflow.config import BaseWorkflowConfig
-from takflow.toolkit import render_jobs_from_directory
+from takflow.jobs.render import render_jobs_from_directory
 
 
 def render(tmp_path, body, mode, *, workflow="ecflow", template=None, script_path="scripts/business.sh"):
@@ -182,6 +183,8 @@ exit "$BUSINESS_STATUS"
     put(source, "config/config.sh.j2", "# domain configuration\n")
     put(source, "templates/runner.sh.j2", '#!/bin/bash\nexec "{{ paths.jobs_dir }}/on/task.sh"\n')
     put(source, "jobs/on/task.sh.j2", f"""#!/bin/bash
+# stdout: {{{{ output_std_log_path }}}}
+# stderr: {{{{ output_stderr_log_path }}}}
 set -eu
 set +f
 trap 'echo parent-exit:$?' EXIT
@@ -234,4 +237,15 @@ def check_business_job(tmp_path, job, mode):
 @pytest.mark.parametrize("mode", ["inline", "external"])
 def test_shell_business_job(tmp_path, mode):
     runner = build_business_workflow(tmp_path, "shell", mode)
+    output = runner.parent
+    script = output / BUSINESS_SCRIPT
+    job = output / "jobs/on/task.sh"
+    rendered = job.read_text()
+    external_call = '"${OUTPUT_REPO_BASE}"/' + shlex.quote(BUSINESS_SCRIPT)
+    assert (script.read_text() in rendered) == (mode == "inline")
+    assert (external_call in rendered) == (mode == "external")
+    assert f"# stdout: {output / 'logs/task.out'}" in rendered.splitlines()
+    assert f"# stderr: {output / 'logs/task.err'}" in rendered.splitlines()
+    for path in (runner, job, script):
+        assert path.stat().st_mode & 0o777 == 0o755
     check_business_job(tmp_path, runner, mode)

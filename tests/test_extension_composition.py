@@ -11,7 +11,7 @@ from takflow.build import BuildError, build
 from takflow.build_info import build_info_scope
 from takflow.config import BaseWorkflowConfig, ConfigValidationError
 from takflow.toolkit.credential import register_credential_hook, render_credential_template
-from takflow.toolkit.job import _current_build_info_lines
+from takflow.build_info import _current_build_info_lines
 
 from test_build import application, data, put, resources
 

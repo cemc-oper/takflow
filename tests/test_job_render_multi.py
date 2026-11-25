@@ -1,11 +1,11 @@
-"""Tests for multi-directory job rendering in takflow.toolkit.job."""
+"""Tests for multi-directory rendering in takflow.jobs.render."""
 from __future__ import annotations
 
 import pytest
 
 from takflow.config import BaseWorkflowConfig
 from takflow.config.workload import ShellWorkload
-from takflow.toolkit import render_jobs_from_directory
+from takflow.jobs.render import render_jobs_from_directory
 
 
 def _minimal_config() -> BaseWorkflowConfig:

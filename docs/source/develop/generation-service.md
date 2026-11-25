@@ -231,8 +231,7 @@ test-suite 7 个用例、14 个 generate/verify 阶段全部通过。服务接�
 以下 API 原样保留，不因新服务移动或改名：
 
 - resource：`copy_resources_to_output`、`make_scripts_executable`；
-- job：`render_jobs_from_directory`、`render_single_job_file`、
-  `generate_output_log_data`、`set_build_info_provider`；
+- job 在生成服务引入时保留了原有入口。作业渲染函数由 `takflow.jobs.render` 提供，旧品牌提供者由 `takflow.build_info` 提供。[作业渲染入口](../reference/jobs.rst)
 - credential：现有渲染与共享注册表入口；
 - observability：`export_definition_manifest`、`write_definition_manifest` 等；
 - runtime 在生成服务引入时保留了原有入口。当前提交适配路径见[后端与资源载体](../guide/backends.md)。

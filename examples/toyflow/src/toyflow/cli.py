@@ -1,6 +1,6 @@
 """toyflow 命令行接口。
 
-用 ``takflow.toolkit`` 拼出与 mcv-workflow 同形态的 4 步生成管线 + credential 生成：
+使用 TakFlow 的资源、作业与流程入口提供四步生成命令和凭证生成。
 
     toyflow resource copy   --config-file config/toyflow.yaml
     toyflow config generate --config-file config/toyflow.yaml
@@ -14,18 +14,15 @@ from pathlib import Path
 
 import click
 
-from takflow.toolkit import (
-    copy_resources_to_output,
-    render_credential,
-    render_jobs_from_directory,
-    set_build_info_provider,
-)
+from takflow.build_info import set_build_info_provider
+from takflow.jobs.render import render_jobs_from_directory
+from takflow.toolkit import copy_resources_to_output, render_credential
 
 from toyflow.config import ToyflowConfig, load_config_from_file
 from toyflow.generate import generate_workflow, render_config, toyflow_build_info_lines
 from toyflow.util import get_output_repo_base_dir, get_workflow_repo_base_dir
 
-# 让 toolkit 渲染的文件头带上 toyflow 品牌（否则是通用 takflow 头）。
+# 为独立作业渲染提供 toyflow 文件头。
 set_build_info_provider(toyflow_build_info_lines)
 
 

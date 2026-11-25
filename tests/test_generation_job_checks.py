@@ -10,7 +10,7 @@ import pytest
 from takflow.checks import GenerationCheckError, GenerationCheckReport
 from takflow.artifact_checks import check_artifacts
 from takflow.config import BaseWorkflowConfig
-from takflow.toolkit.job import render_jobs_from_directory, render_single_job_file
+from takflow.jobs.render import render_jobs_from_directory, render_single_job_file
 
 
 def config(**updates):

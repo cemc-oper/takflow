@@ -135,6 +135,8 @@ def test_complete_pipeline_and_native_artifact_roles(tmp_path, resources, mode, 
     assert manifest["complete"] and manifest["schema_version"] == 1
     assert manifest["build_id"] == result.build_id
     assert manifest["config_fingerprint"]["scope"] == "public-generation-options"
+    for name in ("jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py"):
+        assert manifest["implementation_sha256"][name] == hashlib.sha256(files("takflow").joinpath(name).read_bytes()).hexdigest()
     assert {item.kind for item in result.artifacts} == {"generated", "copied", "reference"}
     assert str(stale) not in {item.path for item in result.artifacts}
     assert not (output / "scripts/off").exists() and not (output / "machine/other").exists()
@@ -432,31 +434,41 @@ def test_resource_copy_failure_retains_partial_output_and_stops(tmp_path, resour
     assert statuses(captured.value.result)["config"] == "not_run"
 
 
-@pytest.mark.parametrize("stage", ["config", "job", "workflow"])
-def test_write_failures_preserve_partial_artifacts(tmp_path, resources, monkeypatch, stage):
+@pytest.mark.parametrize(("stage", "invoke", "relative", "role"), [
+    ("config", "inline", "config/config.h", "config"),
+    ("job", "inline", "jobs/on/task.ecf", "job"),
+    ("job", "external", "jobs/on/task.ecf", "job"),
+    ("workflow", "inline", "run_workflow.sh", "shell_runner"),
+])
+def test_write_failures_preserve_partial_artifacts(tmp_path, resources, monkeypatch, stage, invoke, relative, role):
     import takflow._files as files
+
+    output = tmp_path / "out"
+    target = output / relative
     original = OSError("write failed")
     real_write = files.write_text
+
     def fail(path, text, mode, root):
-        selected = ((stage == "config" and path.name == "config.h") or
-                    (stage == "job" and path.suffix == ".ecf") or
-                    (stage == "workflow" and path.name == "run_workflow.sh"))
-        if selected:
+        if path == target:
             files.make_parents(path, root)
             path.write_text("partial output")
             raise original
         return real_write(path, text, mode, root)
+
     monkeypatch.setattr(files, "write_text", fail)
     monkeypatch.setattr(build_module, "write_text", fail)
-    output = tmp_path / "out"
     mode = "shell" if stage == "workflow" else "ecflow"
-    with application(resources).prepare(data(output, mode)) as context:
+    with application(resources).prepare(data(output, mode, invoke)) as context:
         with pytest.raises(BuildError) as captured:
             build(context)
+    result = captured.value.result
     assert captured.value.original is original
-    assert statuses(captured.value.result)[stage] == "failed"
+    assert statuses(result)[stage] == "failed"
+    assert not result.complete and result.manifest_path is None
     assert not (output / "generation_manifest.json").exists()
-    assert any(Path(item.path).read_text() == "partial output" for item in captured.value.result.artifacts)
+    artifact, = [item for item in result.artifacts if item.path == str(target)]
+    assert (artifact.stage, artifact.role) == (stage, role)
+    assert target.read_text() == "partial output"
 
 
 @pytest.mark.parametrize("point", ["before", "after"])

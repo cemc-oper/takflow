@@ -10,9 +10,8 @@ from jinja2 import Environment, FileSystemLoader
 from takflow.build import BuildError, run_stage
 from takflow.config import BaseWorkflowConfig
 from takflow.config.workload import ResourceAliasWarning
-from takflow.toolkit.job import (
-    render_jobs_from_directory, render_orvix_resource_block, render_single_job_file, render_slurm_resource_block,
-)
+from takflow.jobs.headers import render_orvix_resource_block, render_slurm_resource_block
+from takflow.jobs.render import render_jobs_from_directory, render_single_job_file
 
 from test_build import application, data, put
 from test_build import resources as resources

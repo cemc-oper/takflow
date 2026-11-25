@@ -7,16 +7,17 @@ from pathlib import Path
 import pytest
 from jinja2 import Environment, FileSystemLoader
 
-import takflow.toolkit.job as job_module
+import takflow.build_info as build_info_module
+from takflow.build_info import set_build_info_provider
 from takflow.config import BaseWorkflowConfig
 from takflow.config.workload import ShellWorkload
-from takflow.toolkit.job import render_single_job_file, set_build_info_provider
+from takflow.jobs.render import render_single_job_file
 
 
 @pytest.fixture(autouse=True)
 def preserve_build_info_provider(monkeypatch):
-    original = job_module._build_info_provider
-    monkeypatch.setattr(job_module, "_build_info_provider", original)
+    original = build_info_module._build_info_provider
+    monkeypatch.setattr(build_info_module, "_build_info_provider", original)
     return original
 
 
@@ -64,18 +65,18 @@ def test_replacing_provider_uses_latest_header(tmp_path):
 
 def test_previous_provider_can_be_restored(tmp_path, monkeypatch):
     original = _provider("original warning", "original info")
-    monkeypatch.setattr(job_module, "_build_info_provider", original)
+    monkeypatch.setattr(build_info_module, "_build_info_provider", original)
     set_build_info_provider(_provider("temporary warning", "temporary info"))
     assert _render_header(tmp_path) == "# temporary warning\n# temporary info"
 
-    monkeypatch.setattr(job_module, "_build_info_provider", original)
+    monkeypatch.setattr(build_info_module, "_build_info_provider", original)
 
-    assert job_module._build_info_provider is original
+    assert build_info_module._build_info_provider is original
     assert _render_header(tmp_path) == "# original warning\n# original info"
 
 
 def test_unset_provider_uses_generic_takflow_header(tmp_path, monkeypatch):
-    monkeypatch.setattr(job_module, "_build_info_provider", None)
+    monkeypatch.setattr(build_info_module, "_build_info_provider", None)
 
     warning, detail = _render_header(tmp_path).splitlines()
 

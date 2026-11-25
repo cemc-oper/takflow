@@ -47,7 +47,8 @@ def toyflow(tmp_path, monkeypatch):
 def test_toyflow_full_pipeline(toyflow, tmp_path):
     config, output_repo_base = toyflow
 
-    from takflow.toolkit import copy_resources_to_output, render_jobs_from_directory
+    from takflow.jobs.render import render_jobs_from_directory
+    from takflow.toolkit import copy_resources_to_output
     from toyflow.generate import generate_workflow, render_config
     from toyflow.util import get_resources_path
 
@@ -140,7 +141,8 @@ def test_toyflow_shell_mode_remains_unsupported(toyflow):
 @pytest.mark.parametrize("invoke_mode", ["external", "inline"])
 def test_toyflow_optional_definition_manifest(toyflow, invoke_mode, tmp_path):
     from takflow.config import ObservabilityConfig
-    from takflow.toolkit import copy_resources_to_output, render_jobs_from_directory
+    from takflow.jobs.render import render_jobs_from_directory
+    from takflow.toolkit import copy_resources_to_output
     from takflow.toolkit.observability import ObservabilityConfigError
     from toyflow.generate import generate_workflow
     from toyflow.util import get_resources_path

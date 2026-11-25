@@ -68,7 +68,7 @@ print("\n".join(to_orvix_directives(spec)))
 
 Jinja2 作业模板在第一条可执行语句之前调用 `render_orvix_resource_block(...)`。ecFlow＋slsubmit6 和 Shell 直接 Slurm 的兼容模板可在同一位置改用 `render_slurm_resource_block(...)`。两者使用同一组取值，标准构建在 Python 中生成资源头。
 
-完整构建与分步构建在 config 和 job 模板中注册这两个 helper。前者支持三种 workflow 模式，后者服务于 ecFlow 和 Shell 的历史 Slurm 入口。低层 `render_jobs_from_directory` 注册相同的 helper，`render_single_job_file` 会在调用方的 Jinja 环境中补上缺失的注册。直接调用 Jinja 的应用可自行向 `env.globals` 注册 `takflow.toolkit.job.RESOURCE_TEMPLATE_HELPERS` 并提供 `config` 上下文，或从 Python 调用渲染函数。Python 函数省略 `workflow_mode` 时输出具体值。
+完整构建与分步构建在 config 和 job 模板中注册这两个 helper。前者支持三种 workflow 模式，后者服务于 ecFlow 和 Shell 的历史 Slurm 入口。低层 `render_jobs_from_directory` 注册相同的 helper，`render_single_job_file` 会在调用方的 Jinja 环境中补上缺失的注册。直接调用 Jinja 的应用可自行向 `env.globals` 注册 `takflow.jobs.headers.RESOURCE_TEMPLATE_HELPERS` 并提供 `config` 上下文，或从 Python 调用渲染函数。Python 函数省略 `workflow_mode` 时输出具体值。
 
 | 规范参数 | 原生 Slurm 参数 |
 | --- | --- |

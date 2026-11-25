@@ -12,6 +12,7 @@ API 参考
    build
    cli
    jobspec
+   jobs
    flow
    generation
    backends
