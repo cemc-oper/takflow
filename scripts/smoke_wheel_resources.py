@@ -13,7 +13,7 @@ import takflow.backends.ecflow  # noqa: F401
 import takflow.backends.takler  # noqa: F401
 from takflow.application import Application, ApplicationBrand
 from takflow.build import build, run_stage
-from takflow.checks import GenerationCheckError, GenerationCheckReport
+from takflow.checks import GenerationCheckError, GenerationCheckReport, check_definition_output
 from takflow.config import BaseWorkflowConfig, load_validated_config, validate_config
 from takflow.generation import generate_workflow
 from takflow.spec.jobspec import contract_version, schema_keys, schema_path
@@ -95,7 +95,8 @@ def main() -> None:
         assert result.output_path == Path(temporary) / "wheel_smoke.def"
         assert "task run" in result.output_path.read_text(encoding="utf-8")
         assert len(report.artifacts) == 1 and report.artifacts[0]["role"] == "definition"
-        checks = {(item.code, item.status) for item in report.checks}
+        definition_report = check_definition_output(result.suite, result.output_path)
+        checks = {(item.code, item.status) for item in definition_report.checks}
         assert ("GEN_SERIALIZER_VALID", "passed") in checks
         assert ("GEN_NATIVE_ECFLOW_UNAVAILABLE", "unchecked") in checks
 
