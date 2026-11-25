@@ -11,7 +11,7 @@ import shutil
 from jinja2 import TemplateError, TemplateNotFound, TemplateSyntaxError
 from jinja2.sandbox import SandboxedEnvironment
 
-from takflow._job_paths import ecflow_templates
+from takflow.flow.backends.ecflow._job_paths import ecflow_templates
 from takflow._files import io_failure_reason
 from takflow.artifact_checks import InvalidArtifact, Unavailable
 

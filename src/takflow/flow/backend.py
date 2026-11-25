@@ -7,7 +7,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Union
+import shlex
+from typing import TYPE_CHECKING, Any, Dict, List, Union
+
+if TYPE_CHECKING:
+    from takflow.flow.node import WorkflowEngine
 
 
 class WorkflowBackend(ABC):
@@ -186,3 +190,55 @@ class WorkflowBackend(ABC):
     def get_node_name(self, raw_node: Any) -> str:
         """获取底层节点名称。"""
         ...
+
+
+def _is_ecflow(engine: "WorkflowEngine") -> bool:
+    """Return True if the engine backend is ecflow."""
+    return engine.backend_type == "ecflow"
+
+
+# ---------------------------------------------------------------------------
+# Script command variables
+# ---------------------------------------------------------------------------
+
+
+def script_cmd_var_name(engine: "WorkflowEngine") -> str:
+    """Return the variable name used to point a task at its script.
+
+    ecflow uses ``ECF_SCRIPT_CMD``; takler uses ``TAKLER_SCRIPT``.
+    """
+    return "ECF_SCRIPT_CMD" if _is_ecflow(engine) else "TAKLER_SCRIPT"
+
+
+def script_cmd_value(
+    engine: "WorkflowEngine", jobs_dir, relative_path: str
+) -> str:
+    """Return the value for ``script_cmd_var_name``.
+
+    ecflow mode returns ``cat {jobs_dir}/{relative_path}`` because ecflow
+    embeds the script via ``%include``. takler mode returns the path to the
+    ``.sh`` script under ``jobs_dir``.
+    """
+    if _is_ecflow(engine):
+        return "cat " + shlex.quote(f"{jobs_dir}/{relative_path}")
+    relative_sh = relative_path.replace(".ecf", ".sh")
+    return str(Path(jobs_dir) / relative_sh)
+
+
+# ---------------------------------------------------------------------------
+# Common settings
+# ---------------------------------------------------------------------------
+
+
+def common_setting(engine: "WorkflowEngine") -> Dict[str, str]:
+    """Return engine-common settings attached to suites."""
+    if _is_ecflow(engine):
+        return {
+            "ECF_TRIES": "2",
+            "ECF_TIMEOUT": "600",
+            "ECF_DENIED": "1",
+            "ECF_MICRO": "%",
+            "ECF_EXTN": ".ecf",
+            "ECF_STATUS_CMD": "ps --sid %ECF_RID% -f",
+        }
+    return {}

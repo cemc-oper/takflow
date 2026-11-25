@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from takflow.backends.ecflow import EcflowBackend
+from takflow.flow.backends.ecflow import EcflowBackend
 from takflow.checks import (
     GenerationCheckReport,
     check_output_path,
@@ -46,7 +46,7 @@ def _get_backend_class(mode: str) -> type[WorkflowBackend]:
     if mode == "ecflow":
         return EcflowBackend
     if mode == "takler":
-        from takflow.backends.takler import TaklerBackend
+        from takflow.flow.backends.takler import TaklerBackend
 
         return TaklerBackend
     raise ValueError(f"Unsupported workflow_mode: {mode}")

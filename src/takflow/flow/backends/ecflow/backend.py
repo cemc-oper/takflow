@@ -1,7 +1,7 @@
 """
 ecflow 后端实现。
 
-将统一后端接口映射到 ``takflow.backends.ecflow.serializer`` API（一个纯 Python 的
+将统一后端接口映射到 ``takflow.flow.backends.ecflow.serializer`` API（一个纯 Python 的
 ecflow ``.def`` 生成库，由 ``light_ecflow`` 折叠而来）。
 """
 from pathlib import Path
@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Union
 
 from takflow.flow import Node, NodeType, WorkflowBackend
 from takflow.jobs.submission.variables import ecflow_resource_variables
-from takflow.backends.ecflow.serializer import (
+from takflow.flow.backends.ecflow.serializer import (
     Clock,
     DState,
     Defs,
@@ -96,7 +96,7 @@ class EcflowBackend(WorkflowBackend):
         complete: tuple[int, int] | None = None,
         complete_relative: bool = False,
     ) -> None:
-        from takflow.backends.ecflow.serializer import Late
+        from takflow.flow.backends.ecflow.serializer import Late
 
         late = Late()
         if submitted is not None:

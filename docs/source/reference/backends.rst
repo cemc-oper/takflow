@@ -1,5 +1,5 @@
-takflow.backends — 转换层
-=========================
+takflow.flow.backends — 转换层
+================================
 
 把抽象流程定义转换为具体运行形式：ecFlow ``.def``、takler flow、
 ``#ORVIX`` / ``slsubmit6`` 运行时提交描述。
@@ -8,36 +8,27 @@ takflow.backends — 转换层
 都不是额外的 ``WorkflowBackend``。公共操作的支持状态、显式不支持路径和语义差异见
 :doc:`../guide/backends` 的能力矩阵。
 
-takflow.backends.ecflow
------------------------
+takflow.flow.backends.ecflow
+----------------------------
 
-.. automodule:: takflow.backends.ecflow
+.. automodule:: takflow.flow.backends.ecflow
    :members:
    :show-inheritance:
 
-takflow.backends.ecflow.serializer
-----------------------------------
+takflow.flow.backends.ecflow.serializer
+---------------------------------------
 
 折叠进来的纯 Python ecFlow ``.def`` 序列化器（原 light-ecflow），
 模拟 ecflow Python API 并输出定义文件。
 
-.. automodule:: takflow.backends.ecflow.serializer
+.. automodule:: takflow.flow.backends.ecflow.serializer
    :members:
    :show-inheritance:
 
-takflow.backends.takler
------------------------
+takflow.flow.backends.takler
+----------------------------
 
-.. automodule:: takflow.backends.takler
-   :members:
-   :show-inheritance:
-
-takflow.backends.runtime
-------------------------
-
-工作流调度、通用设置和任务脚本命令。
-
-.. automodule:: takflow.backends.runtime
+.. automodule:: takflow.flow.backends.takler
    :members:
    :show-inheritance:
 

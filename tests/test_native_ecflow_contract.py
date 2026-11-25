@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from takflow.backends.ecflow import EcflowBackend
+from takflow.flow.backends.ecflow import EcflowBackend
 from takflow.checks import GenerationCheckReport, check_definition_output
 from takflow.flow import WorkflowEngine
 from takflow.jobs.submission import set_runtime

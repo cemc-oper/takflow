@@ -5,9 +5,9 @@ import importlib.util
 
 import pytest
 
-from takflow.backends.ecflow import EcflowBackend
-from takflow.backends.runtime import script_cmd_value, script_cmd_var_name
-from takflow.backends.takler import TaklerBackend
+from takflow.flow.backends.ecflow import EcflowBackend
+from takflow.flow.backend import script_cmd_value, script_cmd_var_name
+from takflow.flow.backends.takler import TaklerBackend
 from takflow.flow import NodeType, WorkflowEngine
 
 
@@ -136,7 +136,7 @@ def test_common_capability_subset_supports_chaining_and_save(engine, tmp_path):
 
 def test_ecflow_script_command_quotes_a_real_local_filename(tmp_path):
     import subprocess
-    from takflow.backends.ecflow import EcflowBackend
+    from takflow.flow.backends.ecflow import EcflowBackend
     from takflow.flow import WorkflowEngine
     directory = tmp_path / "space ' dollar $root"
     directory.mkdir()
@@ -147,7 +147,7 @@ def test_ecflow_script_command_quotes_a_real_local_filename(tmp_path):
 
 
 def test_ecflow_script_lookup_retains_legacy_separator_spelling():
-    from takflow.backends.ecflow import EcflowBackend
+    from takflow.flow.backends.ecflow import EcflowBackend
     from takflow.flow import WorkflowEngine
     engine = WorkflowEngine(EcflowBackend())
     assert script_cmd_value(engine, "jobs/", "run.ecf") == "cat jobs//run.ecf"

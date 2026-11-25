@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from takflow.backends.ecflow.backend import EcflowBackend
+from takflow.flow.backends.ecflow.backend import EcflowBackend
 from takflow.config.workload import ShellWorkload, SlurmWorkload
 from takflow.flow.node import WorkflowEngine
 from takflow.jobs.submission import set_runtime

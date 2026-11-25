@@ -227,7 +227,7 @@ def preflight_generation(
     if mode != "shell":
         from takflow.flow import WorkflowBackend
         if mode == "takler":
-            from takflow.backends.takler import TaklerBackend
+            from takflow.flow.backends.takler import TaklerBackend
             unsupported = TaklerBackend.unsupported_operations
         else:
             unsupported = WorkflowBackend.unsupported_operations
@@ -295,7 +295,7 @@ def check_definition_output(
     report.artifact(path, "definition", stage=stage)
     mode = suite.engine.backend_type
     if mode == "ecflow":
-        from takflow.backends.ecflow.serializer import Defs
+        from takflow.flow.backends.ecflow.serializer import Defs
 
         # Branding callbacks may prepend/append full-line comments. This is a
         # serializer comparison, deliberately not a second ecFlow parser.
@@ -308,7 +308,7 @@ def check_definition_output(
         except (OSError, UnicodeError):
             report.fail("GEN_DEFINITION_INVALID", stage, str(path), "definition is not readable UTF-8 text")
         if body(actual) != body(expected):
-            from takflow.backends.ecflow.serializer.attributes import _native_variable_quotes
+            from takflow.flow.backends.ecflow.serializer.attributes import _native_variable_quotes
             token = _native_variable_quotes.set(True)
             try:
                 native_expected = Defs(suite.raw).to_def()

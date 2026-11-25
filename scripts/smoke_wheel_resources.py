@@ -9,8 +9,8 @@ import re
 import tempfile
 
 import takflow
-import takflow.backends.ecflow  # noqa: F401
-import takflow.backends.takler  # noqa: F401
+import takflow.flow.backends.ecflow  # noqa: F401
+import takflow.flow.backends.takler  # noqa: F401
 from takflow.application import Application, ApplicationBrand
 from takflow.build import build, run_stage
 from takflow.checks import GenerationCheckError, GenerationCheckReport, check_definition_output

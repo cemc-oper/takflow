@@ -22,13 +22,13 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateError
 from takflow import __version__
 from takflow._files import file_state, io_failure_reason, make_parents, write_text
 from takflow.application import BuildContext, ResourceEntry
-from takflow.backends.ecflow.serializer.attributes import _native_variable_quotes
 from takflow.checks import (
     GenerationCheckError, GenerationCheckReport, check_input_file,
     check_output_path, check_relative_path, template_failure,
 )
 from takflow.config import ConfigValidationError
-from takflow._job_paths import ecflow_task_templates
+from takflow.flow.backends.ecflow._job_paths import ecflow_task_templates
+from takflow.flow.backends.ecflow.serializer.attributes import _native_variable_quotes
 from takflow.flow.hook import _safe_hook_errors
 from takflow.generation import GenerationContext, GenerationResult, generate_workflow
 from takflow.spec.jobspec import contract_version
@@ -502,10 +502,11 @@ class _Pipeline:
                        resource_layers=[{"name": layer.name, "root": str(layer.root)} for layer in self.context.paths.resource_layers])
         payload["implementation_sha256"] = {
             name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-            for name in ("application.py", "build.py", "generation.py", "checks.py", "_files.py", "_job_paths.py",
-                         "flow/node.py", "flow/hook.py",
+            for name in ("application.py", "build.py", "generation.py", "checks.py", "_files.py",
+                         "flow/backends/ecflow/_job_paths.py",
+                         "flow/node.py", "flow/hook.py", "flow/backend.py", "flow/scheduling.py",
                          "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py",
-                         "toolkit/resource.py", "toolkit/credential.py", "backends/ecflow/serializer/attributes.py")
+                         "toolkit/resource.py", "toolkit/credential.py", "flow/backends/ecflow/serializer/attributes.py")
         }
         spec = Path(__file__).parent / "spec"
         payload["versions"]["orvix_pin"] = (spec / "jobspec/ORVIX_VERSION").read_text().strip()

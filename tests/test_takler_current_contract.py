@@ -17,7 +17,7 @@ from takler.server.scheduler import Scheduler  # noqa: E402
 from takler.tasks.shell.shell_render import ShellRender  # noqa: E402
 from takler.tasks.shell.shell_script_task import ShellScriptTask  # noqa: E402
 
-from takflow.backends.takler.backend import TaklerBackend  # noqa: E402
+from takflow.flow.backends.takler.backend import TaklerBackend  # noqa: E402
 from takflow.config import ShellWorkload, SlurmWorkload  # noqa: E402
 from takflow.flow import WorkflowEngine  # noqa: E402
 from takflow.jobs.submission import set_runtime  # noqa: E402
@@ -175,7 +175,7 @@ def test_backend_does_not_create_legacy_application_bunch(monkeypatch):
         raise AssertionError("TaklerBackend must not create a legacy application Bunch")
 
     monkeypatch.setattr(
-        "takflow.backends.takler.backend.Bunch", fail_if_created, raising=False
+        "takflow.flow.backends.takler.backend.Bunch", fail_if_created, raising=False
     )
     TaklerBackend(host="localhost", port="33083")
 

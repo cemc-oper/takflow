@@ -75,7 +75,7 @@ def add_verify_task(context: EngineHookContext) -> None:
     扩展包注入任务时通常也同时提供对应的作业模板
     （见 ``resources/jobs/main/verify.sh.j2``）。
     """
-    from takflow.backends.runtime import script_cmd_value, script_cmd_var_name
+    from takflow.flow.backend import script_cmd_value, script_cmd_var_name
 
     main_family = context.node
     verify = main_family.add_task("verify")

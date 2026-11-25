@@ -19,6 +19,12 @@ takflow.flow.backend
    :members:
    :show-inheritance:
 
+takflow.flow.scheduling
+-----------------------
+
+.. automodule:: takflow.flow.scheduling
+   :members:
+
 takflow.flow.hook
 -----------------
 

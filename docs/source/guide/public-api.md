@@ -40,12 +40,12 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.jobs.headers` | `render_orvix_resource_block`、`render_slurm_resource_block`、`RESOURCE_TEMPLATE_HELPERS` |
 | `takflow.spec.jobspec` | `contract_version`、`load_schema`、`schema_keys`、`schema_path`；只读访问 vendor 资源 |
 | `takflow.flow` | `WorkflowEngine`、`Node`、`NodeType`、`WorkflowBackend`、通用 hook 基类和工厂 |
-| `takflow.flow.node/backend/hook` | 公共节点、后端抽象和 hook 实现；现有应用直接使用 `flow.hook` 的方式继续受支持 |
+| `takflow.flow.node/backend/hook` | 公共节点、后端抽象、引擎通用设置与脚本命令变量、hook 实现 |
+| `takflow.flow.scheduling` | `set_scheduling` 将重复日期或按天重复规则应用到节点 |
 | `takflow.generation` | `generate_workflow`、`GenerationContext`、`GenerationResult`；统一模式分发、输出路径和保存编排，builder/renderer 与应用产物回调由应用注入 |
 | `takflow.checks` | `GenerationCheckReport`、诊断/异常、能力预检、本地路径/文件及已生成定义/脚本检查；[生成检查](generation-checks.md)明确阶段与未检查边界 |
-| `takflow.backends.ecflow` / `takflow.backends.takler` | `EcflowBackend` / `TaklerBackend`；能力差异以矩阵为准，takler 是可选运行时依赖 |
-| `takflow.backends.ecflow.serializer` | 已文档化的纯 Python ecFlow 低层 serializer；新应用优先使用 `EcflowBackend` |
-| `takflow.backends.runtime` | `set_scheduling`、`common_setting` 和脚本命令变量 |
+| `takflow.flow.backends.ecflow` / `takflow.flow.backends.takler` | `EcflowBackend` / `TaklerBackend`。能力差异以矩阵为准，takler 是可选运行时依赖 |
+| `takflow.flow.backends.ecflow.serializer` | 纯 Python ecFlow 低层 serializer。新应用优先使用 `EcflowBackend` |
 | `takflow.jobs.submission` | `set_runtime` 为节点绑定提交命令、取消命令和资源 |
 | `takflow.jobs.submission.variables/direct/orvix/slsubmit6` | 资源变量声明与编码、各载体的提交和取消命令。[后端与资源载体](backends.md) |
 | `takflow.toolkit` | resource/credential 的可复用生成入口及已导出的 observability helpers |
@@ -53,15 +53,14 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 | `takflow.build_info` | `BuildInfo`、`get_build_info`、`get_build_info_lines`、`build_info_scope` |
 
 可选依赖不改变默认导入契约：没有 takler 包时可以导入 `takflow` 和
-`takflow.backends.takler`，但实例化 `TaklerBackend` 会明确抛出 `ImportError`。可选
+`takflow.flow.backends.takler`，但实例化 `TaklerBackend` 会明确抛出 `ImportError`。可选
 observability 校验能力的依赖和启用条件见[可观测性](observability.md)。
 
 ### 2.2 兼容 facade 与历史入口
 
-- 调度、引擎通用设置和脚本命令的兼容入口由 `takflow.toolkit.util` 和 `takflow.toolkit` 提供。
+- 从 `takflow.flow.scheduling` 导入 `set_scheduling`，从 `takflow.flow.backend` 导入通用设置和脚本命令函数。具体后端从 `takflow.flow.backends` 下的对应引擎包导入。[后端入口](../reference/backends.rst)
 - 原先通过 `takflow.toolkit.job` 或 `takflow.toolkit` 导入的作业渲染函数改从 `takflow.jobs.render` 导入。资源头及模板 helper 改从 `takflow.jobs.headers` 导入。旧 `set_build_info_provider` 已移除，独立作业渲染通过 `takflow.build_info.build_info_scope` 指定品牌。[作业渲染入口](../reference/jobs.rst)
-- `takflow.flow.register_hook` 是 `create_hook_decorator` 的现有兼容别名，不因推荐名称存在而
-  直接删除。
+- 从 `takflow.flow.hook` 导入 `create_hook_decorator` 构建钩子装饰器。
 - 包根部和已列出模块之间的 re-export 都是公共入口。调整其实现位置时，应保留导入路径或按
   下文弃用流程提供 facade，不要求应用跟随内部文件移动。
 - 已被应用或测试使用的非下划线历史入口，即使尚未列入 `__all__`，也不能仅凭这一点视为可

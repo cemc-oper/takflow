@@ -35,13 +35,6 @@ takflow.toolkit.observability
    :members:
    :show-inheritance:
 
-takflow.toolkit.util
---------------------
-
-.. automodule:: takflow.toolkit.util
-   :members:
-   :show-inheritance:
-
 takflow.build_info
 ------------------
 

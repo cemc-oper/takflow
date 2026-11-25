@@ -9,8 +9,8 @@ import shutil
 
 import pytest
 
-from takflow.backends.ecflow import EcflowBackend
-from takflow.backends.takler import TaklerBackend
+from takflow.flow.backends.ecflow import EcflowBackend
+from takflow.flow.backends.takler import TaklerBackend
 from takflow.checks import (
     GenerationCheckError,
     GenerationCheckReport,

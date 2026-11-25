@@ -19,8 +19,4 @@ __all__ = [
     "BaseHookRegistry",
     "HookFunction",
     "create_hook_decorator",
-    "register_hook",
 ]
-
-# 为兼容旧路径 takflow.hooks.base 保留别名
-register_hook = create_hook_decorator

@@ -11,10 +11,10 @@ takflow 按职责分为七层，上层应用（如 `mcv-workflow`）只与其中
   takler JSON；后端差异见[能力矩阵](../guide/backends.md)。
 - **生成编排层 `generation.py`**：统一 definition/shell 模式分发、输出路径解析和保存
   前后回调顺序；应用注入领域 builder/renderer，shell 分支不创建后端或引擎。
-- **转换层 `backends/` 与 `jobs/`** 根据流程定义和资源生成引擎定义、作业与运行设置。
-  - `backends/ecflow/` → ecFlow `.def`
-  - `backends/takler/` → takler flow
-  - `backends/runtime/` → 调度、通用设置和任务脚本命令
+- **引擎后端与作业生成** 根据流程定义和资源生成引擎定义、作业与运行设置。
+  - `flow/backends/ecflow/` → ecFlow `.def`
+  - `flow/backends/takler/` → takler flow
+  - `flow/scheduling.py` 和 `flow/backend.py` → 调度、通用设置和任务脚本命令
   - `jobs/render.py`、`jobs/scripts.py`、`jobs/headers.py` → 模板渲染、脚本调用和资源头
   - `jobs/submission/` → direct、orvix、slsubmit6 提交和取消命令及节点资源声明
 - **工具层 `toolkit/`** 为应用提供可复用的静态资源复制、配置和凭证渲染能力。
@@ -30,13 +30,11 @@ src/takflow/
 ├── config/                 # 配置层
 ├── jobspec/                # 任务资源 Python 模型
 ├── flow/                   # 抽象层（WorkflowEngine / Node / Hook）
+│   ├── scheduling.py       # 将调度规则应用到节点
+│   └── backends/           # ecFlow .def 及 takler flow 后端
 ├── generation.py           # 生成编排层（模式分发 / 路径 / 保存回调）
-├── backends/               # 转换层
-│   ├── ecflow/             # ecFlow .def 后端（含折叠进来的 light-ecflow 序列化器）
-│   ├── takler/             # takler 后端
-│   └── runtime/            # 调度、通用设置和任务脚本命令
 ├── jobs/                   # 作业渲染、脚本、资源头和提交适配
-└── toolkit/                # 工具层（resource / config / credential / util）
+└── toolkit/                # 工具层（resource / config / credential）
 ```
 
 ## 与运行时工具的关系
@@ -45,7 +43,7 @@ src/takflow/
   把作业脚本翻译为 `#SBATCH`（slurm）/ `#DSUB`（donau）等并提交。
   takflow 的 `jobspec` 提供指令渲染，`jobs/submission/orvix.py` 提供提交和取消命令。
 - **takler**（Python 工作流调度器）：ecFlow 之外的另一个引擎后端，
-  由 `backends/takler` 输出其 flow 定义。
+  由 `flow/backends/takler` 输出其 flow 定义。
 
 ## 设计取向
 

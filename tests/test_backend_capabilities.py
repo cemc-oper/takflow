@@ -6,14 +6,17 @@ import json
 
 import pytest
 
-from takflow.backends.ecflow import EcflowBackend
-from takflow.backends.runtime import script_cmd_var_name, script_cmd_value
-from takflow.backends.takler import TaklerBackend
+from takflow.config.scheduling import SchedulingConfig
 from takflow.flow import WorkflowEngine
+from takflow.flow.backend import common_setting, script_cmd_var_name, script_cmd_value
+from takflow.flow.backends.ecflow import EcflowBackend
+from takflow.flow.backends.takler import TaklerBackend
+from takflow.flow.scheduling import set_scheduling
 
 
 def _build_common_suite(engine: WorkflowEngine):
     suite = engine.Suite("capability")
+    suite.add_variables(common_setting(engine))
     suite.add_variable("STRING", "value")
     suite.add_variables({"NUMBER": 3, "FLAG": True})
     suite.add_event("ready")
@@ -21,7 +24,7 @@ def _build_common_suite(engine: WorkflowEngine):
     suite.add_limit("slots", 2)
 
     dated = suite.add_family("dated")
-    dated.add_repeat_date("YMD", 20260101, 20260102)
+    set_scheduling(dated, SchedulingConfig(start_date=20260101, end_date=20260102), engine)
     dated.set_defstatus_complete()
     dated.set_defstatus_queued()
 
@@ -72,6 +75,7 @@ def test_ecflow_backend_capability_matrix(tmp_path):
     text = output.read_text(encoding="utf-8")
     for expected in (
         "suite capability",
+        "edit ECF_TRIES '2'",
         "edit STRING 'value'",
         "edit NUMBER '3'",
         "edit FLAG 'True'",

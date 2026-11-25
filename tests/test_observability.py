@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from takflow.backends.ecflow import EcflowBackend
+from takflow.flow.backends.ecflow import EcflowBackend
 from takflow.config import ObservabilityConfig
 from takflow.flow import WorkflowEngine
 from takflow.toolkit.observability import (

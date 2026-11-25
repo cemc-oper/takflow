@@ -18,12 +18,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from takflow.backends.runtime import (
-    common_setting,
-    script_cmd_var_name,
-    script_cmd_value,
-    set_scheduling,
-)
+from takflow.flow.backend import common_setting, script_cmd_var_name, script_cmd_value
+from takflow.flow.scheduling import set_scheduling
 from takflow.jobs.submission import set_runtime
 
 from toyflow.config import ToyflowConfig
