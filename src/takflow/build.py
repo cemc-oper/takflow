@@ -502,7 +502,8 @@ class _Pipeline:
                        resource_layers=[{"name": layer.name, "root": str(layer.root)} for layer in self.context.paths.resource_layers])
         payload["implementation_sha256"] = {
             name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-            for name in ("application.py", "build.py", "flow/generate.py", "checks.py", "_files.py",
+            for name in ("application/declaration.py", "application/inputs.py", "application/context.py",
+                         "application/prepare.py", "build.py", "flow/generate.py", "checks.py", "_files.py",
                          "flow/backends/ecflow/_job_paths.py",
                          "flow/node.py", "flow/hook.py", "flow/backend.py", "flow/scheduling.py",
                          "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py",

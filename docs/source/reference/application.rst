@@ -3,6 +3,7 @@
 
 .. automodule:: takflow.application
    :members:
+   :imported-members:
    :undoc-members:
 
 注册表隔离与品牌作用域

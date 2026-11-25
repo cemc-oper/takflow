@@ -1,6 +1,7 @@
 """Application lifecycle, path provenance and declarative extension contracts."""
 from pathlib import Path, PurePosixPath
 from contextlib import contextmanager
+from importlib.resources import files
 
 import pytest
 from pydantic import Field, model_validator
@@ -143,6 +144,7 @@ def test_public_layer_is_selected_by_mode_and_keeps_the_effective_base(tmp_path)
     with app.prepare(config_data(), workflow_repo_base=replacement) as context:
         public, base, oper = context.paths.resource_layers
         assert [public.name, base.name, oper.name] == ["takflow", "base", "oper"]
+        assert public.root == Path(str(files("takflow").joinpath("resources")))
         assert (public.root / "ecflow/include/common/head.h").is_file()
         assert base.root == replacement
         assert context.config.workflow_repo_base_dir == str(replacement)
