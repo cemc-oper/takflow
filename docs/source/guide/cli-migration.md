@@ -61,7 +61,7 @@ TYM 默认根入口现已切换为 create_cli；standard 仅作为 0.4.0 前的�
 
 各应用的有效选项、限期旧 Python 返回适配和回退见所属项目迁移公告。工作区在 test-suite 中执行 `uv sync --locked --extra dev`，按本地路径安装框架和应用。需要验证 R3 目标版本时可使用 `scripts/r3_candidates.py` 标记本地候选。独立部署在新环境一并选定已验的框架、base 和所需 oper，由环境锁固定各层。MCV base 仓库的独立锁采用其公开索引策略，工作区开发使用套件锁。复查 R2 源码使用冻结工作树及当时的锁。
 
-2026-11-11 的 R2 联合验收使用 TC-11.8 的 takflow、TYM、GFS base/oper 和 RA2 wheel，配上 TC-13.6 含后处理模板校验的 MCV base/oper wheel。各 wheel 由对应 sdist 构建。版本、SHA-256、当前源码修订与候选来源的对应关系见工作区 `framework/doc/2026-11-06-takflow-capability-plan/tc13/step07/pairing.json`，同目录 `REPORT.md` 记录支持组合和现场入口。
+2026-11-11 的 R2 联合验收使用 TC-11.8 的 takflow、TYM、GFS base/oper 和 RA2 wheel，配上 TC-13.6 含后处理模板校验的 MCV base/oper wheel。各 wheel 由对应 sdist 构建。版本、SHA-256、源码修订与候选来源的对应关系见工作区 `framework/doc/R2_PAIRING.json`。
 
 安装时正常解析七包及配套依赖，在源码树外使用安装解释器的 `-I` 模式运行 test-suite 的 `scripts/check_oper_installation.py`。检查包括 site-packages 来源、六应用默认资源、Python 完整构建与七个分步、console/module/通用 CLI、旧适配告警及 `pip check`。已验证 Python 3.13 当前库环境和 Python 3.10/Pydantic 2.0/Click 8.0 最低库环境。开发用 test-suite 自身需要 Python 3.11 或更新版本。
 

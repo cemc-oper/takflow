@@ -2,8 +2,8 @@
 
 Provides the generic layer shared by the domain applications: the ``jobspec``
 contract, flow/backend abstraction, hooks, config base, and the
-job/resource/credential/util toolkit (see
-``framework/doc/2026-10-26-takflow-roadmap/TAKFLOW_DESIGN.md`` in the workspace).
+job/resource/credential/util toolkit. See ``docs/source/develop/architecture.md``
+in the takflow repository.
 """
 
 try:
