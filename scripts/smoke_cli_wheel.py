@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Exercise installed console/module commands outside the framework source tree."""
+import hashlib
+from importlib.resources import files
 import json
 import os
 from pathlib import Path
@@ -60,7 +62,18 @@ workload:
         assert report["result"]["complete"]
         output = root / "output"
         manifest = output / "generation_manifest.json"
-        assert manifest.is_file()
+        generated = json.loads(manifest.read_text(encoding="utf-8"))
+        installed = files("takflow")
+        fingerprints = generated["implementation_sha256"]
+        assert {"build/pipeline.py", "build/result.py", "build/manifest.py"} <= fingerprints.keys()
+        for relative, digest in fingerprints.items():
+            assert hashlib.sha256(installed.joinpath(relative).read_bytes()).hexdigest() == digest, relative
+        for key, relative in {
+            "jobspec": "spec/jobspec/VERSION",
+            "orvix_pin": "spec/jobspec/ORVIX_VERSION",
+            "takler_pin": "spec/takler/TAKLER_VERSION",
+        }.items():
+            assert generated["versions"][key] == installed.joinpath(relative).read_text().strip()
         for stage in ("resource", "config", "credential", "job", "workflow"):
             report = json.loads(run([*base, stage, "copy" if stage == "resource" else "generate", *options]).stdout)
             assert report["status"] == "success" and not report["result"]["complete"]

@@ -325,7 +325,7 @@ def test_template_diagnostic_keeps_source_and_reason(tmp_path, resources, format
 
 
 def test_manifest_publication_failure_on_cli(tmp_path, resources, monkeypatch):
-    from takflow.build import pipeline as build_module
+    from takflow.build import manifest as manifest_module
     app = application(resources)
     path = configuration(tmp_path)
     manifest = tmp_path / "output/generation_manifest.json"
@@ -333,7 +333,7 @@ def test_manifest_publication_failure_on_cli(tmp_path, resources, monkeypatch):
     def full_disk(temporary, destination):
         assert destination == manifest and not manifest.exists()
         raise OSError(errno.ENOSPC, SECRET)
-    monkeypatch.setattr(build_module.os, "replace", full_disk)
+    monkeypatch.setattr(manifest_module.os, "replace", full_disk)
     for format in ("text", "json"):
         failed = invoke(app, path, "build", format=format)
         assert failed.exit_code == 1 and SECRET not in failed.output

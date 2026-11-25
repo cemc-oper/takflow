@@ -16,6 +16,7 @@ from takflow.application import (
 )
 from takflow.artifact_checks import check_artifacts
 from takflow.build import build, run_stage, BuildError, STAGES
+from takflow.build import manifest as manifest_module
 from takflow.config import BaseWorkflowConfig
 from takflow.config.credentials import register_credential_hook, render_credential_template, CredentialHookPoint
 import takflow.build.pipeline as build_module
@@ -135,7 +136,8 @@ def test_complete_pipeline_and_native_artifact_roles(tmp_path, resources, mode, 
     assert manifest["complete"] and manifest["schema_version"] == 1
     assert manifest["build_id"] == result.build_id
     assert manifest["config_fingerprint"]["scope"] == "public-generation-options"
-    for name in ("jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py"):
+    for name in ("build/pipeline.py", "build/result.py", "build/manifest.py",
+                 "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py"):
         assert manifest["implementation_sha256"][name] == hashlib.sha256(files("takflow").joinpath(name).read_bytes()).hexdigest()
     assert {item.kind for item in result.artifacts} == {"generated", "copied", "reference"}
     assert str(stale) not in {item.path for item in result.artifacts}
@@ -541,7 +543,7 @@ def test_manifest_publish_failure_never_leaves_success(tmp_path, resources, monk
     original = OSError("replace failed")
     def fail(*args):
         raise original
-    monkeypatch.setattr(build_module.os, "replace", fail)
+    monkeypatch.setattr(manifest_module.os, "replace", fail)
     output = tmp_path / "out"
     put(output, "generation_manifest.json", "old success")
     with application(resources).prepare(data(output)) as context:

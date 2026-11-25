@@ -5,21 +5,16 @@ the same stage implementations; generation never submits or runs business code.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 import hashlib
-import json
 import os
 from pathlib import Path, PurePosixPath
-import platform
 import shlex
 import stat
-import tempfile
-from typing import Any, Callable
-from uuid import uuid4
+from collections.abc import Callable
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateError, TemplateNotFound
 
-from takflow import __version__
 from takflow._files import file_state, io_failure_reason, make_parents, write_text
 from takflow.application import BuildContext, ResourceEntry
 from takflow.checks import (
@@ -30,75 +25,14 @@ from takflow.config import ConfigValidationError
 from takflow.flow.backends.ecflow._job_paths import ecflow_task_templates
 from takflow.flow.backends.ecflow.serializer.attributes import _native_variable_quotes
 from takflow.flow.hook import _safe_hook_errors
-from takflow.flow.generate import GenerationContext, GenerationResult, generate_workflow
-from takflow.spec.jobspec import contract_version
+from takflow.flow.generate import GenerationContext, generate_workflow
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
 from takflow.jobs.render import render_jobs_from_directory
 from takflow.config.credentials import CredentialHookPoint, get_credential_registry, render_credential
 from takflow.build.assets import _copy_resource_layers
+from takflow.build.manifest import publish_manifest
+from takflow.build.result import BuildArtifact, BuildError, BuildResult, STAGES
 from takflow.build.runtime_config import render_runtime_config
-
-
-STAGES = ("resource", "config", "credential", "job", "workflow", "report")
-
-
-@dataclass
-class StageResult:
-    name: str
-    status: str = "not_run"
-    reason: str | None = None
-    skipped_outputs: list[str] = field(default_factory=list)
-
-
-@dataclass
-class BuildArtifact:
-    path: str
-    role: str
-    stage: str
-    kind: str = "generated"
-    mode: str | None = None
-    sha256: str | None = None
-    mutable: bool = False
-    sensitive: bool = False
-    sources: list[dict[str, str]] = field(default_factory=list)
-
-
-@dataclass
-class BuildResult:
-    mode: str
-    output_root: Path
-    workflow_output: Path
-    scope: str
-    build_id: str = field(default_factory=lambda: uuid4().hex)
-    complete: bool = False
-    manifest_path: Path | None = None
-    stages: list[StageResult] = field(default_factory=lambda: [StageResult(name) for name in STAGES])
-    artifacts: list[BuildArtifact] = field(default_factory=list)
-    diagnostics: list[dict[str, Any]] = field(default_factory=list)
-    generation: GenerationResult | None = field(default=None, repr=False)
-
-    def as_dict(self) -> dict[str, Any]:
-        """A controlled report: no raw config, credential data or exception text."""
-        return {
-            "build_id": self.build_id, "scope": self.scope, "complete": self.complete,
-            "mode": self.mode, "output_root": str(self.output_root),
-            "workflow_output": str(self.workflow_output),
-            "manifest_path": str(self.manifest_path) if self.manifest_path else None,
-            "stages": [asdict(value) for value in self.stages],
-            "artifacts": [{key: value for key, value in asdict(item).items()
-                           if not (item.sensitive and key == "sha256")} for item in self.artifacts],
-            "diagnostics": list(self.diagnostics),
-        }
-
-
-class BuildError(RuntimeError):
-    """Safe message with a partial result and the unchanged original exception."""
-
-    def __init__(self, result: BuildResult, original: Exception):
-        self.result = result
-        self.original = original
-        stage = next((item.name for item in result.stages if item.status == "failed"), "build")
-        super().__init__(f"[BUILD_FAILED] {stage}: generation failed; partial result and original exception retained")
 
 
 class _BuildChecks(GenerationCheckReport):
@@ -468,47 +402,6 @@ class _Pipeline:
             except Exception:
                 self.report.unchecked("BUILD_PARTIAL_UNREADABLE", "workflow", str(path), "workflow metadata could not be collected")
 
-    def publish(self):
-        public_inputs = {"mode": self.result.mode, "workflow_name": self.context.config.workflow_name,
-                         "script_invoke_mode": self.context.config.script_invoke_mode,
-                         "components": sorted(self.context.components.enabled)}
-        payload = self.result.as_dict()
-        payload.update(schema_version=1, complete=True, manifest_path=str(self.manifest),
-                       versions={"takflow": __version__, "python": platform.python_version(),
-                                 "application": self.context.brand.version, "tool_name": self.context.brand.tool_name,
-                                 "target_model": self.context.brand.target_model, "jobspec": contract_version()},
-                       config_fingerprint={"scope": "public-generation-options", "sha256": hashlib.sha256(json.dumps(public_inputs, sort_keys=True).encode()).hexdigest()},
-                       resource_layers=[{"name": layer.name, "root": str(layer.root)} for layer in self.context.paths.resource_layers])
-        payload["implementation_sha256"] = {
-            name: hashlib.sha256((Path(__file__).resolve().parents[1] / name).read_bytes()).hexdigest()
-            for name in ("application/declaration.py", "application/inputs.py", "application/context.py",
-                         "application/prepare.py", "build/pipeline.py",
-                         "build/assets.py", "build/runtime_config.py", "flow/generate.py", "checks.py", "_files.py",
-                         "flow/backends/ecflow/_job_paths.py",
-                         "flow/node.py", "flow/hook.py", "flow/backend.py", "flow/scheduling.py",
-                         "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py",
-                         "config/credentials.py", "flow/backends/ecflow/serializer/attributes.py")
-        }
-        spec = Path(__file__).resolve().parents[1] / "spec"
-        payload["versions"]["orvix_pin"] = (spec / "jobspec/ORVIX_VERSION").read_text().strip()
-        payload["versions"]["takler_pin"] = (spec / "takler/TAKLER_VERSION").read_text().strip()
-        make_parents(self.manifest, self.root)
-        descriptor, temporary = tempfile.mkstemp(prefix=".generation_manifest.", dir=self.root)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
-                os.fchmod(stream.fileno(), 0o644)
-                stream.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, self.manifest)
-        finally:
-            try:
-                Path(temporary).unlink(missing_ok=True)
-            except OSError:
-                pass
-        self.result.manifest_path = self.manifest
-        self.result.complete = True
-
     def run(self, stages, *, full):
         self.result.scope = "full" if full else "stage"
         self.stage = stages[0]
@@ -537,7 +430,7 @@ class _Pipeline:
             if full:
                 self.stage = "report"
                 try:
-                    self.publish()
+                    publish_manifest(self.context, self.result, self.manifest)
                 except Exception as error:
                     self.report.failed("BUILD_MANIFEST_PUBLISH", "report.publish", str(self.manifest),
                                        io_failure_reason("could not publish the success manifest", error))
