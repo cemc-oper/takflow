@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Run jobs under OUTPUT_REPO_BASE/jobs in order and stop on the first failure.
 # Source logger.sh and the submission helper selected by the application first.
 
 check_function_return() {

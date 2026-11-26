@@ -11,8 +11,7 @@
 
 set -a
 
-#-----------------------------------------------
-# load configure
+# --- 初始化作业并加载配置 ---
 {% if config.workflow_mode == 'ecflow' %}
 {% raw %}
 %include <common/head.h>
@@ -22,12 +21,11 @@ set -a
 source ${OUTPUT_REPO_BASE}/config/config.sh
 {% endif %}
 
-#-----------------------------------------------
-# run script
+# --- 执行业务脚本 ---
 
 {{ invoke_script('scripts/obs/prepare.sh') }}
 
-#-----------------------------------------------
+# --- 报告作业完成 ---
 {% if config.workflow_mode == 'ecflow' %}
 {% raw %}
 %include <common/tail.h>

@@ -162,6 +162,10 @@ esac
         if case == "no credential supplied":
             task.job_password = None
         task.create_job_script()
+        rendered = Path(task.job_path).read_text()
+        for header in ("head", "tail"):
+            for side in ("BEGIN", "END"):
+                assert rendered.count(f"# {side} include takflow:takler/include/{header}.sh\n") == 1
         env = {**os.environ, "PATH": f"{client.parent}:{os.environ['PATH']}",
                "TAKLER_NAME": "/old/task", "TAKLER_ATTEMPT_ID": previous_attempt,
                "TAKLER_PASS": previous_password, "EXPECTED_NAME": task.node_path,

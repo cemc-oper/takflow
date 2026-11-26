@@ -1,4 +1,8 @@
+# =============================================================================
+# BEGIN include toyflow:ecflow/include/common/head.h
+# =============================================================================
 #! /usr/bin/env bash
+# 登记 toyflow 示例作业的 ecFlow 运行进程和异常回调。
 
 set -e          # stop the shell on first error
 set -u          # fail when using an undefined variable
@@ -32,3 +36,6 @@ ERROR() {
    exit 1
 }
 trap ERROR 0
+# =============================================================================
+# END include toyflow:ecflow/include/common/head.h
+# =============================================================================

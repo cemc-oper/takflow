@@ -316,13 +316,15 @@ while [ ! -f "$RELEASE" ]; do sleep 0.02; done
 def test_native_rebuild_reads_public_head_after_component_override_is_removed(tmp_path):
     from takflow.application import ResourceEntry
     from takflow.build import build
+    from takflow.jobs.provenance import source_block
     from test_build import application, data, put
 
     source = tmp_path / "source"
     output = tmp_path / "out"
     put(source, "config/config.sh.j2", "# config\n")
     put(source, "jobs/on/task.sh.j2", "#!/bin/bash\n%include <head.h>\n:\n%include <tail.h>\n")
-    override = put(source, "ecflow/include/data/head.h", "echo component-head\n")
+    override = put(source, "ecflow/include/data/head.h",
+                   source_block("echo component-head\n", "include", "site:ecflow/include/data/head.h"))
 
     def suite_builder(config, engine):
         suite = engine.Suite(config.workflow_name)
@@ -350,11 +352,16 @@ def test_native_rebuild_reads_public_head_after_component_override_is_removed(tm
 
     first = build_and_expand(tmp_path / "first-jobs")
     assert "echo component-head" in first and "ecflow_client --complete" in first
+    assert first.count("# BEGIN include site:ecflow/include/data/head.h\n") == 1
+    assert "# BEGIN include takflow:ecflow/include/common/head.h" not in first
     assert not (output / "ecflow/include/data/tail.h").exists()
     override.unlink()
     second = build_and_expand(tmp_path / "second-jobs")
     assert "echo component-head" not in second
     assert "ecflow_client --init" in second and "ecflow_client --complete" in second
+    for header in ("head", "tail"):
+        for side in ("BEGIN", "END"):
+            assert second.count(f"# {side} include takflow:ecflow/include/common/{header}.h\n") == 1
 
 
 def test_native_orvix_resource_variables_and_application_default(tmp_path):
@@ -508,6 +515,7 @@ def test_native_shared_resource_header_follows_parent_edits(tmp_path, fallback):
             policy = True if fixed else (fallback if state is None else state)
             lines = job.read_text().splitlines()
             assert lines.count("#SBATCH --no-requeue") == int(policy is False)
+            assert lines.count("# BEGIN include takflow:ecflow/include/common/requeue-false.h") == int(policy is False)
             assert "#SBATCH --requeue" not in lines
             expect = {
                 "queue": "batch" if fixed or not attempt else f"batch-{attempt}",

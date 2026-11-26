@@ -1,3 +1,7 @@
+# =============================================================================
+# BEGIN include takflow:ecflow/include/common/head.h
+# =============================================================================
+# 初始化 ecFlow 作业，登记运行进程并安排异常回调。
 set -eu
 
 export ECF_PORT="%ECF_PORT%"
@@ -15,6 +19,7 @@ if [ -n "${HOME:-}" ]; then
     PATH="$PATH:$HOME/bin"
 fi
 
+# --- 安装异常和信号处理 ---
 ecf_phase=init
 ecf_signals='1 2 3 4 5 6 7 8 10 12 13 15'
 ecf_error() {
@@ -41,3 +46,6 @@ done
 
 ecflow_client --init="$ECF_RID"
 ecf_phase=running
+# =============================================================================
+# END include takflow:ecflow/include/common/head.h
+# =============================================================================

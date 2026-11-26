@@ -1,3 +1,7 @@
+# =============================================================================
+# BEGIN include takflow:takler/include/head.sh
+# =============================================================================
+# 导出本次 takler 尝试的参数，初始化作业并处理失败。
 {% macro shell_word(value) -%}'{{ value | replace("'", "'\\''") }}'{%- endmacro -%}
 set -eu
 
@@ -18,6 +22,7 @@ unset TAKLER_PASS
 case $takler_shell_flags in *v*) set -v ;; esac
 case $takler_shell_flags in *x*) set -x ;; esac
 
+# --- 安装异常和信号处理 ---
 takler_phase=init
 takler_signals='1 2 3 4 5 6 7 8 10 12 13 15'
 takler_error() {
@@ -44,3 +49,6 @@ done
 
 takler_client init --task-id "$TAKLER_RID"
 takler_phase=running
+# =============================================================================
+# END include takflow:takler/include/head.sh
+# =============================================================================

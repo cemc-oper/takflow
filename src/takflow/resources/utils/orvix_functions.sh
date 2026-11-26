@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Submit a job through Orvix and wait for a confirmed scheduler result.
 # Source logger.sh before using submit_and_monitor_orvix_job SCRIPT [INTERVAL].
 
 # Read the pinned ORVIX status JSON from stdin. Keep the four fields on one

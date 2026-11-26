@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# logger.sh - 统一日志工具
+# 统一日志级别、终端颜色和日志文件输出。
 #
 # 用法:
 #   source logger.sh
