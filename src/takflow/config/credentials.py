@@ -17,12 +17,13 @@ from jinja2 import Environment, FileSystemLoader
 
 from takflow.config.validation import load_config_data
 from takflow.flow.hook import BaseHookRegistry, create_hook_decorator
+from takflow.jobs.provenance import resource_source, source_block
 
 if TYPE_CHECKING:
     from takflow.config import BaseWorkflowConfig
 
 logger = logging.getLogger(__name__)
-_credential_environment = ContextVar("takflow_credential_environment", default=None)
+_credential_resources = ContextVar("takflow_credential_resources", default=(None, ()))
 
 
 def render_credential_template(
@@ -32,7 +33,7 @@ def render_credential_template(
     template_name: str = "credential_workflow.sh.j2",
 ) -> str:
     """Render a credential fragment from ``{repo_base}/config/{template_name}``."""
-    scoped = _credential_environment.get()
+    scoped, layers = _credential_resources.get()
     env = scoped if scoped is not None else Environment(
         loader=FileSystemLoader(f"{repo_base}/config"),
         lstrip_blocks=True,
@@ -40,7 +41,12 @@ def render_credential_template(
     )
     name = "config/" + template_name if scoped is not None and not template_name.startswith("config/") else template_name
     template = env.get_template(name)
-    return template.render(credential=credential, config=config)
+    text = template.render(credential=credential, config=config)
+    if template.filename is not None:
+        source = resource_source(Path(template.filename), layers)
+        if source is not None:
+            return source_block(text, "include", source)
+    return text
 
 
 class CredentialHookPoint(str, Enum):
@@ -90,7 +96,7 @@ def render_credential(
     config: "BaseWorkflowConfig",
     output_repo_base: str,
     build_info_lines: Dict[str, str],
-    *, environment: Environment | None = None,
+    *, environment: Environment | None = None, source_layers: tuple[tuple[str, Path], ...] = (),
 ) -> None:
     """Write ``config/credential.sh`` at mode 0600 from all registered hooks.
 
@@ -122,11 +128,11 @@ def render_credential(
 
     registry = get_credential_registry()
     context = CredentialContext(credential=credential, config=config)
-    token = _credential_environment.set(environment)
+    token = _credential_resources.set((environment, source_layers))
     try:
         rendered_parts = registry.execute(CredentialHookPoint.RENDER, context)
     finally:
-        _credential_environment.reset(token)
+        _credential_resources.reset(token)
 
     for part in rendered_parts:
         if part and part.strip():

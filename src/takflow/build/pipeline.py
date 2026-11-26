@@ -288,7 +288,7 @@ class _Pipeline:
         before = file_state(path)
         try:
             render_credential(str(self.credential_file), self.context.config, str(self.root), dict(self.context.build_info),
-                              environment=self.environment)
+                              environment=self.environment, source_layers=self.source_layers)
         except (ConfigValidationError, GenerationCheckError):
             raise
         except Exception as error:
