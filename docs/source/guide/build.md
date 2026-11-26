@@ -44,7 +44,7 @@ prepare 的加载/校验失败继续使用配置校验异常；这时尚未开�
 
 ## 默认阶段
 
-资源阶段复用 toolkit 复制计划和检查，按声明层序覆盖；记录实际来源与覆盖层。
+资源阶段使用 `takflow.build.assets` 检查复制计划，按声明顺序覆盖文件，登记实际来源与覆盖层。
 ResourceEntry 支持目录和单文件，组件分类在读取内容前筛选，保留选中的空目录。
 显式 executable=True 的文件0755，普通文件0644，目录0755；覆盖已有文件同样设置精确权限，不受umask影响。
 machine 由公共选择管理，拒绝手工ResourceEntry复制整个machine树。
@@ -54,7 +54,7 @@ machine 由公共选择管理，拒绝手工ResourceEntry复制整个machine树�
 可选缺模板记录skipped_outputs，模板内部渲染错误仍失败。物理别名、角色碰撞和覆盖已知输入会拒绝。
 
 凭证由credential_enabled选择，关闭时skipped，不要求空handler；启用时未给文件、输入缺失及无注册贡献分别诊断。
-复用credential toolkit组合局部贡献，标准路径使用严格环境和0600，写入前/期间即受保护。
+凭证阶段由 `takflow.config.credentials` 组合各扩展贡献的片段，使用严格模板环境，以 `0600` 权限写入。
 单独凭证步骤保留已有父目录权限。`takflow.config.credentials.render_credential` 以 `0600` 写出凭证文件。
 
 作业复用目录 renderer、include_raw、invoke_script 和资源指令 helper，统一写入 jobs/，权限为 0755。

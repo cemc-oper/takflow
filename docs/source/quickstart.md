@@ -2,7 +2,7 @@
 
 本页用最小应用 [toyflow](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow) 走通配置、领域构图、hook、低层生成服务和应用自有四步 CLI，最终生成 ecFlow `.def`。业务主线只有 `obs → main → post`，便于对照源码理解各领域内容如何进入生成物。
 
-> **示例边界**：toyflow 演示底层 API 和旧应用入口，没有声明标准 `Application`，也不运行 `build(context)` 或发布 `generation_manifest.json`。新应用的主路径是 `Application.prepare()` → `build(context)`，请先阅读[设计总览](guide/overview.md)，再以[应用声明](guide/application.md)和[标准构建](guide/build.md)组织代码。
+toyflow 使用 TakFlow 0.3.0 接口演示独立生成命令。标准应用使用 `Application.prepare()` 和 `build(context)` 生成全套产物和成功清单。[设计总览](guide/overview.md) · [0.3.0 发布说明](guide/release-0.3.0.md)
 
 完整业务包的标准应用示例见 {ref}`MCV S1 真实应用参考 <mcv-s1-reference>`。
 
@@ -43,7 +43,7 @@ config = load_config_from_file(
 print(config.forecast.resource)
 ```
 
-这里使用 toyflow 旧入口的独立 loader；标准应用把配置类型交给 `Application`，由 `prepare()` 统一加载、覆盖和校验。完整 YAML、领域模型和两种加载路径见[配置](guide/config.md)。
+toyflow 通过公共配置加载器读取 YAML。标准应用把配置类型交给 `Application`，由 `prepare()` 统一加载、覆盖和校验。[配置](guide/config.md)
 
 ### 2. 定义运行流程
 
@@ -103,6 +103,6 @@ toyflow/
 
 ## 下一步
 
-- **构建新应用**：依次阅读[设计总览](guide/overview.md)、[应用声明](guide/application.md)、[资源层](guide/resource-layers.md)和[标准构建](guide/build.md)，不要把 toyflow 旧 CLI 当作标准入口。
+- **构建新应用**。依次阅读[设计总览](guide/overview.md)、[应用声明](guide/application.md)、[资源层](guide/resource-layers.md)和[标准构建](guide/build.md)。
 - **逐文件研究本示例**：阅读 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)，查看文件职责、产物树和可选凭证/观测能力。
 - **参考真实标准应用**：进入 {ref}`MCV S1 真实应用参考 <mcv-s1-reference>`。

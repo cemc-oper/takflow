@@ -57,11 +57,12 @@ jobspec 契约升级和 orvix pin 更新可以分别发生，不做机械同步 
 `takflow.flow.backends.takler`，但实例化 `TaklerBackend` 会明确抛出 `ImportError`。可选
 observability 校验能力的依赖和启用条件见[可观测性](observability.md)。
 
-### 2.2 兼容 facade 与历史入口
+### 2.2 迁移 0.3.0 之前的入口
 
 - 从 `takflow.flow.scheduling` 导入 `set_scheduling`，从 `takflow.flow.backend` 导入通用设置和脚本命令函数。具体后端从 `takflow.flow.backends` 下的对应引擎包导入。[后端入口](../reference/backends.rst)
 - 原先通过 `takflow.toolkit.job` 或 `takflow.toolkit` 导入的作业渲染函数改从 `takflow.jobs.render` 导入。资源头及模板 helper 改从 `takflow.jobs.headers` 导入。旧 `set_build_info_provider` 已移除，独立作业渲染通过 `takflow.build_info.build_info_scope` 指定品牌。[作业渲染入口](../reference/jobs.rst)
 - 从 `takflow.flow.hook` 导入 `create_hook_decorator` 构建钩子装饰器。
+- `takflow.generation` 的生成入口归入 `takflow.flow.generate`，独立产物检查通过 `takflow.checks.check_artifacts` 调用。完整移除清单与配套要求见 [0.3.0 发布说明](release-0.3.0.md)。
 - 包根部和已列出模块之间的 re-export 都是公共入口。调整其实现位置时，应保留导入路径或按
   下文弃用流程提供 facade，不要求应用跟随内部文件移动。
 - 已被应用或测试使用的非下划线历史入口，即使尚未列入 `__all__`，也不能仅凭这一点视为可
@@ -128,5 +129,4 @@ jobspec 的 schema、19 个指令键、语义化版本和 conformance golden 由
 2. 发布说明/迁移说明及相应测试；
 3. 涉及生成产物时的 golden diff，涉及 jobspec 时的 orvix 契约版本和 pin 同步记录。
 
-当前没有已宣布的 takflow 公共入口弃用项。首项弃用发生时，在本节增加“版本、类型、旧入口、
-替代入口、计划移除/迁移说明”的记录表。
+0.3.0 的模块重组包含不兼容的 Python 导入变更。应用按同批框架、基础应用和所需扩展一起切换。已移除入口及替代位置见 [0.3.0 发布说明](release-0.3.0.md)。

@@ -18,13 +18,15 @@ jobspec vendor 同步流程。
 
 ## 2. takflow 包版本
 
-takflow 使用独立包版本表达 Python API、toolkit、后端适配和生成行为的发布节奏。1.x 起，
+takflow 使用独立包版本表达 Python API、后端适配和生成行为的发布节奏。1.x 起，
 向后兼容功能、修复和不兼容变化分别进入 MINOR、PATCH 和 MAJOR；0.x 阶段的破坏性变化也必须
 显式记录并提供迁移说明。deprecate、兼容 facade、生成产物 golden diff 和应用 CLI 的记录规则
 以[公共 API 与兼容策略](../guide/public-api.md)为准。
 
 应用 CLI 由应用仓库独立版本化。takflow 包升级不隐含应用命令或历史选项变化，也不以 jobspec
 契约版本作为 takflow 或应用的发布版本。
+
+0.3.0 的兼容变更与配套迁移记录见发布说明。正式制品的版本由 `v0.3.0` 标签生成，交付记录随制品登记实际源码修订、包版本和 SHA-256。[0.3.0 发布说明](../guide/release-0.3.0.md)
 
 ## 3. jobspec 契约版本规则
 

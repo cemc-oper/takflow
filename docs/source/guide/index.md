@@ -44,6 +44,7 @@ observability
 :caption: 4. 兼容与迁移
 
 public-api
+release-0.3.0
 legacy-adapters
 cli-migration
 ```

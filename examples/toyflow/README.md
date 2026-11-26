@@ -1,19 +1,19 @@
-# toyflow —— takflow 底层 API 与旧 CLI 示例
+# toyflow 的低层 API 与独立命令示例
 
 `toyflow` 是一个玩具天气预报系统的工作流生成器，用最小业务主线 `obs → main → post` 演示配置、构图、资源、模板、hook、低层生成服务和可选观测。它是 `mcv-workflow` 的袖珍学习示例，不是科学业务实现。
 
-**toyflow 使用应用自有四步 CLI 和旧 toolkit 适配入口，没有声明标准 `Application`，也不发布 `generation_manifest.json`。** 新应用应以 `Application.prepare()` 和 `build(context)` 组织构建，见[设计总览](../../docs/source/guide/overview.md)、[应用声明](../../docs/source/guide/application.md)和[标准构建](../../docs/source/guide/build.md)。本 README 负责说明 toyflow 的文件、命令和产物；各 API 的完整契约以对应专题页为准。
+toyflow 用独立命令演示 TakFlow 0.3.0 的资源、配置、作业、流程和凭证入口。每条命令写出本步产物。标准应用通过 `Application.prepare()` 和 `build(context)` 执行完整生命周期并生成 `generation_manifest.json`。[设计总览](../../docs/source/guide/overview.md) · [0.3.0 迁移说明](../../docs/source/guide/release-0.3.0.md)
 
 ## 示例文件与职责
 
 | toyflow 文件 | 应用职责 | 复用的 takflow 能力 |
 |---|---|---|
 | `config/toyflow.yaml` | 声明通用输入和 toyflow 领域字段 | `BaseWorkflowConfig`、`TaskResource` |
-| `src/toyflow/config.py` | 定义 `ForecastConfig` 和 `ToyflowConfig` | 配置模型与旧 loader |
-| `src/toyflow/flow.py` | 用 `create_suite(config, engine)` 构建节点、trigger、变量和调度 | `takflow.flow`、后端 runtime helpers |
-| `src/toyflow/hooks.py` | 定义应用 hook 点并注入 `main/verify`；渲染 toyflow 凭证片段 | 通用 registry 与 credential hook |
-| `src/toyflow/generate.py` | 适配配置渲染、definition 保存和可选观测清单 | `takflow.flow.generate`、`takflow.observability` |
-| `src/toyflow/cli.py` | 组合应用自有的 resource/config/job/workflow/credential 命令 | 旧 toolkit 生成入口 |
+| `src/toyflow/config.py` | 定义 `ForecastConfig` 和 `ToyflowConfig` | `takflow.config` 的模型和配置加载 |
+| `src/toyflow/flow.py` | 用 `create_suite(config, engine)` 构建节点、trigger、变量和调度 | `takflow.flow.backend`、`takflow.flow.scheduling`、`takflow.jobs.submission` |
+| `src/toyflow/hooks.py` | 定义应用 hook 点并注入 `main/verify`，渲染凭证片段 | `takflow.flow.hook`、`takflow.config.credentials` |
+| `src/toyflow/generate.py` | 复制资源、渲染应用配置并保存定义 | `takflow.build.assets`、`takflow.flow.generate`、`takflow.observability` |
+| `src/toyflow/cli.py` | 组合独立命令，限定作业渲染的文件头作用域 | `takflow.jobs.render`、`takflow.build_info.build_info_scope`、`takflow.config.credentials` |
 | `src/toyflow/resources/` | 提供配置、作业模板、include 和业务脚本 | Jinja 渲染与资源复制 |
 
 toyflow 支持 ecFlow `.def` 和 takler JSON；公共配置模型虽然接受 `shell`，本示例没有 Shell runner，选择该模式会抛出 `ValueError: Unsupported workflow_mode: shell`。
@@ -32,31 +32,31 @@ toyflow/
 
 ## 运行
 
-要求 Python >= 3.10。先安装 takflow 和本示例：
+要求 Python >= 3.10。在 TakFlow 仓库根目录安装框架和示例。
 
 ```bash
-cd framework/takflow
-pip install -e .
-pip install -e examples/toyflow
+pip install -e . -e examples/toyflow
 ```
 
-在 takflow 仓库根目录依次执行：
+在 TakFlow 仓库根目录运行下面的命令，输出会写到新目录。
 
 ```bash
+toyflow_out=$(mktemp -d -t toyflow-XXXXXX)
+
 # 1. 复制静态资源（scripts/、ecflow/include/）
-toyflow resource copy --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
+toyflow resource copy --config-file examples/toyflow/config/toyflow.yaml --output-repo-base "$toyflow_out"
 
 # 2. 生成配置文件（ecFlow 模式生成 config/config.h）
-toyflow config generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
+toyflow config generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base "$toyflow_out"
 
 # 3. 从 Jinja2 模板生成作业脚本（jobs/**/*.sh.j2 → *.ecf）
-toyflow job generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
+toyflow job generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base "$toyflow_out"
 
 # 4. 生成工作流定义（toyflow.def）
-toyflow workflow generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base /tmp/toyflow_output
+toyflow workflow generate --config-file examples/toyflow/config/toyflow.yaml --output-repo-base "$toyflow_out"
 
 # 可选：生成凭证文件 config/credential.sh
-toyflow credential generate --config-file examples/toyflow/config/toyflow.yaml --credential-file examples/toyflow/config/credential.yaml --output-repo-base /tmp/toyflow_output
+toyflow credential generate --config-file examples/toyflow/config/toyflow.yaml --credential-file examples/toyflow/config/credential.yaml --output-repo-base "$toyflow_out"
 ```
 
 如果第三方依赖已经安装，也可以不安装 takflow 和 toyflow。仍在仓库根目录设置两份源码路径，再把上述命令中的 `toyflow` 换成 `python -m toyflow.cli`，参数保持不变：
@@ -65,12 +65,12 @@ toyflow credential generate --config-file examples/toyflow/config/toyflow.yaml -
 export PYTHONPATH="$PWD/examples/toyflow/src:$PWD/src"
 ```
 
-这些命令是 toyflow 的旧应用入口：不会自动补跑前置步骤，也不发布标准成功清单。可选 credential 命令沿用旧 `render_credential` 的权限和返回行为；标准构建的凭证阶段使用 `0600`，见[标准构建](../../docs/source/guide/build.md)。整个生成过程是纯本地渲染，不需要 ecFlow、Slurm 或 HPC；只有加载、提交和运行生成物才需要相应环境。
+按上述顺序生成资源、配置、作业和定义。可选凭证命令使用 `takflow.config.credentials.render_credential`，以 `0600` 权限写出 `config/credential.sh`。生成可在本地完成，加载定义、提交作业和运行流程使用各自的运行环境。[标准构建](../../docs/source/guide/build.md)
 
 ## 生成的产物
 
 ```text
-/tmp/toyflow_output/
+$toyflow_out/
 ├── toyflow.def              # ecFlow 定义文件（含提交方式变量）
 ├── config/
 │   ├── config.h             # 作业运行时加载的配置
@@ -97,8 +97,8 @@ export PYTHONPATH="$PWD/examples/toyflow/src:$PWD/src"
 修改 toyflow 时，可按以下顺序定位：
 
 1. 在 `config.py` 和 YAML 中修改领域字段、功能开关与任务资源。
-2. 在 `flow.py` 中修改节点树；toyflow 旧 CLI 的扩展包可在 import 时注册 hook。
+2. 在 `flow.py` 中修改节点树。toyflow 的扩展可在导入时注册 hook。
 3. 在 `resources/` 中替换配置、作业模板、include 和业务脚本。
-4. 在 `generate.py` 中调整应用保存回调或观测映射；只有维护旧入口时才修改 `cli.py`。
+4. 在 `generate.py` 中调整应用保存回调或观测映射，在 `cli.py` 中维护命令入口。
 
-标准 `Application` 不依赖 import-only 注册，扩展必须在 initializer 中逐轮注册，见[流程与钩子](../../docs/source/guide/flow-and-hooks.md)。新应用不要复制这套旧 CLI 来建立第二套构建生命周期；标准声明、资源层、阶段结果和公共命令分别见[应用声明](../../docs/source/guide/application.md)、[资源层](../../docs/source/guide/resource-layers.md)、[标准构建](../../docs/source/guide/build.md)和[标准命令契约](../../docs/source/guide/cli.md)。真实业务包的标准应用示例见[应用声明中的 MCV S1 参考](../../docs/source/guide/application.md)。
+标准 `Application` 的扩展通过 initializer 在每次构建时注册。新应用可参考 MCV S1 的标准声明、资源层及完整构建。[MCV S1 参考](../../docs/source/guide/application.md) · [流程与钩子](../../docs/source/guide/flow-and-hooks.md) · [标准命令契约](../../docs/source/guide/cli.md)

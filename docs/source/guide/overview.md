@@ -1,6 +1,6 @@
 # 设计总览与职责边界
 
-本页从**一次构建**解释 takflow 的整体设计，帮助读者先建立使用模型，再进入各专题页面。包目录和七层技术架构见[架构设计](../develop/architecture.md)；底层 API 与旧 CLI 示例见[toyflow 快速上手](../quickstart.md)，真实标准应用见 {ref}`MCV S1 参考 <mcv-s1-reference>`。
+本页从**一次构建**解释 takflow 的整体设计。包目录与模块职责见[架构设计](../develop/architecture.md)，低层接口与独立命令见[toyflow 快速上手](../quickstart.md)，标准应用见 {ref}`MCV S1 参考 <mcv-s1-reference>`。
 
 takflow 面向工作流生成器应用，不直接替代业务应用、调度器或作业提交工具。新应用的主路径是：
 
@@ -141,7 +141,7 @@ orvix 拥有语言无关的 jobspec 契约；takflow 保存只读 vendor 副本�
 | 资源载体 | orvix / slsubmit6 等提交与取消命令通道，不是工作流后端 | [资源载体](backends.md) |
 | 低层生成服务 | `takflow.flow.generate` 的模式分发、输出路径和保存编排 | [生成服务 API](../reference/generation.rst) |
 | 独立产物检查 | 对已有 definition、job、Shell 和清单执行所选检查 | [产物检查](generation-checks.md) |
-| 旧 Python 适配 | 旧复制、配置渲染等入口的历史返回和副作用 | [旧接口适配](legacy-adapters.md) |
+| Python 入口迁移 | 旧复制、配置渲染和作业接口的替代位置 | [旧接口迁移](legacy-adapters.md) |
 
 真实消费者的实测边界统一见[开发测试](../develop/testing.md)；版本窗口和迁移历史见[CLI 迁移](cli-migration.md)及开发记录，不混入当前契约的定义。
 
@@ -149,10 +149,10 @@ orvix 拥有语言无关的 jobspec 契约；takflow 保存只读 vendor 副本�
 
 新应用优先使用 `Application.prepare()`、`takflow.build` 和公共 CLI。`takflow.flow` 与 `takflow.jobspec` 是这条主路径中的领域能力；`takflow.flow.generate` 是标准 workflow 阶段复用的低层生成编排入口。
 
-旧 toolkit 适配器、应用自有 CLI 和历史 handler 仍用于兼容既有消费者，但不应与标准路径拼接成另一套并行的构建生命周期。旧复制与配置接口见[旧接口适配](legacy-adapters.md)；迁移时先阅读[CLI 迁移](cli-migration.md)，公共入口及兼容边界见[公共 API 与兼容策略](public-api.md)。
+TakFlow 0.3.0 的低层调用从所属模块导入。应用可通过公共 `create_cli()` 接入标准生命周期，也可以像 toyflow 一样通过独立命令演示各项低层能力。旧入口的替代位置和配套要求见 [0.3.0 发布说明](release-0.3.0.md)。
 
 ## 阅读下一步
 
-- 第一次构建应用：阅读[应用声明](application.md)和[标准构建](build.md)，再用[toyflow 快速上手](../quickstart.md)对照底层 API；toyflow 的旧 CLI 不是标准入口。
+- 第一次构建应用时先阅读[应用声明](application.md)和[标准构建](build.md)，再用[toyflow 快速上手](../quickstart.md)对照低层 API。
 - 已了解示例、需要补齐领域能力：依次阅读[配置](config.md)、[资源层](resource-layers.md)、[流程与钩子](flow-and-hooks.md)和[作业资源](jobspec.md)。
 - 需要生成和验收产物：阅读[标准构建](build.md)、[标准命令契约](cli.md)和[产物检查](generation-checks.md)。
