@@ -1,6 +1,7 @@
 # =============================================================================
 # BEGIN include takflow:ecflow/include/common/orvix-requeue-false.h
 # =============================================================================
+# 向 Orvix 声明当前作业禁止重排队。
 #ORVIX requeue=false
 # =============================================================================
 # END include takflow:ecflow/include/common/orvix-requeue-false.h
