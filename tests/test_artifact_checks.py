@@ -92,7 +92,7 @@ def test_check_distinguishes_syntax_from_tool_failure_without_writing(tmp_path, 
         else:
             assert f"{target}: {status}" in response.output
         assert snapshot(out) == before
-    check("failed", "bash rejected script syntax at line 2")
+    check("failed", "bash rejected script syntax at line 3")
     def cannot_start(*args, **kwargs):
         raise OSError(errno.EACCES, private)
     monkeypatch.setattr("takflow.checks.artifacts.subprocess.run", cannot_start)

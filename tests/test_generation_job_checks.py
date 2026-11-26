@@ -44,7 +44,7 @@ def test_missing_include_fails_at_render_and_keeps_earlier_job(tmp_path):
     assert caught.value.diagnostic.stage == "job.render"
     assert caught.value.diagnostic.object == "jobs/last.sh.j2"
     assert [item["path"] for item in caught.value.report.artifacts] == [str(first)]
-    assert first.read_text() == "new first"
+    assert first.read_text() == "# JOB repo:jobs/first.sh.j2\nnew first"
     assert first.stat().st_mode & 0o111
     assert not (output / "jobs/last.sh").exists()
 
@@ -59,7 +59,7 @@ def test_missing_script_fails_when_its_job_is_rendered(tmp_path, helper, mode):
     assert caught.value.diagnostic.code == "GEN_INPUT_MISSING"
     assert caught.value.diagnostic.stage == "job.render"
     assert caught.value.diagnostic.object.endswith("scripts/missing.sh")
-    assert (output / "jobs/first.sh").read_text() == "echo first"
+    assert (output / "jobs/first.sh").read_text() == "# JOB repo:jobs/first.sh.j2\necho first"
     assert not (output / "jobs/last.sh").exists()
 
 
@@ -76,7 +76,13 @@ def test_external_script_requires_execute_permission_but_inline_only_reads(tmp_p
     assert caught.value.diagnostic.stage == "job.render"
     assert not (output / "jobs").exists()
     assert render(root, output, settings=config(script_invoke_mode="inline")) is None
-    assert (output / "jobs/task.sh").read_text().splitlines() == ["(", ":", "echo business", ")"]
+    separator = "# " + "=" * 77
+    assert (output / "jobs/task.sh").read_text().splitlines() == [
+        "# JOB repo:jobs/task.sh.j2", "(", ":",
+        separator, "# BEGIN script output:scripts/task.sh", separator,
+        "echo business",
+        separator, "# END script output:scripts/task.sh", separator, ")",
+    ]
 
 
 @pytest.mark.parametrize("reference", ["../outside.sh", "/outside.sh", "../${DYNAMIC_SCRIPT}"])
@@ -148,7 +154,7 @@ def test_same_template_overlay_keeps_only_final_artifact_record(tmp_path):
     report = GenerationCheckReport()
     assert render([base, oper], tmp_path / "out", report=report) is None
     result = tmp_path / "out/jobs/task.sh"
-    assert result.read_text() == "echo oper"
+    assert result.read_text() == "# JOB oper:jobs/task.sh.j2\necho oper"
     assert len(report.artifacts) == 1
     assert report.artifacts[0]["sha256"] == hashlib.sha256(result.read_bytes()).hexdigest()
     assert report.artifacts[0]["role"] == "job"
@@ -164,8 +170,8 @@ def test_sparse_layers_use_original_loader_index_and_fallback_order(tmp_path):
     (base / "templates/shared.j2").write_text("base current")
     oper = jobs(tmp_path / "oper", {"oper.sh.j2": '{% include "templates/shared.j2" %}'})
     render([sparse, base, oper], tmp_path / "out")
-    assert (tmp_path / "out/jobs/task.sh").read_text() == "base current"
-    assert (tmp_path / "out/jobs/oper.sh").read_text() == "base current"
+    assert (tmp_path / "out/jobs/task.sh").read_text() == "# JOB base:jobs/task.sh.j2\nbase current"
+    assert (tmp_path / "out/jobs/oper.sh").read_text() == "# JOB oper:jobs/oper.sh.j2\nbase current"
 
 
 def test_disabled_template_is_neither_read_nor_checked(tmp_path, monkeypatch):
@@ -215,7 +221,7 @@ def test_jinja_candidate_list_and_optional_include_keep_native_semantics(tmp_pat
     (root / "templates/ok.j2").write_text("echo selected")
     report = GenerationCheckReport()
     render(root, tmp_path / "out", report=report)
-    assert (tmp_path / "out/jobs/task.sh").read_text().strip() == "echo selected"
+    assert (tmp_path / "out/jobs/task.sh").read_text().strip() == "# JOB repo:jobs/task.sh.j2\necho selected"
     assert not any(item.code == "GEN_TEMPLATE_OPTIONAL" for item in report.checks)
 
 
@@ -248,7 +254,7 @@ def test_late_dynamic_render_failure_retains_earlier_outputs_and_report(tmp_path
         render([first, last], output, settings=config(workflow_name="missing-dynamic.j2"))
     assert caught.value.diagnostic.code == "GEN_JOB_RENDER"
     assert caught.value.diagnostic.stage == "job.render"
-    assert (output / "jobs/first.sh").read_text() == "echo first"
+    assert (output / "jobs/first.sh").read_text() == "# JOB first:jobs/first.sh.j2\necho first"
     assert len(caught.value.report.artifacts) == 1
     assert not (output / "jobs/last.sh").exists()
 
@@ -295,7 +301,7 @@ def test_unexecuted_control_flow_does_not_read_or_require_its_references(tmp_pat
     monkeypatch.setattr(FileSystemLoader, "get_source", get_source)
     report = GenerationCheckReport()
     render(root, output, report=report)
-    assert (output / "jobs/task.sh").read_text().strip() == "echo safe"
+    assert (output / "jobs/task.sh").read_text().strip() == "# JOB repo:jobs/task.sh.j2\necho safe"
     assert not any(item.status == "unchecked" for item in report.checks)
 
 
@@ -304,7 +310,7 @@ def test_overridden_parent_block_does_not_require_unused_include(tmp_path):
     (root / "templates").mkdir()
     (root / "templates/base.j2").write_text('{% block body %}{% include "missing.j2" %}{% endblock %}')
     render(root, tmp_path / "out")
-    assert (tmp_path / "out/jobs/task.sh").read_text() == "echo selected"
+    assert (tmp_path / "out/jobs/task.sh").read_text() == "# JOB repo:jobs/task.sh.j2\necho selected"
 
 
 @pytest.mark.parametrize("reference,code", [
@@ -319,7 +325,7 @@ def test_executed_guarded_reference_fails_at_render_and_retains_earlier_jobs(tmp
         render([first, last], output)
     assert caught.value.diagnostic.code == code
     assert caught.value.diagnostic.stage == "job.render"
-    assert (output / "jobs/first.sh").read_text() == "echo first"
+    assert (output / "jobs/first.sh").read_text() == "# JOB first:jobs/first.sh.j2\necho first"
     assert len(caught.value.report.artifacts) == 1
     assert not (output / "jobs/last.sh").exists()
 
@@ -376,7 +382,7 @@ def test_false_include_branch_does_not_read_an_escaping_template_symlink(tmp_pat
         return original(loader, environment, template)
     monkeypatch.setattr(FileSystemLoader, "get_source", get_source)
     render(root, tmp_path / "out")
-    assert (tmp_path / "out/jobs/task.sh").read_text().strip() == "echo safe"
+    assert (tmp_path / "out/jobs/task.sh").read_text().strip() == "# JOB repo:jobs/task.sh.j2\necho safe"
 
 
 @pytest.mark.parametrize("body", [

@@ -224,7 +224,7 @@ def test_selected_followup_layer_shares_final_sources_across_stages(tmp_path, re
             assert name in (context.paths.output_root / destination).read_text()
         # A base-only job resolves its nested include from the final layer too.
         fallback = context.paths.jobs_dir / 'on/fallback.ecf'
-        assert fallback.read_text() == f'#!/bin/bash\n# nested={name}\n'
+        assert fallback.read_text() == f'#!/bin/bash\n# JOB base:jobs/on/fallback.sh.j2\n# nested={name}\n'
         item = next(a for a in result.artifacts if a.path == str(fallback))
         assert item.sources == [{'template': str(resources / 'jobs/on/fallback.sh.j2')}]
 

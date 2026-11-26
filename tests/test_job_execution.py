@@ -104,6 +104,9 @@ def test_multiple_calls_continue_only_after_success(tmp_path, shell, mode, rc):
 {{ invoke_script('scripts/business.sh', 'second') }}"""
     body = f'echo "business:$1"\nexit {rc}'
     rendered, output = render(tmp_path, body, mode, template=template)
+    count = 2 if mode == "inline" else 0
+    assert rendered.count("# BEGIN script output:scripts/business.sh\n") == count
+    assert rendered.count("# END script output:scripts/business.sh\n") == count
     result, calls = execute(tmp_path, shell, rendered, output, expected_status=rc)
     assert result.stdout.splitlines() == (
         ["business:first", "business:second"] if rc == 0 else ["business:first"]
@@ -135,8 +138,13 @@ def test_external_script_path_is_one_argument_in_legacy_renderer(tmp_path, workf
 
 def test_include_raw_keeps_same_shell_semantics(tmp_path, shell):
     template = "{{ include_raw('scripts/business.sh') }}\ntest \"$loaded\" = yes"
-    rendered, output = render(tmp_path, "loaded=yes", "inline", template=template)
-    _, calls = execute(tmp_path, shell, rendered, output)
+    payload = "cat <<'PAYLOAD'\n# literal payload\n{{ not_jinja }}\nPAYLOAD\nloaded=yes"
+    rendered, output = render(tmp_path, payload, "inline", template=template)
+    assert "# BEGIN include output:scripts/business.sh\n" in rendered
+    assert "# END include output:scripts/business.sh\n" in rendered
+    assert payload in rendered
+    result, calls = execute(tmp_path, shell, rendered, output)
+    assert result.stdout == "# literal payload\n{{ not_jinja }}\n"
     assert calls == ["--init=test", "--complete"]
 
 

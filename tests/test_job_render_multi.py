@@ -42,11 +42,11 @@ def test_multi_repo_base_rendering_and_override(tmp_path):
         output_repo_base=str(out_dir),
     )
 
-    assert (out_dir / "jobs" / "base_only.sh").read_text().strip() == "echo base-only"
-    assert (out_dir / "jobs" / "oper_only.sh").read_text().strip() == "echo oper-only"
-    assert (out_dir / "jobs" / "shared.sh").read_text().strip() == "echo oper-shared"
+    assert (out_dir / "jobs" / "base_only.sh").read_text() == "# JOB base:jobs/base_only.sh.j2\necho base-only"
+    assert (out_dir / "jobs" / "oper_only.sh").read_text() == "# JOB oper:jobs/oper_only.sh.j2\necho oper-only"
+    assert (out_dir / "jobs" / "shared.sh").read_text() == "# JOB oper:jobs/shared.sh.j2\necho oper-shared"
     # File discovered only in base must use base's own template, not oper's override.
-    assert (out_dir / "jobs" / "uses_partial.sh").read_text().strip() == "base partial"
+    assert (out_dir / "jobs" / "uses_partial.sh").read_text() == "# JOB base:jobs/uses_partial.sh.j2\nbase partial"
 
 
 def test_oper_template_falls_back_to_base_include(tmp_path):
@@ -70,9 +70,9 @@ def test_oper_template_falls_back_to_base_include(tmp_path):
         output_repo_base=str(out_dir),
     )
 
-    assert (
-        out_dir / "jobs" / "uses_base_only.sh"
-    ).read_text().strip() == "echo only-in-base"
+    assert (out_dir / "jobs" / "uses_base_only.sh").read_text() == (
+        "# JOB oper:jobs/uses_base_only.sh.j2\necho only-in-base"
+    )
 
 
 def test_multi_repo_base_skips_missing_jobs_dir(tmp_path):
@@ -91,7 +91,7 @@ def test_multi_repo_base_skips_missing_jobs_dir(tmp_path):
         output_repo_base=str(out_dir),
     )
 
-    assert (out_dir / "jobs" / "foo.sh").read_text().strip() == "echo base"
+    assert (out_dir / "jobs" / "foo.sh").read_text() == "# JOB base:jobs/foo.sh.j2\necho base"
 
 
 def test_single_repo_base_missing_jobs_dir_raises(tmp_path):

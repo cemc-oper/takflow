@@ -39,6 +39,12 @@ cwd。显式 workflow_repo_base 仅替换 base，扩展仍按自己的有效字�
 同名项后层覆盖、缺失项向前回落。公共结果中静态文件保留有序 layer/path 来源，渲染
 产物的 template 指向选中的源文件；成功清单记录相同的层根，不记录模板正文。
 
+生成的作业和 Shell runner 在 shebang 后写入 `# JOB <来源>`，无 shebang 的作业在文件头写入。
+`invoke_script` 内联的业务正文有一对 `BEGIN script`／`END script`，`include_raw` 展开的 Shell
+片段使用 `include`。外部调用行属于当前作业。包内来源写为 `包名:resources/ 下的相对路径`，
+包外来源使用清单中的资源层名和层内相对路径。单独执行 `job generate` 时，按字节匹配已准备的
+输入和当前资源层。无法回溯的输入以 `output:` 加输出根下的路径定位。
+
 多模式应用可声明 `use_public_resources=lambda config: config.workflow_mode == "ecflow"`。
 公共文件包括 `ecflow/include/common/{head,tail}.h`、`takler/include/{head,tail}.sh`
 和 `utils/{logger,orvix_functions,run_functions}.sh`。沿用普通

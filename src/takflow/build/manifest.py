@@ -23,7 +23,7 @@ _IMPLEMENTATION_FILES = (
     "checks/diagnostics.py", "checks/preflight.py", "checks/artifacts.py", "checks/_native.py",
     "flow/generate.py", "flow/node.py", "flow/hook.py", "flow/backend.py", "flow/scheduling.py",
     "flow/backends/ecflow/_job_paths.py", "flow/backends/ecflow/serializer/attributes.py",
-    "jobs/render.py", "jobs/scripts.py", "jobs/headers.py",
+    "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "jobs/provenance.py",
 )
 
 

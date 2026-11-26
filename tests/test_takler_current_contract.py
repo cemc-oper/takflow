@@ -80,7 +80,15 @@ def test_takler_preprocesses_and_runs_business_job(tmp_path, mode):
 
     task.create_job_script()
     job = Path(task.job_path)
-    assert ("{% raw %}\n" + business + "\n{% endraw %}" in source) == (mode == "inline")
+    if mode == "inline":
+        _, _, protected = source.partition("{% raw %}\n")
+        fragment, closing, _ = protected.partition("\n{% endraw %}")
+        assert closing
+        begin = f"# BEGIN script base:{BUSINESS_SCRIPT}\n"
+        end = f"# END script base:{BUSINESS_SCRIPT}\n"
+        assert fragment.index(begin) < fragment.index(business) < fragment.index(end)
+    else:
+        assert business not in source
     rendered = job.read_text()
     assert (business in rendered) == (mode == "inline")
     assert 'export BUSINESS_INPUT="from-suite"' in rendered

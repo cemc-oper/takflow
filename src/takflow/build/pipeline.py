@@ -29,6 +29,7 @@ from takflow.flow.hook import _safe_hook_errors
 from takflow.flow.generate import GenerationContext, generate_workflow
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
 from takflow.jobs.render import render_jobs_from_directory
+from takflow.jobs.provenance import job_source, prepared_source, resource_source
 from takflow.config.credentials import CredentialHookPoint, get_credential_registry, render_credential
 from takflow.build.assets import _copy_resource_layers
 from takflow.build.manifest import publish_manifest
@@ -96,6 +97,7 @@ class _Pipeline:
             context.paths.workflow_output: "workflow",
         }
         self.loader = _ResourceLoader([layer.root for layer in context.paths.resource_layers], self.report)
+        self.source_layers = tuple((layer.name, layer.root) for layer in context.paths.resource_layers)
         self.environment = Environment(loader=self.loader, undefined=StrictUndefined,
                                        lstrip_blocks=True, trim_blocks=True, keep_trailing_newline=True)
         self.environment.globals.update(context.template_context())
@@ -218,6 +220,14 @@ class _Pipeline:
             return f"%includenopp <{target}>"
         return '. "${MACHINE_DIR}"/' + shlex.quote(path.as_posix())
 
+    def _resource_entries(self):
+        entries = list(self.context.application.resource_entries)
+        machine = self.context.machine
+        if machine is not None and not machine.external:
+            relative = f"machine/{machine.name}"
+            entries.append(ResourceEntry(relative, relative, required=True))
+        return [entry for entry in entries if self.context.components.keep_resource(entry.source)]
+
     def resource(self):
         for layer in self.context.paths.resource_layers:
             for relative in layer.required_inputs:
@@ -231,14 +241,10 @@ class _Pipeline:
                           for layer in self.context.paths.resource_layers]
             if not any(path.is_file() for path in candidates):
                 self.fail("BUILD_RESOURCE_INPUT_REQUIRED", relative, "required input is absent from all source layers")
-        entries = list(self.context.application.resource_entries)
-        if any(PurePosixPath(item.destination).parts[0] == "machine" for item in entries):
+        if any(PurePosixPath(item.destination).parts[0] == "machine" for item in self.context.application.resource_entries):
             self.fail("BUILD_MACHINE_MAPPING", "resource_entries", "machine copying is managed by the common selection")
         machine = self.context.machine
-        if machine is not None and not machine.external:
-            relative = f"machine/{machine.name}"
-            entries.append(ResourceEntry(relative, relative, required=True))
-        entries = [entry for entry in entries if self.context.components.keep_resource(entry.source)]
+        entries = self._resource_entries()
         for entry in entries:
             if entry.required and not any((layer.root / entry.source).exists() for layer in self.context.paths.resource_layers):
                 self.fail("BUILD_RESOURCE_REQUIRED", entry.source, "required resource is absent from all layers")
@@ -317,6 +323,21 @@ class _Pipeline:
 
     def job(self):
         self.config_inputs()
+        sources = {item.path: item.sources[-1] for item in self.result.artifacts if item.sources}
+        entries = tuple((item.source, item.destination) for item in self._resource_entries())
+
+        def script_source(path, content):
+            origin = sources.get(str(path), {})
+            filename = origin.get("path") or origin.get("template")
+            if filename:
+                layers = self.source_layers
+                if "layer" in origin:
+                    layers = tuple(layer for layer in layers if layer[0] == origin["layer"])
+                source = resource_source(Path(filename), layers)
+                if source:
+                    return source
+            return prepared_source(path, content, self.source_layers, self.root, entries)
+
         planned = []
         before = {}
 
@@ -331,7 +352,8 @@ class _Pipeline:
                                        str(self.root), template_filter=self.context.components.keep_job,
                                        check_report=self.report, environment=self.environment,
                                        template_context=self.context.template_context(), file_mode=0o755, verbose=False,
-                                       script_input_check=self.check_script_input, prepare_outputs=prepare_outputs)
+                                       script_input_check=self.check_script_input, prepare_outputs=prepare_outputs,
+                                       source_layers=self.source_layers, script_source=script_source)
         finally:
             for _, path in planned:
                 try:
@@ -375,9 +397,13 @@ class _Pipeline:
                                   f"enabled task requires a prepared job template: {candidates[-1]}")
 
         def shell_renderer(config, output_root, resource_root):
-            text = self.render(self.context.application.shell_template)
+            template = self.context.application.shell_template
+            text = self.render(template)
+            filename = self.template_sources[template]
+            source = resource_source(Path(filename), self.source_layers) or f"template:{template}"
+            text = job_source(text, source, config.workflow_mode)
             self.write(path, text, "workflow", 0o755)
-            self.record(path, "workflow", source={"template": self.template_sources[self.context.application.shell_template]})
+            self.record(path, "workflow", source={"template": filename})
             return path
 
         suite_builder = self.context.application.suite_builder

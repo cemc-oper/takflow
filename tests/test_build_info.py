@@ -31,7 +31,9 @@ def render_header(tmp_path: Path) -> str:
         ),
         env=Environment(loader=FileSystemLoader(template_root)),
     )
-    return (output_root / "job.sh").read_text(encoding="utf-8")
+    marker, _, header = (output_root / "job.sh").read_text(encoding="utf-8").partition("\n")
+    assert marker == "# JOB templates:job.sh.j2"
+    return header
 
 
 def test_nested_scopes_supply_and_restore_job_headers(tmp_path):

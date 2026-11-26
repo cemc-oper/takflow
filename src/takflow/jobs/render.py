@@ -22,6 +22,7 @@ from takflow.checks import (
 )
 from takflow.checks.diagnostics import template_failure
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
+from takflow.jobs.provenance import job_source, prepared_source, resource_source
 from takflow.jobs.scripts import _script_template_helpers
 
 if TYPE_CHECKING:
@@ -90,6 +91,8 @@ def render_jobs_from_directory(
     verbose: bool = True,
     script_input_check: Callable[[str], None] | None = None,
     prepare_outputs: Callable[[list[tuple[Path, Path]]], None] | None = None,
+    source_layers: tuple[tuple[str, Path], ...] | None = None,
+    script_source: Callable[[Path, bytes], str] | None = None,
 ) -> None:
     """Render every ``jobs/**/*.j2`` template under one or more repo roots.
 
@@ -133,6 +136,11 @@ def render_jobs_from_directory(
         raise TypeError(
             f"repo_base must be str, Path, or list, got {type(repo_base)}"
         )
+    if source_layers is None:
+        source_layers = tuple((Path(base).absolute().name, Path(base)) for base in repo_bases)
+    if script_source is None:
+        def script_source(path: Path, content: bytes) -> str:
+            return prepared_source(path, content, source_layers, Path(output_repo_base).absolute(), ((".", "."),))
 
     # Collect existing (repo_base, jobs_dir) pairs.  For a single repo_base we
     # preserve the original error-on-missing behaviour; for a list we tolerate
@@ -156,6 +164,7 @@ def render_jobs_from_directory(
         config, output_repo_base, report,
         protect_input=lambda path: protect_input(path),
         script_input_check=script_input_check,
+        script_source=script_source,
         legacy_renderer=environment is None,
     )
 
@@ -250,6 +259,7 @@ def render_jobs_from_directory(
             report=report,
             template_context=template_context,
             file_mode=file_mode,
+            source_layers=source_layers,
         )
 
         if verbose:
@@ -276,13 +286,18 @@ def render_single_job_file(
     source = _template_file(env, relative_path.as_posix())
     if source is not None:
         _job_input_guard([destination], report)(source)
-    _render_single_job_file(relative_path, output_repo_base, output_relative_path, config, env, report)
+    layers = ()
+    if isinstance(env.loader, FileSystemLoader):
+        layers = tuple((Path(root).absolute().name, Path(root)) for root in reversed(env.loader.searchpath))
+    _render_single_job_file(relative_path, output_repo_base, output_relative_path, config, env, report,
+                            source_layers=layers)
 
 
 def _render_single_job_file(
     relative_path: Path, output_repo_base: str, output_relative_path: Path,
     config: "BaseWorkflowConfig", env: Environment, report: GenerationCheckReport,
     *, template_context: Mapping | None = None, file_mode: int | None = None,
+    source_layers: tuple[tuple[str, Path], ...] = (),
 ) -> None:
     base_name = output_relative_path.stem
     if file_mode is not None and config.workflow_mode == "shell":
@@ -306,6 +321,9 @@ def _render_single_job_file(
     try:
         template = env.get_template(relative_path.as_posix())
         rendered_content = template.render(data)
+        source = resource_source(Path(template.filename), source_layers) if template.filename else None
+        rendered_content = job_source(rendered_content, source or f"template:{relative_path.as_posix()}",
+                                      config.workflow_mode)
     except GenerationCheckError:
         raise
     except (TemplateError, TypeError, ValueError, OSError) as error:

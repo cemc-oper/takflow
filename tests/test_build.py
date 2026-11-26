@@ -137,7 +137,7 @@ def test_complete_pipeline_and_native_artifact_roles(tmp_path, resources, mode, 
     assert manifest["build_id"] == result.build_id
     assert manifest["config_fingerprint"]["scope"] == "public-generation-options"
     for name in ("build/pipeline.py", "build/result.py", "build/manifest.py",
-                 "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "build_info.py"):
+                 "jobs/render.py", "jobs/scripts.py", "jobs/headers.py", "jobs/provenance.py", "build_info.py"):
         assert manifest["implementation_sha256"][name] == hashlib.sha256(files("takflow").joinpath(name).read_bytes()).hexdigest()
     assert {item.kind for item in result.artifacts} == {"generated", "copied", "reference"}
     assert str(stale) not in {item.path for item in result.artifacts}
@@ -222,16 +222,31 @@ def test_layered_resources_and_templates_share_final_precedence(tmp_path, resour
     extension = tmp_path / "extension"
     put(extension, "scripts/on/task.sh", "#!/bin/sh\nprintf override\n")
     put(extension, "config/config.sh.j2", "# override config\n")
-    put(extension, "jobs/on/task.sh.j2", "#!/bin/sh\n# selected final layer\n")
+    put(extension, "jobs/on/task.sh.j2", "#!/bin/sh\n{{ invoke_script('scripts/on/task.sh') }}\n")
     # An obsolete shadowed base template cannot cause a render failure.
     put(resources, "jobs/on/task.sh.j2", "{{ invalid(\n")
     app = application(resources, resource_layers=(ResourceLayer("oper", extension),))
-    with app.prepare(data(tmp_path / "out")) as context:
+    output = tmp_path / "out"
+    with app.prepare(data(output)) as context:
         result = build(context)
     assert "override config" in context.paths.config_file.read_text()
-    assert "selected final layer" in (tmp_path / "out/jobs/on/task.ecf").read_text()
+    job = output / "jobs/on/task.ecf"
+    rendered = job.read_text()
+    assert rendered.splitlines()[:2] == ["#!/bin/sh", "# JOB oper:jobs/on/task.sh.j2"]
+    assert "# BEGIN script oper:scripts/on/task.sh\n" in rendered
+    assert "# END script oper:scripts/on/task.sh\n" in rendered
     artifact = next(item for item in result.artifacts if item.path.endswith("scripts/on/task.sh"))
     assert [source["layer"] for source in artifact.sources] == ["base", "oper"]
+    with app.prepare(data(output)) as context:
+        run_stage(context, "job")
+    assert job.read_text() == rendered
+
+    # A standalone job run can embed a prepared output when the source layer
+    # no longer agrees with its contents.
+    (output / "scripts/on/task.sh").write_text("echo edited prerequisite\n")
+    with app.prepare(data(output)) as context:
+        run_stage(context, "job")
+    assert "# BEGIN script output:scripts/on/task.sh\n" in job.read_text()
 
 
 @pytest.mark.parametrize("invoke", ["inline", "external"])

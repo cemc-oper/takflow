@@ -110,7 +110,9 @@ def test_composed_choices_and_extension_data_share_effective_config(tmp_path, re
         public = context.paths.config_dir / 'public.sh'
         assert public.read_text() == '# effective-name effective-name composed-domain\n'
         job = context.paths.jobs_dir / 'on/task.ecf'
-        assert job.read_text().splitlines()[1] == f'# {context.build_info["info"]}'
+        assert job.read_text().splitlines()[1:3] == [
+            '# JOB base:jobs/on/task.sh.j2', f'# {context.build_info["info"]}',
+        ]
         private = [context.paths.config_dir / name for name in ('private.sh', 'credential.sh')]
         assert all(path.exists() is enabled for path in private)
         if enabled:
