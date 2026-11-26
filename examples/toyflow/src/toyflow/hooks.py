@@ -79,7 +79,7 @@ def add_verify_task(context: EngineHookContext) -> None:
 
     main_family = context.node
     verify = main_family.add_task("verify")
-    verify.add_trigger("forecast == complete")
+    verify.add_trigger("./forecast == complete")
 
     jobs_dir = context.kwargs["jobs_dir"]
     suffix = ".ecf" if context.engine.backend_type == "ecflow" else ".sh"

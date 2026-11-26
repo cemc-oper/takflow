@@ -109,6 +109,7 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
     # engine hook 注入的 verify 任务（连同它的作业脚本变量）
     assert "task verify" in def_text
     assert "main/verify.ecf" in def_text
+    assert "./forecast == complete" in def_text
     # forecast 依赖 obs/prepare
     assert "/toyflow/obs/prepare == complete" in def_text
 
