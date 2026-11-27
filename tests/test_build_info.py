@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
+import pytest
 
 from takflow.build_info import build_info_scope
 from takflow.config import BaseWorkflowConfig
@@ -56,3 +57,49 @@ def test_standalone_job_uses_generic_takflow_header(tmp_path):
         r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z",
         detail,
     )
+
+
+@pytest.mark.parametrize("deferred", [False, True])
+def test_job_stage_comments_use_the_output_path_and_selected_layer(tmp_path, deferred):
+    base = tmp_path / "base"
+    site = tmp_path / "site"
+    for layer in (base, site):
+        layer.mkdir()
+    shebang = "#!/bin/bash"
+    source_shebang = shebang
+    if deferred:
+        shebang = "%includenopp <%MACHINE_INCLUDE%/shebang_bash.sh>"
+        source_shebang = "{{ ecflow_include('<%MACHINE_INCLUDE%/shebang_bash.sh>', directive='includenopp') }}"
+    (base / "copy.sh.j2").write_text(
+        source_shebang + "\n{% include 'serial.j2' %}\n{{ ecflow_include('<common/head.h>') }}\n",
+        encoding="utf-8",
+    )
+    (base / "serial.j2").write_text("echo base\n", encoding="utf-8")
+    (site / "serial.j2").write_text(
+        "{% set body %}echo site\n{% endset %}{{ mark_build_include(body) }}",
+        encoding="utf-8",
+    )
+    output = tmp_path / "workflow"
+    relative = Path("jobs/renamed.ecf")
+    render_single_job_file(
+        relative_path=Path("copy.sh.j2"),
+        output_repo_base=str(output),
+        output_relative_path=relative,
+        config=BaseWorkflowConfig(
+            project_base_dir=str(tmp_path),
+            run_base_dir=str(tmp_path / "runs"),
+            workflow_mode="ecflow",
+            workload=ShellWorkload(),
+        ),
+        env=Environment(loader=FileSystemLoader([site, base])),
+    )
+    rendered = (output / relative).read_text(encoding="utf-8")
+    assert rendered.splitlines()[:3] == [
+        shebang, "# JOB base:copy.sh.j2", "# BUILD OUTPUT jobs/renamed.ecf",
+    ]
+    if deferred:
+        assert rendered.splitlines()[3] == "# INCLUDE [ecflow] <%%MACHINE_INCLUDE%%/shebang_bash.sh>"
+    assert "# BEGIN include [build] site:serial.j2\n" in rendered
+    assert "\necho site\n" in rendered
+    assert "# END include [build] site:serial.j2\n" in rendered
+    assert "# INCLUDE [ecflow] <common/head.h>\n%include <common/head.h>" in rendered

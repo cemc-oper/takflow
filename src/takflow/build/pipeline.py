@@ -29,7 +29,7 @@ from takflow.flow.hook import _safe_hook_errors
 from takflow.flow.generate import GenerationContext, generate_workflow
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
 from takflow.jobs.render import render_jobs_from_directory
-from takflow.jobs.provenance import job_source, prepared_source, resource_source
+from takflow.jobs.provenance import ecflow_include, job_source, prepared_source, resource_source
 from takflow.config.credentials import CredentialHookPoint, get_credential_registry, render_credential
 from takflow.build.assets import _copy_resource_layers
 from takflow.build.manifest import publish_manifest
@@ -215,9 +215,8 @@ class _Pipeline:
             # ecFlow tokenizes a literal include path before expanding variables.
             # Use a raw native path channel when the selected directory has spaces;
             # MACHINE_DIR remains shell-encoded for config exports.
-            if " " in str(machine.directory):
-                return f"%includenopp <%TAKFLOW_MACHINE_INCLUDE_DIR%/{relative}>"
-            return f"%includenopp <{target}>"
+            lookup = f"%TAKFLOW_MACHINE_INCLUDE_DIR%/{relative}" if " " in str(machine.directory) else str(target)
+            return ecflow_include(f"<{lookup}>", directive="includenopp")
         return '. "${MACHINE_DIR}"/' + shlex.quote(path.as_posix())
 
     def _resource_entries(self):

@@ -56,9 +56,11 @@ def _comment(line: str, mode: str) -> str:
     return line
 
 
-def job_source(text: str, source: str, mode: str) -> str:
-    """Keep the marker after a literal or deferred machine shebang."""
+def job_source(text: str, source: str, mode: str, *, output: Path | None = None) -> str:
+    """Keep the job header after a literal or deferred machine shebang."""
     marker = _comment(f"# JOB {source}", mode) + "\n"
+    if output is not None:
+        marker += _comment(f"# BUILD OUTPUT {output.as_posix()}", mode) + "\n"
     offset = 0
     for line in text.splitlines(keepends=True):
         if line.strip():
@@ -70,10 +72,21 @@ def job_source(text: str, source: str, mode: str) -> str:
     return marker + text
 
 
-def source_block(text: str, kind: str, source: str, mode: str = "shell") -> str:
+def ecflow_include(target: str, *, directive: str = "include") -> str:
+    """Identify a deferred include while leaving the target and directive intact."""
+    marker = _comment(f"# INCLUDE [ecflow] {target}", "ecflow")
+    statement = f"%{directive} {target}"
+    if _SHEBANG_INCLUDE.fullmatch(statement):
+        return f"{statement}\n{marker}"
+    return f"{marker}\n{statement}"
+
+
+def source_block(text: str, kind: str, source: str, mode: str = "shell", *, stage: str | None = None) -> str:
     """Enclose an expanded statement without modifying its body."""
     if not text.strip():
         return text
+    if stage:
+        kind = f"{kind} [{stage}]"
     begin = _comment(f"# BEGIN {kind} {source}", mode)
     end = _comment(f"# END {kind} {source}", mode)
     trailing_newline = "\n" if text.endswith("\n") else ""

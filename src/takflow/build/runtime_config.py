@@ -31,7 +31,7 @@ def render_runtime_config(pipeline: _Pipeline, skipped_outputs: list[str]) -> No
         if ecflow and (role == "config" or (
                 path.is_relative_to(context.paths.ecflow_include) and path.suffix in {".h", ".sh", ".ecf"})):
             source = resource_source(Path(filename), pipeline.source_layers) or f"template:{template}"
-            text = source_block(text, "include", source, "ecflow")
+            text = source_block(text, "include", source, "ecflow", stage="build")
         if role == "config":
             lines = []
             if ecflow:

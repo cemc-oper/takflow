@@ -45,7 +45,8 @@ def render_credential_template(
     if template.filename is not None:
         source = resource_source(Path(template.filename), layers)
         if source is not None:
-            return source_block(text, "include", source)
+            stage = "build" if config.workflow_mode == "ecflow" else None
+            return source_block(text, "include", source, stage=stage)
     return text
 
 

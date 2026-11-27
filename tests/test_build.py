@@ -232,9 +232,11 @@ def test_layered_resources_and_templates_share_final_precedence(tmp_path, resour
     assert "override config" in context.paths.config_file.read_text()
     job = output / "jobs/on/task.ecf"
     rendered = job.read_text()
-    assert rendered.splitlines()[:2] == ["#!/bin/sh", "# JOB oper:jobs/on/task.sh.j2"]
-    assert "# BEGIN script oper:scripts/on/task.sh\n" in rendered
-    assert "# END script oper:scripts/on/task.sh\n" in rendered
+    assert rendered.splitlines()[:3] == [
+        "#!/bin/sh", "# JOB oper:jobs/on/task.sh.j2", "# BUILD OUTPUT jobs/on/task.ecf",
+    ]
+    assert "# BEGIN script [build] oper:scripts/on/task.sh\n" in rendered
+    assert "# END script [build] oper:scripts/on/task.sh\n" in rendered
     artifact = next(item for item in result.artifacts if item.path.endswith("scripts/on/task.sh"))
     assert [source["layer"] for source in artifact.sources] == ["base", "oper"]
     with app.prepare(data(output)) as context:
@@ -246,7 +248,7 @@ def test_layered_resources_and_templates_share_final_precedence(tmp_path, resour
     (output / "scripts/on/task.sh").write_text("echo edited prerequisite\n")
     with app.prepare(data(output)) as context:
         run_stage(context, "job")
-    assert "# BEGIN script output:scripts/on/task.sh\n" in job.read_text()
+    assert "# BEGIN script [build] output:scripts/on/task.sh\n" in job.read_text()
 
 
 @pytest.mark.parametrize("invoke", ["inline", "external"])

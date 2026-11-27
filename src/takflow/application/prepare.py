@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 _RESERVED_CONTEXT = frozenset({
     "config", "paths", "brand", "components", "machine", "variables",
     "build_info_warning", "build_info_detail", "include_raw", "invoke_script",
+    "mark_build_include", "ecflow_include",
     "include_machine", "render_orvix_resource_block", "render_slurm_resource_block", "stdout", "stderr",
 })
 

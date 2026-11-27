@@ -13,10 +13,9 @@ set -a
 
 # --- 初始化作业并加载配置 ---
 {% if config.workflow_mode == 'ecflow' %}
-{% raw %}
-%include <common/head.h>
-%include <common/configure.h>
-{% endraw %}
+
+{{ ecflow_include('<common/head.h>') }}
+{{ ecflow_include('<common/configure.h>') }}
 {% else %}
 source ${OUTPUT_REPO_BASE}/config/config.sh
 {% endif %}
@@ -27,7 +26,6 @@ source ${OUTPUT_REPO_BASE}/config/config.sh
 
 # --- 报告作业完成 ---
 {% if config.workflow_mode == 'ecflow' %}
-{% raw %}
-%include <common/tail.h>
-{% endraw %}
+
+{{ ecflow_include('<common/tail.h>') }}
 {% endif %}

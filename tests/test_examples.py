@@ -69,8 +69,8 @@ def test_toyflow_full_pipeline(toyflow, tmp_path):
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o644
     config_content = config_path.read_text()
     assert "FORECAST_LENGTH=24" in config_content
-    assert config_content.count("# BEGIN include toyflow:config/config.sh.j2\n") == 1
-    assert config_content.count("# END include toyflow:config/config.sh.j2\n") == 1
+    assert config_content.count("# BEGIN include [build] toyflow:config/config.sh.j2\n") == 1
+    assert config_content.count("# END include [build] toyflow:config/config.sh.j2\n") == 1
 
     # 3. job generate（jobs/**/*.sh.j2 -> *.ecf）
     config_file = tmp_path / "toyflow.yaml"

@@ -7,7 +7,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Union
 
-from jinja2 import Environment, FileSystemLoader, TemplateError
+from jinja2 import Environment, FileSystemLoader, TemplateError, pass_context
+from jinja2.runtime import Context
 
 from takflow._files import io_failure_reason
 from takflow.build_info import _current_build_info_lines
@@ -22,7 +23,13 @@ from takflow.checks import (
 )
 from takflow.checks.diagnostics import template_failure
 from takflow.jobs.headers import RESOURCE_TEMPLATE_HELPERS
-from takflow.jobs.provenance import job_source, prepared_source, resource_source
+from takflow.jobs.provenance import (
+    ecflow_include,
+    job_source,
+    prepared_source,
+    resource_source,
+    source_block,
+)
 from takflow.jobs.scripts import _script_template_helpers
 
 if TYPE_CHECKING:
@@ -309,21 +316,35 @@ def _render_single_job_file(
         output_repo_base=output_repo_base,
     )
 
+    @pass_context
+    def mark_build_include(context: Context, text: str) -> str:
+        included = env.get_template(context.name)
+        source = resource_source(Path(included.filename), source_layers) if included.filename else None
+        return source_block(
+            text, "include", source or f"template:{included.name}", config.workflow_mode, stage="build",
+        )
+
     build_info_lines = _current_build_info_lines()
     data = {
         **(template_context or {}),
         "config": config,
         "build_info_warning": build_info_lines["warning"],
         "build_info_detail": build_info_lines["info"],
+        "ecflow_include": ecflow_include,
         **output_log_dict,
     }
+    ecflow = config.workflow_mode == "ecflow"
+    if ecflow:
+        data["mark_build_include"] = mark_build_include
 
     try:
         template = env.get_template(relative_path.as_posix())
         rendered_content = template.render(data)
         source = resource_source(Path(template.filename), source_layers) if template.filename else None
-        rendered_content = job_source(rendered_content, source or f"template:{relative_path.as_posix()}",
-                                      config.workflow_mode)
+        rendered_content = job_source(
+            rendered_content, source or f"template:{relative_path.as_posix()}", config.workflow_mode,
+            output=output_relative_path if ecflow else None,
+        )
     except GenerationCheckError:
         raise
     except (TemplateError, TypeError, ValueError, OSError) as error:

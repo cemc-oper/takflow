@@ -8,6 +8,7 @@ from jinja2 import pass_context
 
 from takflow.config import SlurmWorkload
 from takflow.config.workload import RESOURCE_ALIAS_HINTS, ResourceAliasWarning, resolve_resource_alias
+from takflow.jobs.provenance import ecflow_include
 from takflow.jobs.submission.variables import RESOURCE_VARIABLES, ecflow_log_value
 from takflow.jobspec import CANONICAL_KEYS, ResourceSpec, TaskResource
 from takflow.jobspec.render import orvix_directive, slurm_directive
@@ -53,7 +54,7 @@ def _resource_directive(field: str, variable: str, fallback, mode: str, native_s
     if mode == "ecflow":
         if field == "requeue" and (native_slurm or fallback is None):
             fragment = "requeue" if native_slurm else "orvix-requeue"
-            return f"%include <common/{fragment}-%{variable}:{fallback or 'unset'}%.h>"
+            return ecflow_include(f"<common/{fragment}-%{variable}:{fallback or 'unset'}%.h>")
         ref = f"%{variable}%" if fallback is None else f"%{variable}:{fallback}%"
         if native_slurm:
             line = slurm_directive(field, ref, engine_reference=True)

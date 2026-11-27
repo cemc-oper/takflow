@@ -69,7 +69,7 @@ def render_config(
     if config.workflow_mode == "ecflow":
         layers = (("base", Path(workflow_repo_base)),)
         source = resource_source(Path(template.filename), layers)
-        rendered = source_block(rendered, "include", source, "ecflow")
+        rendered = source_block(rendered, "include", source, "ecflow", stage="build")
     output_file_path = Path(output_repo_base, "config", output_file_name)
     output_file_path.parent.mkdir(exist_ok=True, parents=True)
     output_file_path.write_text(rendered)

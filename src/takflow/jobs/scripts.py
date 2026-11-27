@@ -59,7 +59,8 @@ def _script_template_helpers(
             content = f.read()
         if content.strip():
             mode = "takler" if kind == "include" and config.workflow_mode == "takler" else "shell"
-            content = source_block(content, kind, script_source(script_file, payload), mode)
+            stage = "build" if config.workflow_mode == "ecflow" else None
+            content = source_block(content, kind, script_source(script_file, payload), mode, stage=stage)
 
         # ecflow 模式下需用 %nopp/%end 包裹原生脚本内容，
         # 避免 ecflow 预处理器解析脚本中的 % 指令。
