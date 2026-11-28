@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Minimal example application built on takflow (toy weather-forecast workflow generator)."
 requires-python = ">=3.10"
 dependencies = [
-    "takflow",
+    "takflow>=0.3.0",
     "click",
     "jinja2",
     "pyyaml",

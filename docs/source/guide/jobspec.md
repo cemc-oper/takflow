@@ -100,7 +100,7 @@ ecFlow 在声明资源的 suite、family 或 task 上写入标量。常用变量
 
 日志文件名可以同时含有 ecFlow 和 Slurm 的占位符。通过 takflow 的节点 API 传入原始路径即可。在原生 ecFlow Python API 中，可用 `node.add_variable(ecflow_resource_variables({"JOB_OUTPUT": "/log dir/%A_%a.%j.out"}))` 写入所需的百分号转义。该函数由 `takflow.jobs.submission.variables` 导出，只返回传入的标量。删除日志覆盖后，默认路径中的 `%ECF_JOBOUT%` 会随本次尝试重新展开。升级已有产物时，用同一次构建生成的定义和源作业配套加载。
 
-ecFlow 在没有 requeue 回退的 ORVIX 模板中按 `REQUEUE` 选择公共 include。使用标准 Application 时启用 `use_public_resources` 并将输出的 `ecflow/include` 加入 `ECF_INCLUDE`。原生 Slurm 模板可以使用 `%include <common/requeue.h>`，只有有效 False 产生 `#SBATCH --no-requeue`。takler 用第二轮 Jinja 处理缺失值与布尔值。
+ecFlow 在没有 requeue 回退的 ORVIX 模板中按 `REQUEUE` 选择公共 include。使用标准 Application 时启用 `use_public_resources` 并将输出的 `ecflow/include` 加入 `ECF_INCLUDE`。原生 Slurm 模板可以使用 `%include <common/requeue.h>`，只有有效 False 产生 `#SBATCH --no-requeue`。takler 用第二轮 Jinja 处理缺失值与布尔值。公共片段保留各自的调度器用途说明，ecFlow 延迟 include 由 `# INCLUDE [ecflow]` 标记；空片段仍不发出调度指令，来源块与处理阶段见[资源层](resource-layers.md)。
 
 示例见 `examples/toyflow` 的 `resources/jobs/` 模板。
 

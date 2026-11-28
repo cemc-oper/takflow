@@ -96,7 +96,8 @@ register_engine_hook = create_hook_decorator(EngineHookRegistry.get_instance)
 def add_verify_task(context: EngineHookContext) -> None:
     """在预报任务之后注入一个检验任务。"""
     verify = context.node.add_task("verify")
-    verify.add_trigger("forecast == complete")
+    # verify 与 forecast 都是 main 下的同级任务，显式引用兄弟节点。
+    verify.add_trigger("./forecast == complete")
 ```
 
 这个 toyflow／旧应用入口示例在 **import 时**通过装饰器注册 hook；扩展包的 CLI 先 import 自己的 hooks 模块，再调用基础包的流程构建函数。流程构建代码在相应位置执行：

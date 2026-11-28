@@ -132,6 +132,13 @@ def render_jobs_from_directory(
     script_input_check : callable, optional
         Additional validation of local scripts actually consumed while rendering.
         The standard full build uses this to reject stale prerequisite files.
+    source_layers : tuple of (str, Path), optional
+        Ordered resource-layer names and roots used to label job templates and
+        embedded scripts. By default, the ``repo_base`` roots provide the labels.
+    script_source : callable, optional
+        Callback receiving a prepared script path and its bytes and returning
+        the source label for an embedded block. The default attributes a script
+        to a layer only when its bytes match; otherwise it uses ``output:``.
     """
     report = check_report if check_report is not None else GenerationCheckReport()
     preflight_generation(config, check_report=report)

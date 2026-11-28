@@ -91,7 +91,10 @@ ecFlow 的两种载体使用相同的 `TaskResource` 输入。takler 的调度�
 
 | 原入口 | 新入口 |
 |---|---|
-| `takflow.backends.runtime.set_runtime` 及各载体的 `set_runtime` | `takflow.jobs.submission.set_runtime`，按 workload 选择载体 |
+| `takflow.backends.runtime.set_runtime` | `takflow.jobs.submission.set_runtime`，按 workload 选择载体 |
+| 各载体模块的 `set_runtime`、`set_orvix_runtime`、`set_slsubmit_runtime` | 已删除，没有迁入 `.orvix` 或 `.slsubmit6`；统一调用提交包根部的 `set_runtime` |
+| `takflow.backends.runtime` 的 `common_setting`、`script_cmd_value`、`script_cmd_var_name` | `takflow.flow.backend` |
+| `takflow.backends.runtime.set_scheduling` | `takflow.flow.scheduling.set_scheduling` |
 | `takflow.backends.runtime` 的 `set_resource_variables`、`ecflow_resource_variables` | `takflow.jobs.submission.variables` |
 | `takflow.backends.runtime`、`takflow.toolkit.util` 和 `takflow.toolkit` 的 `shell_job` | `takflow.jobs.submission.direct.shell_job` |
 | `takflow.backends.runtime.orvix.orvix_job` | `takflow.jobs.submission.orvix.orvix_job` |

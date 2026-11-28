@@ -16,6 +16,7 @@ TakFlow 将应用准备、流程生成、作业渲染和产物检查放在各自
   - `flow/backends/takler/` → takler flow
   - `flow/scheduling.py` 和 `flow/backend.py` → 调度、通用设置和任务脚本命令
   - `jobs/render.py`、`jobs/scripts.py`、`jobs/headers.py` → 模板渲染、脚本调用和资源头
+  - `jobs/provenance.py` → 作业、嵌入脚本和 include 的来源标签与注释块
   - `jobs/submission/` → direct、orvix、slsubmit6 提交和取消命令及节点资源声明
 - **应用声明和构建** 由 `application/prepare.py` 准备有效配置、扩展和资源层。
   `build/pipeline.py` 编排完整与分步构建，`build/assets.py` 复制静态资源，
@@ -39,7 +40,7 @@ src/takflow/
 │   ├── scheduling.py       # 将调度规则应用到节点
 │   ├── generate.py         # 模式分发、路径和保存回调
 │   └── backends/           # ecFlow .def 及 takler flow 后端
-├── jobs/                   # 作业渲染、脚本、资源头和提交适配
+├── jobs/                   # 作业渲染、来源追踪、脚本、资源头和提交适配
 ├── application/            # 应用声明和准备流程
 ├── build/                  # 阶段、资源、运行配置、结果及成功清单
 ├── checks/                 # 生成诊断、预检及独立产物检查

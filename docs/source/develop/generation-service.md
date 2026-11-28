@@ -76,6 +76,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from takflow.checks import GenerationCheckReport
 from takflow.config import BaseWorkflowConfig
 from takflow.flow import Node, WorkflowEngine
 
@@ -183,8 +184,9 @@ shell renderer 的模板、build-info、cycles 校验、enable-aware 和可执�
 - GFS-POST/MCV 的 definition 内容和权限不被无意改变；
 - shell 与 definition 的应用头部继续各自演进。
 
-`takflow.build_info` 和 job 的 build-info provider 保持现有职责，不新增另一个全局
-provider。通用服务只统一**调用时机**，不拥有应用品牌内容。
+上述 provider 边界是 TF-07 时的历史设计。当前 0.3.0 已移除进程级 build-info provider：
+标准应用使用 `ApplicationBrand`，独立作业渲染用 `with build_info_scope(lines):` 限定品牌作用域。
+通用生成服务仍只统一**调用时机**，不拥有应用品牌内容。
 
 ## 6. 应用 facade 对照
 

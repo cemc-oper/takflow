@@ -87,11 +87,14 @@ mapping 或文件，以保证覆盖先于派生。显式 definition `output` 仍
 | `required_operations(config)` | 返回已有后端操作名，复用公共能力预检，不建立新 IR |
 
 `BuildContext.template_context()` 返回只读外层 mapping，包含 config、paths、brand、
-components、machine、variables、两个 build_info 行以及领域贡献。保留键还包括
-`include_raw`、`invoke_script`、`include_machine`、`render_orvix_resource_block`、`render_slurm_resource_block`、stdout/stderr，
-领域贡献不可覆写。底层 config 及嵌套领域对象仍是 Python 模型，按只读契约消费。
+components、machine、variables、两个 build_info 行以及领域贡献。底层 config 及嵌套领域对象
+仍是 Python 模型，按只读契约消费。
 
-资源指令 helper 的注册时机、直接 Jinja 入口、参数和模板回退规则统一见[作业资源](jobspec.md)。
+`include_raw`、`invoke_script`、`mark_build_include`、`ecflow_include`、`include_machine`、
+`render_orvix_resource_block`、`render_slurm_resource_block`、stdout/stderr 是领域贡献不可覆写的
+保留名称，由 config/job 等构建或渲染阶段按需注入，**不是** `BuildContext.template_context()`
+自身返回的字段。直接调用该方法的业务代码不能假定这些 helper 已存在；资源指令注册见
+[作业资源](jobspec.md)，include 与来源注释见[作业 API](../reference/jobs.rst)。
 
 `ApplicationExtension(name, initialize=None, registries=(), resource_layers=(),
 context=None, outputs=())` 只提供局部初始化、数据和规则，名称必须唯一。资源与输出的选择见[资源层](resource-layers.md)；初始化顺序、注册表隔离和恢复见{ref}`初始化的注册表所有权 <registry-ownership>`。

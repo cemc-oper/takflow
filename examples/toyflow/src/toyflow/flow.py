@@ -6,8 +6,9 @@
     ├── admin/toggles            # 运维开关（defstatus complete）
     ├── time_triggers/00         # 时间调度（RepeatDate + time）
     ├── obs/prepare              # 观测预处理（serial）
-    ├── main/forecast            # 预报（parallel，trigger: obs）
-    │   └── verify               # 由 engine hook 注入
+    ├── main/
+    │   ├── forecast            # 预报（parallel，trigger: obs）
+    │   └── verify              # 由 engine hook 注入的同级任务（trigger: ./forecast）
     └── post/plot                # 后处理绘图（serial，trigger: forecast）
 
 同一套代码通过 ``WorkflowEngine(backend)`` 换后端即可输出 ecFlow ``.def``

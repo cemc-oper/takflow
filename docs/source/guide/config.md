@@ -91,6 +91,11 @@ shebang 选择解释器及其选项。两种模式生成的子 Shell 都以 `:` 
 传入字面参数。空字符串、空格、引号、`$(...)` 和 `%NAME%` 在原生 job 中
 保留原值和参数边界。参数写在 helper 调用内。
 
+inline `invoke_script()` 和 `include_raw()` 实际展开的非空内容会带来源注释块；ecFlow 使用
+`[build]` 标记生成期展开，并继续置于既有 `%nopp` 保护中。takler 的 raw／字符串保护同样保留，
+来源注释不会改变业务子 Shell、参数或错误处理边界。外部调用不嵌入业务正文，完整规则见
+[生成物来源注释](resource-layers.md)。
+
 ### takler 和 Shell 的业务脚本调用
 
 这两种后端的 `invoke_script()` 也将 inline 业务放进独立的前台子 Shell。

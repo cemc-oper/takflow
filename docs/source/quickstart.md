@@ -8,10 +8,10 @@ toyflow 使用 TakFlow 0.3.0 接口演示独立生成命令。标准应用使用
 
 ## 安装
 
-要求 Python >= 3.10。只使用框架库时可安装发布包：
+要求 Python >= 3.10。只使用框架库时可安装发布包；toyflow 的当前接口要求 TakFlow >= 0.3.0：
 
 ```bash
-pip install takflow
+pip install "takflow>=0.3.0"
 ```
 
 本页的端到端命令使用仓库内独立的 toyflow 包。从源码安装框架和该示例：
@@ -94,12 +94,25 @@ toyflow/
 ├── admin/toggles            # 运维开关（defstatus complete）
 ├── time_triggers/00         # RepeatDate 调度 + 00:00 时间触发
 ├── obs/prepare              # 观测预处理（serial 作业）
-├── main/forecast            # 预报（parallel 作业，trigger: obs/prepare）
-│   └── verify               # 由 engine hook 注入的扩展任务
+├── main/
+│   ├── forecast             # 预报（parallel 作业，trigger: obs/prepare）
+│   └── verify               # engine hook 注入的同级任务（trigger: ./forecast）
 └── post/plot                # 后处理绘图（serial 作业，trigger: main/forecast）
 ```
 
-打开 `/tmp/toyflow_output/toyflow.def` 和 `/tmp/toyflow_output/jobs/main/forecast.ecf`，可以对照源码检查节点、变量和资源指令的来源。完整产物树见 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)。
+打开 `/tmp/toyflow_output/toyflow.def` 和 `/tmp/toyflow_output/jobs/main/forecast.ecf`，可以对照源码检查节点、变量和资源指令的来源。`# JOB`、`# BUILD OUTPUT`、`# INCLUDE [ecflow]` 以及成对的 `BEGIN include`／`END include` 注释用于追踪模板、输出和 include 片段，不是额外的运行命令。标准构建的机器可读来源记录见[标准构建](guide/build.md)，作业与嵌入脚本的标记布局见[资源层](guide/resource-layers.md)。完整产物树见 [toyflow README](https://github.com/cemc-oper/takflow/tree/main/examples/toyflow)。
+
+默认配置使用 `script_invoke_mode: external`，所以业务脚本保留为调用行，不会生成 `BEGIN script` 嵌入块。当前作业的相关片段如下：
+
+```text
+# JOB toyflow:jobs/main/forecast.sh.j2
+# BUILD OUTPUT jobs/main/forecast.ecf
+...
+# INCLUDE [ecflow] <common/head.h>
+%include <common/head.h>
+...
+"${OUTPUT_REPO_BASE}"/scripts/main/run_forecast.sh
+```
 
 ## 下一步
 

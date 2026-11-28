@@ -32,7 +32,12 @@ def render_credential_template(
     config: "BaseWorkflowConfig",
     template_name: str = "credential_workflow.sh.j2",
 ) -> str:
-    """Render a credential fragment from ``{repo_base}/config/{template_name}``."""
+    """Render a credential fragment from ``{repo_base}/config/{template_name}``.
+
+    When the active credential resources resolve the selected template file,
+    the non-empty fragment is enclosed in a source block. Literal hook strings
+    and unresolved templates are returned without an inferred source label.
+    """
     scoped, layers = _credential_resources.get()
     env = scoped if scoped is not None else Environment(
         loader=FileSystemLoader(f"{repo_base}/config"),
@@ -111,6 +116,12 @@ def render_credential(
         Output repo root.
     build_info_lines : dict
         ``{"warning": ..., "info": ...}`` header lines (app-branded).
+    environment : jinja2.Environment, optional
+        Strict template environment used by ``render_credential_template`` hooks.
+    source_layers : tuple of (str, Path), optional
+        Ordered resource-layer names and roots used to identify credential
+        templates. Only template fragments whose filenames resolve through
+        these layers receive source blocks; literal hook strings remain unchanged.
     """
     credential = load_config_data(credential_file)
 

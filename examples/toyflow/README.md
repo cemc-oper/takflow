@@ -25,14 +25,15 @@ toyflow/
 ├── admin/toggles            # 运维开关（defstatus complete）
 ├── time_triggers/00         # RepeatDate 调度 + 00:00 时间触发
 ├── obs/prepare              # 观测预处理（serial 作业）
-├── main/forecast            # 预报（parallel 作业，trigger: obs/prepare）
-│   └── verify               # 由 engine hook 注入的扩展任务
+├── main/
+│   ├── forecast             # 预报（parallel 作业，trigger: obs/prepare）
+│   └── verify               # engine hook 注入的同级任务（trigger: ./forecast）
 └── post/plot                # 后处理绘图（serial 作业，trigger: main/forecast）
 ```
 
 ## 运行
 
-要求 Python >= 3.10。在 TakFlow 仓库根目录安装框架和示例。
+要求 Python >= 3.10、TakFlow >= 0.3.0。在 TakFlow 仓库根目录安装框架和示例。
 
 ```bash
 pip install -e . -e examples/toyflow
@@ -84,7 +85,21 @@ $toyflow_out/
 └── ecflow/include/common/   # head.h / configure.h / tail.h
 ```
 
-可以打开 `toyflow.def` 和 `jobs/main/forecast.ecf`，对照 `flow.py`、YAML 和作业模板检查每一行来自哪里。
+可以打开 `toyflow.def` 和 `jobs/main/forecast.ecf`，对照 `flow.py`、YAML 和作业模板检查每一行来自哪里。作业中的 `# JOB` 和 `# BUILD OUTPUT` 分别定位源模板与本步输出，`# INCLUDE [ecflow]` 标记留给 ecFlow 预处理的 include；配置和 include 文件用成对的 `BEGIN include`／`END include` 注释包裹来源片段。这些注释用于人工追踪，不是额外的运行命令。标准构建还在 `generation_manifest.json` 中保存机器可读的产物来源，toyflow 的独立命令不发布该清单。
+
+默认 `external` 模式的作业片段可直接核对：
+
+```text
+# JOB toyflow:jobs/main/forecast.sh.j2
+# BUILD OUTPUT jobs/main/forecast.ecf
+...
+# INCLUDE [ecflow] <common/head.h>
+%include <common/head.h>
+...
+"${OUTPUT_REPO_BASE}"/scripts/main/run_forecast.sh
+```
+
+切换为 inline 后，实际嵌入的非空业务正文才会出现 `BEGIN script`／`END script` 来源块。
 
 ## 可选观测
 

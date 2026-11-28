@@ -22,6 +22,15 @@ takflow.jobs.headers
 .. automodule:: takflow.jobs.headers
    :members:
 
+来源注释与 include 阶段
+-----------------------
+
+目录和单文件渲染自动为作业添加 ``# JOB``，ecFlow 作业还标记 ``# BUILD OUTPUT``。
+模板可用 ``ecflow_include("<common/head.h>")`` 保留延迟到 ecFlow 预处理的 include，
+同时生成 ``# INCLUDE [ecflow]`` 注释。ecFlow 中通过 Jinja 实际展开的嵌套 include 不会自动
+添加来源块；模板可将捕获的正文传给 ``mark_build_include(body)`` 显式标记。任意直接写出的
+字面 ``%include`` 不会被自动改写。完整布局和来源标签见 :doc:`../guide/resource-layers`。
+
 takflow.jobs.scripts
 --------------------
 

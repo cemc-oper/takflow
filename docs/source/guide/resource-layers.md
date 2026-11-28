@@ -40,10 +40,25 @@ cwd。显式 workflow_repo_base 仅替换 base，扩展仍按自己的有效字�
 产物的 template 指向选中的源文件；成功清单记录相同的层根，不记录模板正文。
 
 生成的作业和 Shell runner 在 shebang 后写入 `# JOB <来源>`，无 shebang 的作业在文件头写入。
-`invoke_script` 内联的业务正文有一对 `BEGIN script`／`END script`，`include_raw` 展开的 Shell
-片段使用 `include`。外部调用行属于当前作业。包内来源写为 `包名:resources/ 下的相对路径`，
-包外来源使用清单中的资源层名和层内相对路径。单独执行 `job generate` 时，按字节匹配已准备的
-输入和当前资源层。无法回溯的输入以 `output:` 加输出根下的路径定位。
+包内来源写为 `包名:resources/ 下的相对路径`，包外来源使用资源层名和层内相对路径。
+单独执行 `job generate` 时，按字节匹配已准备的输入和当前资源层；无法回溯的已准备输入以
+`output:` 加输出根下的路径定位，无法映射到源文件的模板使用 `template:<模板名>`。
+
+`invoke_script` 内联的非空业务正文有一对 `BEGIN script`／`END script`，`include_raw` 展开的非空
+片段使用 `BEGIN include`／`END include`。ecFlow 在生成期实际展开的内容增加 `[build]` 阶段标签，
+Shell/takler 嵌入块不带该标签。外部 `invoke_script` 只保留父作业中的调用行，不伪造嵌入正文来源；
+纯空白正文也不添加空来源块。ecFlow 注释中的字面 `%` 会按原生规则写成 `%%`，takler 标记则避免
+在第二轮 Jinja 中被当作模板语法。
+
+ecFlow 生成作业还用 `# BUILD OUTPUT <输出根相对路径>` 标明本步产物。保留给原生预处理的 include
+由 `ecflow_include()` 生成 `# INCLUDE [ecflow] <片段>` 和原指令；`[ecflow]` 表示延后处理，不是资源层
+名称。任意模板中直接写出的字面 `%include` 不会被自动改写；嵌套 Jinja include 可用
+`mark_build_include(body)` 显式标记，见[作业 API](../reference/jobs.rst)。
+
+随包提供的 ecFlow/takler head、tail 和选定 requeue 片段在资源源码中自带 `BEGIN include`／
+`END include` 来源块，因此原生引擎展开后仍能定位片段。它们不是 resource 复制阶段临时注入的注释；
+应用覆盖这些片段时，如需同等追踪，应在自己的资源中保留相应来源说明。所有来源注释只用于人工
+定位输入、输出和处理边界，不改变 include 或业务命令语义，也不承诺跨版本逐字节不变。
 
 多模式应用可声明 `use_public_resources=lambda config: config.workflow_mode == "ecflow"`。
 公共文件包括 `ecflow/include/common/{head,tail}.h`、`takler/include/{head,tail}.sh`
